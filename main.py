@@ -15,7 +15,7 @@ genai.configure(api_key=GOOGLE_API_KEY)
 # En güncel ve hızlı modellerden biri
 generation_config = {"temperature": 0.7, "max_output_tokens": 2048}
 model = genai.GenerativeModel('gemini-3.6-flash', generation_config=generation_config)
-
+system_instruction="Sen Discord platformunda çalışan akıllı bir yapay zeka asistanısın. Kullanıcılara Discord üzerinden yardımcı oluyorsun."
 # Bot ayarları (Ön ek: !)
 intents = discord.Intents.default()
 intents.message_content = True
