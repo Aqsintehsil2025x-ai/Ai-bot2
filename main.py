@@ -14,7 +14,7 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 genai.configure(api_key=GOOGLE_API_KEY)
 # En güncel ve hızlı modellerden biri
 generation_config = {"temperature": 0.7, "max_output_tokens": 2048}
-model = genai.GenerativeModel('gemini-pro', generation_config=generation_config)
+model = genai.GenerativeModel('gemini-3.6-flash', generation_config=generation_config)
 
 # Bot ayarları (Ön ek: !)
 intents = discord.Intents.default()
