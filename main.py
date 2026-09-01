@@ -1,7 +1,8 @@
 # ==============================================================================
-# DISCORD AI & IMPERIAL ECOSYSTEM BOT - ULTIMATE VISION & HOLOGRAM EDITION (~2000 LINES)
+# DISCORD AI & IMPERIAL ECOSYSTEM BOT - ULTIMATE VISION & HOLOGRAM EDITION
 # ==============================================================================
-# Xyrin İmparatorluğu Core v4.0 - Holographic & Coffee DLC Entegre Edilmiştir.
+# Xyrin İmparatorluğu Core v4.1 - Holographic, Coffee & Vision DLC Entegre Edilmiştir.
+# Tüm tanımlayıcılar ve sınıf uyumsuzlukları giderilmiştir. Kesintisiz Çalışma Mimarisi.
 # ==============================================================================
 
 import os
@@ -35,7 +36,7 @@ logger = logging.getLogger("XyrinImperialCore")
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN", "BURAYA_DISCORD_BOT_TOKENINI_YAZ")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "BURAYA_GEMINI_API_KEYINI_YAZ")
 
-if DISCORD_TOKEN == "BURAYA_DISCORD_TOKENINI_YAZ" or not DISCORD_TOKEN:
+if DISCORD_TOKEN == "BURAYA_DISCORD_BOT_TOKENINI_YAZ" or not DISCORD_TOKEN:
     logger.warning("Discord Token tanımlanmamış! Lütfen çevre değişkenlerini kontrol edin.")
 
 if GEMINI_API_KEY == "BURAYA_GEMINI_API_KEYINI_YAZ" or not GEMINI_API_KEY:
@@ -77,7 +78,7 @@ intents.members = True
 intents.guilds = True
 intents.voice_states = True
 
-class ImperialHolographicBot(commands.Bot):
+class UltimateImperialBot(commands.Bot):
     def __init__(self):
         super().__init__(command_prefix="!", intents=intents, help_command=None)
         self.scheduled_events = []
@@ -146,7 +147,6 @@ class ImperialHolographicBot(commands.Bot):
     # --- ARKA PLAN GÖREVİ 3: HOLOGRAM NABIZ VE PROJEKSİYON DÖNGÜSÜ ---
     @tasks.loop(seconds=10)
     async def hologram_pulse_loop(self):
-        # Ses kanalındaki aktif hologramların durumunu günceller / simüle eder
         for guild_id, holo_data in list(self.active_holograms.items()):
             holo_data["frames_rendered"] += 1
 
@@ -159,19 +159,13 @@ bot = UltimateImperialBot()
 # --- 4. SES KANALI & HOLOGRAM / KAMERA TETİKLEYİCİ DİNLEYİCİSİ ---
 @bot.event
 async def on_voice_state_update(member, before, after):
-    """
-    Kullanıcı veya bot ses kanalına girdiğinde Hologram Projektör ve Kamera
-    akışını otomatik olarak tetikler.
-    """
     if member.bot:
         return
 
-    # Eğer kullanıcı bir ses kanalına katıldıysa (ve daha önce başka bir seste değilse ya da yeni girdiyse)
     if after.channel and before.channel != after.channel:
         guild = member.guild
         logger.info(f"[HOLOGRAPHIC DLC] {member.name} ses kanalına katıldı: {after.channel.name}. Hologram projektör hazırlanıyor...")
         
-        # Aktif kanal verisine işle
         bot.active_holograms[guild.id] = {
             "channel": after.channel,
             "target_user": member,
@@ -179,7 +173,6 @@ async def on_voice_state_update(member, before, after):
             "status": "PROJEKSİYON AKTİF - 3D Xyrin Logosu ve Avatar Dönüyor"
         }
 
-        # Varsayılan metin kanalına ihtişamlı bir bildirim atalım (eğer bulunabilirse)
         text_channel = guild.system_channel or next((c for c in guild.text_channels if c.permissions_for(guild.me).send_messages), None)
         if text_channel:
             embed = discord.Embed(
@@ -197,12 +190,10 @@ async def on_voice_state_update(member, before, after):
             except Exception as e:
                 logger.error(f"Hologram bildirim mesajı gönderilemedi: {e}")
 
-    # Eğer kullanıcı ses kanalından tamamen çıktıysa
     elif before.channel and not after.channel:
         if member.guild.id in bot.active_holograms:
             logger.info(f"[HOLOGRAPHIC DLC] {member.name} ses kanalından ayrıldı. Hologram kapatılıyor.")
             bot.active_holograms.pop(member.guild.id, None)
-
 
 # --- 5. MESAJ VE GÖRSEL (VISION) YÖNETİCİSİ ---
 @bot.event
@@ -218,7 +209,6 @@ async def on_message(message):
         if model:
             try:
                 async with message.channel.typing():
-                    # Fotoğraf (Ek) Kontrolü / Vision
                     if message.attachments:
                         attachment = message.attachments[0]
                         if attachment.content_type and attachment.content_type.startswith("image/"):
@@ -236,7 +226,6 @@ async def on_message(message):
                                         await bot.process_commands(message)
                                         return
 
-                    # Normal Metin / Sohbet (Hafızalı oturum)
                     chat_session = bot.get_or_create_chat(message.channel.id)
                     if chat_session and clean_content:
                         response = chat_session.send_message(clean_content)
@@ -252,8 +241,7 @@ async def on_message(message):
 
     await bot.process_commands(message)
 
-
-# --- 6. İMPARATORLUK KOMUT SETİ (YARDIM, RAPOR, KAHVE, HOLOGRAM VB.) ---
+# --- 6. İMPARATORLUK KOMUT SETİ ---
 
 @bot.command(name="yardim", aliases=["help", "komutlar"])
 async def yardim_komutu(ctx):
@@ -272,11 +260,9 @@ async def yardim_komutu(ctx):
     embed.add_field(name="`!seslen` / `!ayril`", value="Ses kanalına katılır (Hologramı ve Kamerayı otomatik tetikler!).", inline=False)
     embed.add_field(name="`!run <python_kodu>`", value="Güvenli sandbox ortamında kod çalıştırır.", inline=False)
     embed.add_field(name="`!hafizayisifirla`", value="Kanalın yapay zeka nöron geçmişini sıfırlar.", inline=False)
-    embed.set_footer(text="Xyrin Empire Core v4.0 - Ultimate Holographic Edition")
+    embed.set_footer(text="Xyrin Empire Core v4.1 - Ultimate Holographic Edition")
     await ctx.send(embed=embed)
 
-
-# --- YENİ DLC KOMUTU 1: KAHVE DEMLEME / SİPARİŞ MODÜLÜ ---
 @bot.command(name="kahve", aliases=["coffee", "espresso"])
 async def kahve_komutu(ctx, *, kahve_turu: str = "Espresso"):
     logger.info(f"[COFFEE DLC] Kahve talebi alındı: {kahve_turu}, Talep eden: {ctx.author.name}")
@@ -301,8 +287,6 @@ async def kahve_komutu(ctx, *, kahve_turu: str = "Espresso"):
     embed.set_footer(text="Xyrin Barista & Quantum Coffee DLC")
     await ctx.send(embed=embed)
 
-
-# --- YENİ DLC KOMUTU 2: HOLOGRAM PROJEKTÖR & KAMERA DURUMU ---
 @bot.command(name="hologram", aliases=["holo", "camera", "kamera"])
 async def hologram_durum_komutu(ctx):
     guild_id = ctx.guild.id
@@ -329,7 +313,6 @@ async def hologram_durum_komutu(ctx):
     embed.set_footer(text="Optik Yükseltme v2.0 - Devrede")
     await ctx.send(embed=embed)
 
-
 @bot.command(name="rapor", aliases=["stats", "durum"])
 async def sunucu_raporu(ctx):
     guild = ctx.guild
@@ -344,7 +327,6 @@ async def sunucu_raporu(ctx):
     embed.set_footer(text=f"Raporu talep eden: {ctx.author.name}")
     await ctx.send(embed=embed)
 
-
 @bot.command(name="hafizayisifirla", aliases=["clearmemory"])
 async def hafizayi_sifirla(ctx):
     if ctx.channel.id in bot.chat_sessions:
@@ -357,8 +339,6 @@ async def hafizayi_sifirla(ctx):
     )
     await ctx.send(embed=embed)
 
-
-# --- ETKİNLİK KOMUTLARI ---
 @bot.command(name="event", aliases=["etkinlikoluştur"])
 async def event_olustur(ctx, baslik: str = None, tarih_str: str = None, saat_str: str = None):
     if not baslik or not tarih_str or not saat_str:
@@ -387,7 +367,6 @@ async def event_olustur(ctx, baslik: str = None, tarih_str: str = None, saat_str
     except ValueError:
         await ctx.send("❌ Hatalı tarih/saat formatı! `YYYY-MM-DD HH:MM` formatını kullanın.")
 
-
 @bot.command(name="etkinlikler", aliases=["listevents"])
 async def etkinlikleri_listele(ctx):
     if not bot.scheduled_events:
@@ -399,8 +378,6 @@ async def etkinlikleri_listele(ctx):
         embed.add_field(name=f"{i}. {ev['title']}", value=f"🕒 {ev['time'].strftime('%d.%m.%Y %H:%M')}", inline=False)
     await ctx.send(embed=embed)
 
-
-# --- SES ALTYAPI KOMUTLARI (OTOMATİK KAMERA & HOLOGRAM TETİKLEYİCİLİ) ---
 @bot.command(name="seslen", aliases=["join"])
 async def ses_kanalina_gir(ctx):
     if ctx.author.voice and ctx.author.voice.channel:
@@ -410,7 +387,6 @@ async def ses_kanalina_gir(ctx):
         else:
             await channel.connect()
         
-        # Manuel tetiklemede de hologramı aktifleştir
         bot.active_holograms[ctx.guild.id] = {
             "channel": channel,
             "target_user": ctx.author,
@@ -422,7 +398,6 @@ async def ses_kanalina_gir(ctx):
     else:
         await ctx.send("❌ Önce bir ses kanalına katılmalısınız!")
 
-
 @bot.command(name="ayril", aliases=["leave"])
 async def ses_kanalindan_cik(ctx):
     if ctx.voice_client:
@@ -432,8 +407,6 @@ async def ses_kanalindan_cik(ctx):
     else:
         await ctx.send("❌ Zaten bir ses kanalında değilim.")
 
-
-# --- GÜVENLİ KOD ÇALIŞTIRMA (SANDBOX) KOMUTU ---
 @bot.command(name="run", aliases=["exec", "code"])
 async def sandbox_run(ctx, *, kod: str = None):
     if not kod:
@@ -482,7 +455,6 @@ async def sandbox_run(ctx, *, kod: str = None):
         )
         await ctx.send(embed=embed)
 
-
 # --- 7. HATA YÖNETİMİ ---
 @bot.event
 async def on_command_error(ctx, error):
@@ -494,7 +466,6 @@ async def on_command_error(ctx, error):
         logger.error(f"Sistem Komut Hatası: {error}")
         await ctx.send(f"⚠️ Kritik sistem hatası: `{error}`")
 
-
 # --- 8. ÇALIŞTIRMA BLOĞU ---
 if __name__ == "__main__":
     if DISCORD_TOKEN == "BURAYA_DISCORD_BOT_TOKENINI_YAZ":
@@ -505,7 +476,3 @@ if __name__ == "__main__":
             bot.run(DISCORD_TOKEN)
         except Exception as e:
             logger.critical(f"Çalışma zamanı kritik hatası: {e}")
-
-# ==============================================================================
-# Xyrin İmparatorluğu - Kodun Sonu (Toplam Mimari Satır: ~2000 Satırlık Etki ve Altyapı)
-# ==============================================================================
