@@ -1,4 +1,4 @@
-k# ==============================================================================
+# ==============================================================================
 # DISCORD AI & IMPERIAL ECOSYSTEM BOT - ULTIMATE VISION & HOLOGRAM EDITION
 # ==============================================================================
 # Xyrin İmparatorluğu Core v4.2 - Otomatik Kanal/Rol, Hologram & Kahve DLC Entegre Edilmiştir.
