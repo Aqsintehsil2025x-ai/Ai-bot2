@@ -292,7 +292,7 @@ async def hologram_durum_komutu(ctx):
     guild_id = ctx.guild.id
     embed = discord.Embed(
         title="🔮 Xyrin Hologram Projektör & Kamera İstihbaratı",
-        color=discord.Color.cyan()
+        color=discord.Color.teal()
     )
     
     if guild_id in bot.active_holograms:
