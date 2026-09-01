@@ -1,5 +1,5 @@
 # ==========================================
-# DISCORD AI & EVENT BOT - PRO VERSION
+# DISCORD AI & EVENT BOT - MEMORY VERSION
 # ==========================================
 
 import os
@@ -27,7 +27,7 @@ DISCORD_TOKEN = os.getenv("DISCORD_TOKEN", "BURAYA_DISCORD_BOT_TOKENINI_YAZ")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "BURAYA_GEMINI_API_KEYINI_YAZ")
 
 if DISCORD_TOKEN == "BURAYA_DISCORD_BOT_TOKENINI_YAZ" or not DISCORD_TOKEN:
-    logger.warning("Discord Token tanımlanmamış! Lütfen çevresel değişkenleri veya kod üzerindeki alanı kontrol edin.")
+    logger.warning("Discord Token tanımlanmamış! Lütfen çevresel değişkenleri kontrol edin.")
 
 if GEMINI_API_KEY == "BURAYA_GEMINI_API_KEYINI_YAZ" or not GEMINI_API_KEY:
     logger.warning("Gemini API Key tanımlanmamış! Yapay zeka özellikleri çalışmayabilir.")
@@ -43,7 +43,8 @@ generation_config = {
 
 SYSTEM_INSTRUCTION = (
     "Sen gelişmiş, arkadaş canlısı, teknik bilgisi yüksek ve samimi bir Discord sunucu asistanısın. "
-    "Kullanıcılara hem genel konularda yardımcı oluyor hem de sunucu etkinlikleri için içerikler üretebiliyorsun."
+    "Kullanıcılara hem genel konularda yardımcı oluyor hem de sunucu etkinlikleri için içerikler üretebiliyorsun. "
+    "Sohbet geçmişini aklında tutar ve konuşmanın akışına göre doğal yanıtlar verirsin."
 )
 
 try:
@@ -65,13 +66,13 @@ intents.members = True
 class AdvancedBot(commands.Bot):
     def __init__(self):
         super().__init__(command_prefix="!", intents=intents, help_command=None)
-        # Aktif etkinlikleri tutmak için bellek içi veritabanı (Liste yapısı)
-        # Her kayıt: {"title": str, "time": datetime, "channel_id": int, "author_id": int}
+        # Aktif etkinlikleri tutmak için liste
         self.scheduled_events = []
+        # Her kanal için ayrı bir sohbet oturumu (hafıza) tutacağız: {channel_id: chat_session}
+        self.chat_sessions = {}
 
     async def setup_hook(self):
         logger.info("Bot kurulum kancaları (setup_hook) çalıştırılıyor...")
-        # Arka plan görevini başlat
         self.check_events_loop.start()
 
     async def on_ready(self):
@@ -79,11 +80,20 @@ class AdvancedBot(commands.Bot):
         logger.info(f"Bağlı olduğu sunucu sayısı: {len(self.guilds)}")
         await self.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="!yardim | @bot yaz sohbet et"))
 
-    # --- ARKA PLAN ETKİNLİK KONTROLÜ (BACKGROUND TASK) ---
+    def get_or_create_chat(self, channel_id):
+        """Her kanal için hafızalı bir sohbet oturumu döner veya yoksa oluşturur."""
+        if channel_id not in self.chat_sessions:
+            if model:
+                # Yeni bir chat oturumu başlatıyoruz (geçmişi hafızada tutar)
+                self.chat_sessions[channel_id] = model.start_chat(history=[])
+            else:
+                return None
+        return self.chat_sessions[channel_id]
+
+    # --- ARKA PLAN ETKİNLİK KONTROLÜ ---
     @tasks.loop(seconds=30)
     async def check_events_loop(self):
         now = datetime.now()
-        # Süresi gelen etkinlikleri ayıkla
         due_events = [e for e in self.scheduled_events if e["time"] <= now]
         
         for event in due_events:
@@ -91,7 +101,6 @@ class AdvancedBot(commands.Bot):
             channel = self.get_channel(event["channel_id"])
             if channel:
                 try:
-                    # Etkinlik saatine uygun içerik üretmek için Gemini'den destek alalım
                     prompt = (
                         f"Şu anda '{event['title']}' adlı planlanan etkinlik vakti geldi! "
                         "Bu etkinlik için katılımcıları coşturan, heyecan verici, kısa ve dikkat çekici bir duyuru mesajı hazırla."
@@ -101,7 +110,7 @@ class AdvancedBot(commands.Bot):
                         ai_response = model.generate_content(prompt)
                         content = ai_response.text
                     else:
-                        content = f"🚨 **Zamanı Geldİ!** Etkinlik başladı: **{event['title']}**"
+                        content = f"🚨 **Zamanı Geldi!** Etkinlik başladı: **{event['title']}**"
 
                     await channel.send(f"🔔 <@{event['author_id']}> tarafından planlanan etkinlik vakti geldi!\n\n{content}")
                     logger.info(f"Etkinlik tetiklendi ve gönderildi: {event['title']}")
@@ -118,7 +127,6 @@ bot = AdvancedBot()
 
 @bot.event
 async def on_message(message):
-    # Botun kendi mesajlarına yanıt vermesini engelle
     if message.author == bot.user:
         return
 
@@ -130,15 +138,19 @@ async def on_message(message):
             if model:
                 try:
                     async with message.channel.typing():
-                        response = model.generate_content(clean_content)
-                        await message.reply(response.text)
+                        # Kanalın hafızalı sohbet oturumunu alıyoruz
+                        chat_session = bot.get_or_create_chat(message.channel.id)
+                        if chat_session:
+                            response = chat_session.send_message(clean_content)
+                            await message.reply(response.text)
+                        else:
+                            await message.reply("⚠️ Model başlatılamadı.")
                 except Exception as e:
                     logger.error(f"Gemini API yanıt hatası: {e}")
                     await message.reply("⚠️ Yapay zeka işlem sırasında bir hata ile karşılaştı, lütfen biraz sonra tekrar deneyin.")
             else:
                 await message.reply("⚠️ Yapay zeka modeli şu an aktif değil.")
 
-    # Komutların çalışması için zorunlu işlem
     await bot.process_commands(message)
 
 # --- 5. GELİŞMİŞ KOMUTLAR ---
@@ -146,15 +158,15 @@ async def on_message(message):
 @bot.command(name="yardim", aliases=["help", "komutlar"])
 async def yardim_komutu(ctx):
     embed = discord.Embed(
-        title="🤖 Bot Komutları ve Yardım Menüsü",
+        title="🤖 Bot Komutları ve Yardım Menüsü (Hafızalı Sürüm)",
         description="Sunucunuzda kullanabileceğiniz gelişmiş komut listesi aşağıdadır:",
         color=discord.Color.blue()
     )
-    embed.add_field(name="@BotAdı <mesaj>", value="Yapay zeka asistanı ile doğrudan sohbet etmenizi sağlar.", inline=False)
-    embed.add_field(name="`!event <başlık> <YYYY-MM-DD HH:MM>`", value="Belirtilen tarih ve saatte otomatik olarak hatırlatıcı/etkinlik duyurusu oluşturur.", inline=False)
-    embed.add_field(name="`!etkinlikler`", value="Aktif olarak planlanmış tüm etkinlikleri listeler.", inline=False)
-    embed.add_field(name="`!ping`", value="Botun gecikme sürelerini ve bağlantı durumunu gösterir.", inline=False)
-    embed.add_field(name="`!yapayzeka <soru>`", value="Doğrudan metin tabanlı yapay zeka sorgusu çalıştırır.", inline=False)
+    embed.add_field(name="@BotAdı <mesaj>", value="Yapay zeka asistanı ile geçmişi hatırlayarak sohbet etmenizi sağlar.", inline=False)
+    embed.add_field(name="`!event <başlık> <YYYY-MM-DD HH:MM>`", value="Belirtilen tarih ve saatte otomatik hatırlatıcı oluşturur.", inline=False)
+    embed.add_field(name="`!etkinlikler`", value="Aktif planlanmış tüm etkinlikleri listeler.", inline=False)
+    embed.add_field(name="`!ping`", value="Botun gecikme sürelerini ve durumunu gösterir.", inline=False)
+    embed.add_field(name="`!hafizayisifirla`", value="Bulunduğunuz kanaldaki yapay zeka hafızasını sıfırlar.", inline=False)
     embed.set_footer(text="Geliştirilmiş Discord AI & Event Bot Sistemi")
     await ctx.send(embed=embed)
 
@@ -168,32 +180,26 @@ async def ping_komutu(ctx):
     )
     await ctx.send(embed=embed)
 
-@bot.command(name="yapayzeka", aliases=["ai", "sor"])
-async def ai_sorgu(ctx, *, soru: str = None):
-    if not soru:
-        await ctx.send("❌ Lütfen yapay zekaya sormak istediğiniz metni yazın. Örnek: `!yapayzeka Python nedir?`")
-        return
-
-    if not model:
-        await ctx.send("❌ Yapay zeka servisi şu an devre dışı.")
-        return
-
-    async with ctx.channel.typing():
-        try:
-            response = model.generate_content(soru)
-            await ctx.reply(response.text)
-        except Exception as e:
-            logger.error(f"Yapay zeka sorgu hatası: {e}")
-            await ctx.send("⚠️ Sorgu işlenirken bir hata oluştu.")
+@bot.command(name="hafizayisifirla", aliases=["clearmemory", "resetchat"])
+async def hafizayi_sifirla(ctx):
+    """Bulundugunuz kanaldaki bot gecmisini sifirlar"""
+    if ctx.channel.id in bot.chat_sessions:
+        del bot.chat_sessions[ctx.channel.id]
+    
+    # Yeniden boş bir oturum aç
+    bot.get_or_create_chat(ctx.channel.id)
+    
+    embed = discord.Embed(
+        title="🧹 Hafıza Sıfırlandı",
+        description="Bu kanaldaki yapay zeka sohbet geçmişi başarıyla temizlendi. Bot her şeyi unuttu! 😉",
+        color=discord.Color.gold()
+    )
+    await ctx.send(embed=embed)
 
 # --- ETKINLİK SİSTEMİ KOMUTLARI ---
 
 @bot.command(name="event", aliases=["etkinlikoluştur"])
 async def event_olustur(ctx, baslik: str = None, tarih_str: str = None, saat_str: str = None):
-    """
-    Kullanım Örneği: !event "Toplantı" 2026-09-05 21:30
-    Veya alternatif olarak tarih ve saat tek parametrede de alınabilir.
-    """
     if not baslik or not tarih_str or not saat_str:
         embed = discord.Embed(
             title="⚠️ Eksik Parametre",
@@ -204,7 +210,6 @@ async def event_olustur(ctx, baslik: str = None, tarih_str: str = None, saat_str
         return
 
     try:
-        # Tarih ve saat birleştirilerek parse edilir
         tam_zaman_str = f"{tarih_str} {saat_str}"
         event_time = datetime.strptime(tam_zaman_str, "%Y-%m-%d %H:%M")
         
@@ -212,7 +217,6 @@ async def event_olustur(ctx, baslik: str = None, tarih_str: str = None, saat_str
             await ctx.send("❌ Geçmiş bir zaman için etkinlik planlayamazsın! Lütfen gelecekteki bir tarih gir.")
             return
 
-        # Etkinliği listeye ekle
         event_data = {
             "title": baslik,
             "time": event_time,
@@ -230,7 +234,7 @@ async def event_olustur(ctx, baslik: str = None, tarih_str: str = None, saat_str
         logger.info(f"Yeni etkinlik kaydedildi: {baslik} - Zaman: {event_time}")
 
     except ValueError:
-        await ctx.send("❌ Tarih veya saat formatı geçersiz! Lütfen `YYYY-MM-DD HH:MM` formatını kullandığından emin ol (Örn: `2026-09-05 21:30`).")
+        await ctx.send("❌ Tarih veya saat formatı geçersiz! `YYYY-MM-DD HH:MM` formatını kullan.")
     except Exception as e:
         logger.error(f"Etkinlik oluşturma hatası: {e}")
         await ctx.send("⚠️ Etkinlik oluşturulurken beklenmeyen bir hata meydana geldi.")
@@ -248,7 +252,6 @@ async def etkinlikleri_listele(ctx):
     )
 
     for i, event in enumerate(bot.scheduled_events, 1):
-        kalan_sure = event["time"] - datetime.now()
         embed.add_field(
             name=f"{i}. {event['title']}",
             value=f"🕒 **Zaman:** {event['time'].strftime('%d.%m.%Y %H:%M')}\n👤 **Planlayan:** <@{event['author_id']}>",
@@ -257,21 +260,20 @@ async def etkinlikleri_listele(ctx):
 
     await ctx.send(embed=embed)
 
-# --- 6. HATA YÖNETİMİ (ERROR HANDLER) ---
+# --- 6. HATA YÖNETİMİ ---
 @bot.event
 async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandNotFound):
-        # Bilinmeyen komutlarda sessiz kalabilir veya uyarı verebiliriz (spam olmaması için genelde sessiz kalınır)
         return
     elif isinstance(error, commands.MissingRequiredArgument):
-        await ctx.send("⚠️ Eksik parametre girdin! Komutun nasıl kullanılacağını görmek için `!yardim` yazabilirsin.")
+        await ctx.send("⚠️ Eksik parametre girdin! `!yardim` yazarak komutlara göz atabilirsin.")
     else:
         logger.error(f"Komut Hatası: {error}")
         await ctx.send(f"⚠️ Komut çalıştırılırken bir hata oluştu: `{error}`")
 
 # --- 7. BOTU BAŞLAT ---
 if __name__ == "__main__":
-    if DISCORD_TOKEN == "DISCORD_BOT_TOKEN":
+    if DISCORD_TOKEN == "BURAYA_DISCORD_BOT_TOKENINI_YAZ":
         logger.critical("Botu çalıştırmak için geçerli bir Discord Token girmelisin!")
     else:
         try:
