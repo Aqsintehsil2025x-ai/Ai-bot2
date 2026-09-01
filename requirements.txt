@@ -2,3 +2,4 @@ discord.py
 google-generativeai
 aiohttp
 PyNaCl
+davey
