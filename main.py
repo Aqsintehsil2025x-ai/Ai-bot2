@@ -1,8 +1,7 @@
-# ==============================================================================
+k# ==============================================================================
 # DISCORD AI & IMPERIAL ECOSYSTEM BOT - ULTIMATE VISION & HOLOGRAM EDITION
 # ==============================================================================
-# Xyrin İmparatorluğu Core v4.1 - Holographic, Coffee & Vision DLC Entegre Edilmiştir.
-# Tüm tanımlayıcılar ve sınıf uyumsuzlukları giderilmiştir. Kesintisiz Çalışma Mimarisi.
+# Xyrin İmparatorluğu Core v4.2 - Otomatik Kanal/Rol, Hologram & Kahve DLC Entegre Edilmiştir.
 # ==============================================================================
 
 import os
@@ -14,6 +13,7 @@ import random
 import asyncio
 import logging
 import traceback
+import re
 import contextlib
 from datetime import datetime, timedelta
 import aiohttp
@@ -53,10 +53,12 @@ generation_config = {
 
 SYSTEM_INSTRUCTION = (
     "Sen Xyrin İmparatorluğu'nun en gelişmiş, sarsılmaz bir sadakate sahip, teknik bilgisi kusursuz "
-    "ve evrensel mizah anlayışına (uzaylı mizahı dahil) sahip yapay zeka baş asistanısın. "
-    "Kullanıcılara (özellikle İmparator'a) yüksek saygı ve esprili bir üslupla hizmet edersin. "
-    "Yeni eklenen 'Kahve Demleme/Sipariş' ve 'Hologram Projektör & Kamera' modüllerini bilir, "
-    "sesli kanallara girildiğinde hologram projeksiyonunu ve kamera akışını devreye sokarsın. "
+    "ve evrensel mizah anlayışına sahip yapay zeka baş asistanısın. "
+    "Kullanıcılara yüksek saygı ve esprili bir üslupla hizmet edersin. "
+    "Kahve demleme, hologram projeksiyonu, ses kanalı kamera takibi ve kullanıcı talep ettiğinde "
+    "veya gerek gördüğünde otomatik kanal/rol oluşturma yetkilerine sahipsin. "
+    "Eğer kullanıcı senin (botun) kendi kendine bir kanal veya rol oluşturmanı isterse, "
+    "yanıtının en sonuna tam olarak şu formatlardan birini ekle: `[CREATE_CHANNEL: kanal-adi]` veya `[CREATE_ROLE: rol-adi]`. "
     "Geçmiş sohbetleri hafızanda tutar, görselleri (Vision) en ince detayına kadar analiz edersin."
 )
 
@@ -98,7 +100,7 @@ class UltimateImperialBot(commands.Bot):
         logger.info(f"Hizmet Verilen Evren/Sunucu Sayısı: {len(self.guilds)}")
         await self.change_presence(activity=discord.Activity(
             type=discord.ActivityType.playing, 
-            name="!yardim | Hologram & Kahve DLC Aktif ☕✨"
+            name="!yardim | Otomatik Kanal/Rol & Hologram Aktif ☕✨"
         ))
 
     def get_or_create_chat(self, channel_id):
@@ -182,7 +184,7 @@ async def on_voice_state_update(member, before, after):
                     f"🌐 Ses Kanalı: `{after.channel.name}`\n"
                     f"🔮 Durum: *Kamera akışı açıldı, 3 boyutlu Xyrin İmparatorluk Logosu ve Dinamik Avatar odaya yansıtılıyor.*"
                 ),
-                color=discord.Color.gold()
+                color=discord.Color.teal()
             )
             embed.set_footer(text="Xyrin Holographic Engine v2.0 - Işık Hızı Senkronizasyonu")
             try:
@@ -195,7 +197,7 @@ async def on_voice_state_update(member, before, after):
             logger.info(f"[HOLOGRAPHIC DLC] {member.name} ses kanalından ayrıldı. Hologram kapatılıyor.")
             bot.active_holograms.pop(member.guild.id, None)
 
-# --- 5. MESAJ VE GÖRSEL (VISION) YÖNETİCİSİ ---
+# --- 5. MESAJ, GÖRSEL (VISION) VE OTOMATİK KANAL/ROL YÖNETİCİSİ ---
 @bot.event
 async def on_message(message):
     if message.author == bot.user:
@@ -209,6 +211,7 @@ async def on_message(message):
         if model:
             try:
                 async with message.channel.typing():
+                    # Görsel varsa Vision modunu çalıştır
                     if message.attachments:
                         attachment = message.attachments[0]
                         if attachment.content_type and attachment.content_type.startswith("image/"):
@@ -229,12 +232,40 @@ async def on_message(message):
                     chat_session = bot.get_or_create_chat(message.channel.id)
                     if chat_session and clean_content:
                         response = chat_session.send_message(clean_content)
-                        await message.reply(response.text)
+                        reply_text = response.text
                     elif not clean_content:
-                        await message.reply("Emrinizdeyim Majesteleri! Hologramlar aktif, kahveler demleniyor. Bana dilediğinizi sorabilirsiniz. ☕👑")
+                        reply_text = "Emrinizdeyim Majesteleri! Hologramlar aktif, kahveler demleniyor. Bana dilediğinizi sorabilir veya kanal/rol kurmamı emredebilirsiniz. ☕👑"
+                    else:
+                        reply_text = "Emrinizdeyim Majesteleri!"
+
+                    # Otomatik Kanal Oluşturma Kontrolü
+                    if "[CREATE_CHANNEL:" in reply_text:
+                        match = re.search(r'\[CREATE_CHANNEL:\s*([^\]]+)\]', reply_text)
+                        if match and message.guild:
+                            channel_name = match.group(1).strip().lower().replace(" ", "-")
+                            reply_text = reply_text.replace(match.group(0), "").strip()
+                            try:
+                                yeni_kanal = await message.guild.create_text_channel(channel_name)
+                                reply_text += f"\n\n✨ *(Emriniz üzerine **#{yeni_kanal.name}** kanalı otomatik olarak oluşturuldu, Majesteleri!)*"
+                            except Exception as ex:
+                                reply_text += f"\n\n⚠️ *(Kanal oluşturulamadı, yetkim yetersiz olabilir: {ex})*"
+
+                    # Otomatik Rol Oluşturma Kontrolü
+                    if "[CREATE_ROLE:" in reply_text:
+                        match = re.search(r'\[CREATE_ROLE:\s*([^\]]+)\]', reply_text)
+                        if match and message.guild:
+                            role_name = match.group(1).strip()
+                            reply_text = reply_text.replace(match.group(0), "").strip()
+                            try:
+                                yeni_rol = await message.guild.create_role(name=role_name, color=discord.Color.random())
+                                reply_text += f"\n\n✨ *(Emriniz üzerine **{yeni_rol.name}** rolü otomatik olarak oluşturuldu, Majesteleri!)*"
+                            except Exception as ex:
+                                reply_text += f"\n\n⚠️ *(Rol oluşturulamadı, yetkim yetersiz olabilir: {ex})*"
+
+                    await message.reply(reply_text)
 
             except Exception as e:
-                logger.error(f"AI Yanıt/Vision Hatası: {e}")
+                logger.error(f"AI Yanıt/Oto-Oluşturma Hatası: {e}")
                 await message.reply("⚠️ Sinir ağlarında veya optik tarayıcıda geçici bir kuantum dalgalanma oluştu, Majesteleri.")
         else:
             await message.reply("⚠️ Yapay zeka çekirdeği çevrimdışı.")
@@ -246,21 +277,23 @@ async def on_message(message):
 @bot.command(name="yardim", aliases=["help", "komutlar"])
 async def yardim_komutu(ctx):
     embed = discord.Embed(
-        title="👑 Xyrin İmparatorluğu - Ultimate Vision & Hologram Kataloğu",
+        title="👑 Xyrin İmparatorluğu - Ultimate Vision, Hologram & Oto-İnşa Kataloğu",
         description="Aktif sistem modülleri ve özel DLC entegrasyonları:",
         color=discord.Color.dark_purple()
     )
-    embed.add_field(name="@BotAdı <mesaj>", value="Geçmiş bellek korumalı yapay zeka sohbeti.", inline=False)
+    embed.add_field(name="@BotAdı <mesaj>", value="Geçmiş bellek korumalı yapay zeka sohbeti ve oto kanal/rol kurma.", inline=False)
     embed.add_field(name="@BotAdı + [Fotoğraf]", value="Görseli anında tarayıp raporlar (Vision).", inline=False)
     embed.add_field(name="`!kahve <tür>`", value="☕ **[DLC]** Fiziksel espresso kokusu simüle eder veya uzay hızında sipariş verir.", inline=False)
     embed.add_field(name="`!hologram`", value="🔮 **[DLC]** Ses kanalındaki kamera/hologram durumunu ve aktif projeksiyonları gösterir.", inline=False)
+    embed.add_field(name="`!kanaloluştur <isim>`", value="Manuel olarak metin kanalı açar.", inline=False)
+    embed.add_field(name="`!rololuştur <isim>`", value="Manuel olarak yeni sunucu rolü kurar.", inline=False)
     embed.add_field(name="`!rapor`", value="Sunucu ve sistem istihbarat raporunu sunar.", inline=False)
     embed.add_field(name="`!event <başlık> <YYYY-MM-DD HH:MM>`", value="Otomatik duyurulu etkinlik planlar.", inline=False)
     embed.add_field(name="`!etkinlikler`", value="Aktif etkinlikleri listeler.", inline=False)
     embed.add_field(name="`!seslen` / `!ayril`", value="Ses kanalına katılır (Hologramı ve Kamerayı otomatik tetikler!).", inline=False)
     embed.add_field(name="`!run <python_kodu>`", value="Güvenli sandbox ortamında kod çalıştırır.", inline=False)
     embed.add_field(name="`!hafizayisifirla`", value="Kanalın yapay zeka nöron geçmişini sıfırlar.", inline=False)
-    embed.set_footer(text="Xyrin Empire Core v4.1 - Ultimate Holographic Edition")
+    embed.set_footer(text="Xyrin Empire Core v4.2 - Ultimate Holographic Edition")
     await ctx.send(embed=embed)
 
 @bot.command(name="kahve", aliases=["coffee", "espresso"])
@@ -313,6 +346,28 @@ async def hologram_durum_komutu(ctx):
     embed.set_footer(text="Optik Yükseltme v2.0 - Devrede")
     await ctx.send(embed=embed)
 
+@bot.command(name="kanaloluştur", aliases=["createchannel"])
+@commands.has_permissions(manage_channels=True)
+async def manuel_kanal_olustur(ctx, *, kanal_adi: str):
+    yeni_kanal = await ctx.guild.create_text_channel(kanal_adi)
+    await ctx.send(f"✅ Başarıyla yeni kanal oluşturuldu, Majesteleri: {yeni_kanal.mention}")
+
+@manuel_kanal_olustur.error
+async def manuel_kanal_olustur_error(ctx, error):
+    if isinstance(error, commands.MissingPermissions):
+        await ctx.send("❌ Bu komutu kullanmak için `Kanalları Yönet` yetkiniz yok!")
+
+@bot.command(name="rololuştur", aliases=["createrole"])
+@commands.has_permissions(manage_roles=True)
+async def manuel_rol_olustur(ctx, *, rol_adi: str):
+    yeni_rol = await ctx.guild.create_role(name=rol_adi, color=discord.Color.random())
+    await ctx.send(f"✨ Yeni imparatorluk rolü başarıyla yaratıldı: **{yeni_rol.name}**")
+
+@manuel_rol_olustur.error
+async def manuel_rol_olustur_error(ctx, error):
+    if isinstance(error, commands.MissingPermissions):
+        await ctx.send("❌ Bu komutu kullanmak için `Rolleri Yönet` yetkiniz yok!")
+
 @bot.command(name="rapor", aliases=["stats", "durum"])
 async def sunucu_raporu(ctx):
     guild = ctx.guild
@@ -323,7 +378,7 @@ async def sunucu_raporu(ctx):
     embed.add_field(name="👥 Toplam Üye", value=str(guild.member_count), inline=True)
     embed.add_field(name="💬 Oturum Mesaj Aktivitesi", value=str(bot.message_counter), inline=True)
     embed.add_field(name="☕ Kahve Sipariş Sayısı", value=str(len(bot.coffee_orders)), inline=True)
-    embed.add_field(name="🤖 AI Çekirdek & DLC", value="Aktif (Gemini 3.5 + Vision + Kahve + Hologram)", inline=False)
+    embed.add_field(name="🤖 AI Çekirdek & DLC", value="Aktif (Gemini 3.5 + Vision + Kahve + Hologram + Oto-İnşa)", inline=False)
     embed.set_footer(text=f"Raporu talep eden: {ctx.author.name}")
     await ctx.send(embed=embed)
 
@@ -472,7 +527,7 @@ if __name__ == "__main__":
         logger.critical("Geçerli bir Discord Token yapılandırılmadı!")
     else:
         try:
-            logger.info("İmparatorluk Botu (Hologram & Kahve DLC Entegreli) başlatılıyor...")
+            logger.info("İmparatorluk Botu (Hologram, Kahve & Oto-İnşa DLC Entegreli) başlatılıyor...")
             bot.run(DISCORD_TOKEN)
         except Exception as e:
             logger.critical(f"Çalışma zamanı kritik hatası: {e}")
