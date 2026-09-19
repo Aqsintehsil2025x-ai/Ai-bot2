@@ -52,6 +52,41 @@ SPAM_MESSAGE_LIMIT = 6
 # Strike verileri yeniden başlatmalarda kaybolmasın diye buraya kaydediliyor.
 STRIKES_FILE = "profanity_strikes.json"
  
+# --- EKONOMİ & SEVİYE SİSTEMİ AYARLARI ---
+ECONOMY_FILE = "economy_data.json"
+STARTING_BALANCE = 100
+DAILY_REWARD_MIN = 100
+DAILY_REWARD_MAX = 250
+DAILY_COOLDOWN_HOURS = 24
+XP_PER_MESSAGE_MIN = 5
+XP_PER_MESSAGE_MAX = 15
+XP_MESSAGE_COOLDOWN_SECONDS = 60  # Spam ile XP kasmayı önlemek için üye başına bekleme
+XP_PER_LEVEL = 150  # level = xp // XP_PER_LEVEL
+ 
+# Seviye eşiğine göre otomatik rol verilecekse buraya ekle: {seviye: "rol adı"}
+# Rol sunucuda mevcut değilse bot sadece log'a uyarı yazar, hata vermez.
+LEVEL_ROLES = {5: "Vasal", 15: "Lord", 30: "Asil Lord"}
+ 
+# Market'te satılan eşyalar: {"komut_adi": {"fiyat": int, "aciklama": str, "rol_adi": str|None}}
+SHOP_ITEMS = {
+    "vip": {"fiyat": 1000, "aciklama": "VIP rolü ve özel renk.", "rol_adi": "VIP"},
+    "reklam": {"fiyat": 300, "aciklama": "24 saat boyunca #Booster kanalında sabitlenmiş reklamın.", "rol_adi": None},
+}
+ 
+# --- KARŞILAMA SİSTEMİ AYARLARI ---
+WELCOME_CHANNEL_ID = int(os.getenv("WELCOME_CHANNEL_ID", "0"))
+WELCOME_ROLE_NAME = os.getenv("WELCOME_ROLE_NAME", "")  # boş bırakılırsa otomatik rol verilmez
+ 
+# --- LİNK/DAVET FİLTRESİ AYARLARI ---
+INVITE_LINK_PATTERN = re.compile(r"(discord\.gg/|discord(app)?\.com/invite/)", re.IGNORECASE)
+GENERIC_LINK_PATTERN = re.compile(r"https?://\S+", re.IGNORECASE)
+# Yalnızca Discord davet linklerini mi engelleyelim, yoksa tüm dış linkleri mi?
+BLOCK_ALL_LINKS = os.getenv("BLOCK_ALL_LINKS", "false").lower() == "true"
+ 
+# --- HATA BİLDİRİM AYARLARI ---
+# Kritik hata olursa bu kullanıcıya DM ile haber verilir (Discord kullanıcı ID'si).
+BOT_OWNER_ID = int(os.getenv("BOT_OWNER_ID", "0"))
+ 
 if DISCORD_TOKEN == "BURAYA_DISCORD_BOT_TOKENINI_YAZ" or not DISCORD_TOKEN:
     logger.warning("Discord Token tanımlanmamış! Lütfen çevre değişkenlerini kontrol edin.")
  
@@ -125,6 +160,8 @@ class UltimateImperialBot(commands.Bot):
         self.coffee_orders = []     # Kahve demleme/sipariş kuyruğu
         self.profanity_strikes = self._load_strikes()  # {user_id: strike_sayisi}
         self.recent_messages = {}   # {user_id: [timestamp, timestamp, ...]} -> spam takibi
+        self.economy = self._load_economy()  # {user_id: {"balance":, "xp":, "level":, "last_daily":}}
+        self.last_xp_time = {}      # {user_id: timestamp} -> XP kasma spam'ini önlemek için
  
     def _load_strikes(self):
         if os.path.exists(STRIKES_FILE):
@@ -141,6 +178,33 @@ class UltimateImperialBot(commands.Bot):
                 json.dump(self.profanity_strikes, f)
         except Exception as e:
             logger.error(f"Strike dosyası kaydedilemedi: {e}")
+ 
+    def _load_economy(self):
+        if os.path.exists(ECONOMY_FILE):
+            try:
+                with open(ECONOMY_FILE, "r", encoding="utf-8") as f:
+                    return {int(k): v for k, v in json.load(f).items()}
+            except Exception as e:
+                logger.error(f"Ekonomi dosyası okunamadı: {e}")
+        return {}
+ 
+    def _save_economy(self):
+        try:
+            with open(ECONOMY_FILE, "w", encoding="utf-8") as f:
+                json.dump(self.economy, f)
+        except Exception as e:
+            logger.error(f"Ekonomi dosyası kaydedilemedi: {e}")
+ 
+    def get_account(self, user_id: int) -> dict:
+        """Kullanıcının ekonomi hesabını döndürür, yoksa varsayılan değerlerle oluşturur."""
+        if user_id not in self.economy:
+            self.economy[user_id] = {
+                "balance": STARTING_BALANCE,
+                "xp": 0,
+                "level": 0,
+                "last_daily": None
+            }
+        return self.economy[user_id]
  
     async def setup_hook(self):
         logger.info("İmparatorluk alt sistemleri, arka plan görevleri ve DLC modülleri başlatılıyor...")
@@ -316,6 +380,86 @@ async def apply_moderation_action(message: discord.Message, reason: str, categor
         pass
  
  
+async def award_xp(member: discord.Member):
+    """Mesaj başına XP verir, spam ile kasılmasın diye üye başına cooldown uygular.
+    Seviye atlarsa ve o seviyeye tanımlı bir rol varsa otomatik verir."""
+    if member.bot:
+        return
+    now = time.time()
+    last = bot.last_xp_time.get(member.id, 0)
+    if now - last < XP_MESSAGE_COOLDOWN_SECONDS:
+        return
+    bot.last_xp_time[member.id] = now
+ 
+    account = bot.get_account(member.id)
+    gained = random.randint(XP_PER_MESSAGE_MIN, XP_PER_MESSAGE_MAX)
+    account["xp"] += gained
+    new_level = account["xp"] // XP_PER_LEVEL
+ 
+    if new_level > account["level"]:
+        old_level = account["level"]
+        account["level"] = new_level
+        bot._save_economy()
+        # Aradan geçilen tüm seviye eşiklerindeki rolleri kontrol et.
+        for lvl in range(old_level + 1, new_level + 1):
+            role_name = LEVEL_ROLES.get(lvl)
+            if role_name:
+                role = discord.utils.get(member.guild.roles, name=role_name)
+                if role:
+                    try:
+                        await member.add_roles(role, reason=f"Seviye {lvl}'e ulaştı")
+                    except Exception as e:
+                        logger.error(f"Seviye rolü verilemedi: {e}")
+                else:
+                    logger.warning(f"'{role_name}' adında bir rol sunucuda bulunamadı (seviye {lvl} için tanımlı).")
+        try:
+            channel = member.guild.system_channel
+            if channel:
+                await channel.send(f"🎉 {member.mention} **Seviye {new_level}**'e yükseldi!", delete_after=15)
+        except Exception:
+            pass
+    else:
+        bot._save_economy()
+ 
+ 
+def format_balance(amount: int) -> str:
+    return f"{amount:,} 🪙".replace(",", ".")
+ 
+ 
+async def check_link_violation(message: discord.Message) -> bool:
+    """Davet linki (veya BLOCK_ALL_LINKS açıksa tüm linkler) varsa mesajı siler. True dönerse mesaj silinmiştir."""
+    content = message.content or ""
+    is_violation = bool(INVITE_LINK_PATTERN.search(content))
+    if not is_violation and BLOCK_ALL_LINKS:
+        is_violation = bool(GENERIC_LINK_PATTERN.search(content))
+    if not is_violation:
+        return False
+    try:
+        await message.delete()
+    except Exception as e:
+        logger.error(f"Link mesajı silinemedi: {e}")
+    try:
+        await message.channel.send(
+            f"🔗 {message.author.mention}, sunucu davet linki/izinsiz link paylaşımı yasak, mesajın silindi.",
+            delete_after=10
+        )
+    except Exception:
+        pass
+    if MOD_LOG_CHANNEL_ID:
+        log_channel = message.guild.get_channel(MOD_LOG_CHANNEL_ID)
+        if log_channel:
+            embed = discord.Embed(title="🔗 Link/Davet Engellendi", color=discord.Color.gold())
+            embed.add_field(name="Kullanıcı", value=message.author.mention, inline=True)
+            embed.add_field(name="Kanal", value=message.channel.mention, inline=True)
+            embed.add_field(name="İçerik", value=content[:1024], inline=False)
+            embed.timestamp = discord.utils.utcnow()
+            try:
+                await log_channel.send(embed=embed)
+            except Exception:
+                pass
+    return True
+ 
+ 
 # --- 4. SES KANALI & HOLOGRAM / KAMERA TETİKLEYİCİ DİNLEYİCİSİ ---
 @bot.event
 async def on_voice_state_update(member, before, after):
@@ -359,6 +503,71 @@ async def on_voice_state_update(member, before, after):
         if member.guild.id in bot.active_holograms:
             bot.active_holograms.pop(member.guild.id, None)
  
+ 
+# --- 4B. KARŞILAMA SİSTEMİ ---
+@bot.event
+async def on_member_join(member: discord.Member):
+    bot.get_account(member.id)  # Hesabını baştan oluştur ki ilk !bakiye'de hata vermesin.
+    bot._save_economy()
+ 
+    if WELCOME_ROLE_NAME:
+        role = discord.utils.get(member.guild.roles, name=WELCOME_ROLE_NAME)
+        if role:
+            try:
+                await member.add_roles(role, reason="Otomatik karşılama rolü")
+            except Exception as e:
+                logger.error(f"Karşılama rolü verilemedi: {e}")
+        else:
+            logger.warning(f"'{WELCOME_ROLE_NAME}' adında karşılama rolü sunucuda bulunamadı.")
+ 
+    channel = None
+    if WELCOME_CHANNEL_ID:
+        channel = member.guild.get_channel(WELCOME_CHANNEL_ID)
+    channel = channel or member.guild.system_channel
+    if channel:
+        embed = discord.Embed(
+            title="✨ Xyrin İmparatorluğu'na Hoş Geldin!",
+            description=(
+                f"{member.mention}, imparatorluğumuzun {member.guild.member_count}. üyesi oldun!\n"
+                f"Kuralları okumayı ve kendini tanıtmayı unutma. `!yardim` veya `/yardim` ile bota göz atabilirsin."
+            ),
+            color=discord.Color.dark_purple()
+        )
+        if member.display_avatar:
+            embed.set_thumbnail(url=member.display_avatar.url)
+        embed.set_footer(text="Xyrin Empire Core - Hükümdar Protokolü Aktif")
+        try:
+            await channel.send(embed=embed)
+        except Exception as e:
+            logger.error(f"Karşılama mesajı gönderilemedi: {e}")
+ 
+ 
+# --- 4C. GENEL HATA BİLDİRİMİ ---
+@bot.event
+async def on_command_error(ctx, error):
+    if isinstance(error, (commands.CommandNotFound, commands.CheckFailure)):
+        # Yetkisiz komut denemeleri veya yanlış yazımlar log'u kirletmesin.
+        if isinstance(error, commands.CheckFailure):
+            try:
+                await ctx.send("❌ Bu komutu kullanmak için yetkin yok.", delete_after=8)
+            except Exception:
+                pass
+        return
+ 
+    logger.error(f"Komut hatası ({ctx.command}): {error}")
+    try:
+        await ctx.send("⚠️ Komut çalıştırılırken bir hata oluştu, bu durum Hükümdar'a bildirildi.", delete_after=8)
+    except Exception:
+        pass
+ 
+    if BOT_OWNER_ID:
+        try:
+            owner = await bot.fetch_user(BOT_OWNER_ID)
+            await owner.send(f"⚠️ **Komut hatası**\nKomut: `{ctx.command}`\nSunucu: {ctx.guild.name if ctx.guild else 'DM'}\nHata: `{error}`")
+        except Exception as e:
+            logger.error(f"Sahibe hata DM'i gönderilemedi: {e}")
+ 
+ 
 # --- 5. MESAJ, GÖRSEL (VISION) VE HÜKÜMDAR MUTLAK YETKİ YÖNETİCİSİ ---
 @bot.event
 async def on_message(message):
@@ -367,17 +576,26 @@ async def on_message(message):
  
     bot.message_counter += 1
  
-    # --- MODERASYON KONTROLÜ (küfür + spam) ---
+    # --- MODERASYON KONTROLÜ (küfür + spam + link/davet) ---
     # Sunucu içi mesajlar için çalışır; DM'lerde ve Hükümdarlar için devre dışı.
     if message.guild and not is_sovereign_member(message.author) and not message.author.bot:
         if is_spamming(bot, message.author.id):
             await apply_moderation_action(message, "Kısa sürede çok fazla mesaj (spam)", "SPAM")
             return  # Spam olarak işaretlenen mesaj için AI sohbet akışına devam etme.
  
+        # Yöneticiler link filtresinden muaf (duyuru/link paylaşabilsin diye).
+        if not message.author.guild_permissions.administrator:
+            link_silindi = await check_link_violation(message)
+            if link_silindi:
+                return
+ 
         kufur_var, sebep = await ai_check_profanity(message.content)
         if kufur_var:
             await apply_moderation_action(message, sebep, "KÜFÜR/HAKARET")
             return
+ 
+        # Mesaj hiçbir kurala takılmadıysa XP ver (seviye sistemi).
+        await award_xp(message.author)
  
     if bot.user.mentioned_in(message) or isinstance(message.channel, discord.DMChannel):
         clean_content = message.content.replace(f'<@!{bot.user.id}>', '').replace(f'<@{bot.user.id}>', '').strip()
@@ -485,6 +703,10 @@ async def yardim_komutu(ctx):
     embed.add_field(name="🛡️ `!uyarilar [@kullanıcı]`", value="Kullanıcının küfür/spam strike sayısını gösterir.", inline=False)
     embed.add_field(name="🛡️ `!uyarisifirla @kullanıcı`", value="Yalnızca yöneticiler: strike sicilini sıfırlar.", inline=False)
     embed.add_field(name="🛡️ `!modlog`", value="Yalnızca yöneticiler: moderasyon loglarının gönderileceği kanalı bu kanal olarak ayarlar.", inline=False)
+    embed.add_field(name="🪙 `!bakiye` `!gunluk` `!transfer`", value="Ekonomi sistemi: bakiyeni gör, günlük ödül al, başkasına gönder.", inline=False)
+    embed.add_field(name="🏪 `!market` `!satinal`", value="Marketten VIP rol gibi eşyalar satın al.", inline=False)
+    embed.add_field(name="📈 `!seviye` `!siralama`", value="Mesaj XP'sine göre seviyeni ve sunucu zenginlik sıralamasını gör.", inline=False)
+    embed.add_field(name="🎲 `!zar` `!yazitura` `!bahis`", value="Mini oyunlar, `!bahis yazi/tura <miktar>` ile bakiyeni ikiye katlamayı dene.", inline=False)
     embed.set_footer(text="Xyrin Empire Core v4.5 - Hükümdar Protokolü Aktif (endercosmic1, melikhan111)")
     await ctx.send(embed=embed)
  
@@ -590,6 +812,151 @@ async def modlog_kanal_ayarla(ctx):
         f"⚠️ Not: Bot yeniden başlatılırsa bu ayar sıfırlanır — kalıcı olması için "
         f"`MOD_LOG_CHANNEL_ID={ctx.channel.id}` çevre değişkenini Render/Railway ayarlarına ekle."
     )
+ 
+# --- 6B. EKONOMİ & SEVİYE KOMUTLARI ---
+ 
+@bot.hybrid_command(name="bakiye", aliases=["balance", "cuzdan"])
+async def bakiye_komutu(ctx, member: discord.Member = None):
+    member = member or ctx.author
+    account = bot.get_account(member.id)
+    embed = discord.Embed(title="🪙 İmparatorluk Hazinesi", color=discord.Color.gold())
+    embed.add_field(name="Kullanıcı", value=member.mention, inline=True)
+    embed.add_field(name="Bakiye", value=format_balance(account["balance"]), inline=True)
+    await ctx.send(embed=embed)
+ 
+@bot.hybrid_command(name="seviye", aliases=["level", "rank"])
+async def seviye_komutu(ctx, member: discord.Member = None):
+    member = member or ctx.author
+    account = bot.get_account(member.id)
+    xp_in_level = account["xp"] % XP_PER_LEVEL
+    embed = discord.Embed(title="📈 Seviye Kartı", color=discord.Color.blurple())
+    embed.add_field(name="Kullanıcı", value=member.mention, inline=True)
+    embed.add_field(name="Seviye", value=str(account["level"]), inline=True)
+    embed.add_field(name="XP", value=f"{xp_in_level}/{XP_PER_LEVEL} (toplam: {account['xp']})", inline=False)
+    next_role_lvl = next((lvl for lvl in sorted(LEVEL_ROLES) if lvl > account["level"]), None)
+    if next_role_lvl:
+        embed.add_field(name="Sıradaki rol", value=f"Seviye {next_role_lvl}: **{LEVEL_ROLES[next_role_lvl]}**", inline=False)
+    await ctx.send(embed=embed)
+ 
+@bot.hybrid_command(name="gunluk", aliases=["daily"])
+async def gunluk_komutu(ctx):
+    account = bot.get_account(ctx.author.id)
+    now = datetime.now()
+    if account["last_daily"]:
+        last = datetime.fromisoformat(account["last_daily"])
+        remaining = timedelta(hours=DAILY_COOLDOWN_HOURS) - (now - last)
+        if remaining.total_seconds() > 0:
+            hours = int(remaining.total_seconds() // 3600)
+            minutes = int((remaining.total_seconds() % 3600) // 60)
+            await ctx.send(f"⏳ Günlük ödülünü zaten aldın! {hours} saat {minutes} dakika sonra tekrar gel.")
+            return
+ 
+    reward = random.randint(DAILY_REWARD_MIN, DAILY_REWARD_MAX)
+    account["balance"] += reward
+    account["last_daily"] = now.isoformat()
+    bot._save_economy()
+    await ctx.send(f"🎁 {ctx.author.mention} günlük ödülün: **{format_balance(reward)}**! Yeni bakiye: {format_balance(account['balance'])}")
+ 
+@bot.hybrid_command(name="transfer", aliases=["pay", "gonder"])
+async def transfer_komutu(ctx, member: discord.Member, miktar: int):
+    if miktar <= 0:
+        await ctx.send("❌ Geçerli (pozitif) bir miktar gir.")
+        return
+    if member.id == ctx.author.id:
+        await ctx.send("❌ Kendine para gönderemezsin.")
+        return
+    sender = bot.get_account(ctx.author.id)
+    if sender["balance"] < miktar:
+        await ctx.send(f"❌ Yetersiz bakiye! Şu an: {format_balance(sender['balance'])}")
+        return
+    receiver = bot.get_account(member.id)
+    sender["balance"] -= miktar
+    receiver["balance"] += miktar
+    bot._save_economy()
+    await ctx.send(f"✅ {ctx.author.mention}, {member.mention} kullanıcısına **{format_balance(miktar)}** gönderdi!")
+ 
+@bot.hybrid_command(name="market", aliases=["shop", "magaza"])
+async def market_komutu(ctx):
+    embed = discord.Embed(title="🏪 İmparatorluk Marketi", description="Satın almak için `!satinal <isim>` yaz.", color=discord.Color.purple())
+    for key, item in SHOP_ITEMS.items():
+        embed.add_field(name=f"{key} — {format_balance(item['fiyat'])}", value=item["aciklama"], inline=False)
+    await ctx.send(embed=embed)
+ 
+@bot.hybrid_command(name="satinal", aliases=["buy"])
+async def satinal_komutu(ctx, item_adi: str):
+    item_adi = item_adi.lower().strip()
+    item = SHOP_ITEMS.get(item_adi)
+    if not item:
+        await ctx.send(f"❌ Böyle bir eşya yok. `!market` ile listeye bakabilirsin.")
+        return
+    account = bot.get_account(ctx.author.id)
+    if account["balance"] < item["fiyat"]:
+        await ctx.send(f"❌ Yetersiz bakiye! Gereken: {format_balance(item['fiyat'])}, mevcut: {format_balance(account['balance'])}")
+        return
+    account["balance"] -= item["fiyat"]
+    bot._save_economy()
+    if item["rol_adi"]:
+        role = discord.utils.get(ctx.guild.roles, name=item["rol_adi"])
+        if role:
+            try:
+                await ctx.author.add_roles(role, reason=f"Market satın alma: {item_adi}")
+            except Exception as e:
+                logger.error(f"Market rolü verilemedi: {e}")
+        else:
+            logger.warning(f"'{item['rol_adi']}' adında market rolü sunucuda bulunamadı.")
+    await ctx.send(f"✅ {ctx.author.mention}, **{item_adi}** satın alındı! Kalan bakiye: {format_balance(account['balance'])}")
+ 
+@bot.hybrid_command(name="zar", aliases=["dice", "roll"])
+async def zar_komutu(ctx, max_sayi: int = 100):
+    if max_sayi < 2:
+        max_sayi = 100
+    sonuc = random.randint(1, max_sayi)
+    await ctx.send(f"🎲 {ctx.author.mention} zar attı: **{sonuc}** / {max_sayi}")
+ 
+@bot.hybrid_command(name="yazitura", aliases=["coinflip"])
+async def yazitura_komutu(ctx):
+    sonuc = random.choice(["Yazı", "Tura"])
+    await ctx.send(f"🪙 {ctx.author.mention}, sonuç: **{sonuc}**!")
+ 
+@bot.hybrid_command(name="bahis", aliases=["bet"])
+async def bahis_komutu(ctx, secim: str, miktar: int):
+    secim = secim.lower().strip()
+    if secim not in ("yazi", "tura"):
+        await ctx.send("❌ Seçimin `yazi` ya da `tura` olmalı. Örnek: `!bahis yazi 100`")
+        return
+    if miktar <= 0:
+        await ctx.send("❌ Geçerli (pozitif) bir miktar gir.")
+        return
+    account = bot.get_account(ctx.author.id)
+    if account["balance"] < miktar:
+        await ctx.send(f"❌ Yetersiz bakiye! Şu an: {format_balance(account['balance'])}")
+        return
+ 
+    sonuc = random.choice(["yazi", "tura"])
+    if sonuc == secim:
+        kazanc = miktar  # 2 katına çıkar (yatırdığın + eşit kazanç)
+        account["balance"] += kazanc
+        bot._save_economy()
+        await ctx.send(f"🎉 {ctx.author.mention} kazandı! Sonuç: **{sonuc.title()}**. Kazanç: +{format_balance(kazanc)}. Yeni bakiye: {format_balance(account['balance'])}")
+    else:
+        account["balance"] -= miktar
+        bot._save_economy()
+        await ctx.send(f"💸 {ctx.author.mention} kaybetti! Sonuç: **{sonuc.title()}**. Kayıp: -{format_balance(miktar)}. Yeni bakiye: {format_balance(account['balance'])}")
+ 
+@bot.hybrid_command(name="siralama", aliases=["leaderboard", "top"])
+async def siralama_komutu(ctx):
+    if not bot.economy:
+        await ctx.send("Henüz kimsenin bir hesabı yok.")
+        return
+    sirali = sorted(bot.economy.items(), key=lambda kv: kv[1]["balance"], reverse=True)[:10]
+    embed = discord.Embed(title="🏆 İmparatorluk Zenginlik Sıralaması", color=discord.Color.gold())
+    lines = []
+    for i, (user_id, data) in enumerate(sirali, start=1):
+        member = ctx.guild.get_member(user_id)
+        name = member.mention if member else f"`{user_id}`"
+        lines.append(f"**{i}.** {name} — {format_balance(data['balance'])}")
+    embed.description = "\n".join(lines)
+    await ctx.send(embed=embed)
  
 # --- 7. ÇALIŞTIRMA BLOĞU ---
 if __name__ == "__main__":
