@@ -1,9 +1,10 @@
+
 # ==============================================================================
 # DISCORD AI & IMPERIAL ECOSYSTEM BOT - ULTIMATE VISION & HOLOGRAM EDITION
 # ==============================================================================
 # Xyrin İmparatorluğu Core v4.5 - Hükümdarlar (endercosmic1, melikhan111) Mutlak Yetki Protokolü Entegre Edilmiştir.
 # ==============================================================================
-
+ 
 import os
 import sys
 import time
@@ -20,7 +21,7 @@ import aiohttp
 import discord
 from discord.ext import commands, tasks
 import google.generativeai as genai
-
+ 
 # --- 1. GELİŞMİŞ LOGLAMA VE SİSTEM ÇEKİRDEĞİ YAPILANDIRMASI ---
 logging.basicConfig(
     level=logging.INFO,
@@ -31,15 +32,15 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger("XyrinImperialCore")
-
+ 
 # --- 2. ÇEVRESEL DEĞİŞKENLER VE GÜVENLİK ---
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN", "BURAYA_DISCORD_BOT_TOKENINI_YAZ")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "BURAYA_GEMINI_API_KEYINI_YAZ")
-
+ 
 # Birden fazla Hükümdar kullanıcı adını buradan yönetiyoruz.
 # Yeni bir hükümdar eklemek istersen sadece bu listeye ismini ekle.
 SOVEREIGN_USERNAMES = {"endercosmic1", "melikhan111"}
-
+ 
 # --- MODERASYON (KÜFÜR/SPAM FİLTRESİ) AYARLARI ---
 # Loglama mesajlarının (silinen mesaj + kim + ne yazdı) gönderileceği kanal ID'si.
 MOD_LOG_CHANNEL_ID = int(os.getenv("MOD_LOG_CHANNEL_ID", "0"))
@@ -50,22 +51,22 @@ SPAM_WINDOW_SECONDS = 7
 SPAM_MESSAGE_LIMIT = 6
 # Strike verileri yeniden başlatmalarda kaybolmasın diye buraya kaydediliyor.
 STRIKES_FILE = "profanity_strikes.json"
-
+ 
 if DISCORD_TOKEN == "BURAYA_DISCORD_BOT_TOKENINI_YAZ" or not DISCORD_TOKEN:
     logger.warning("Discord Token tanımlanmamış! Lütfen çevre değişkenlerini kontrol edin.")
-
+ 
 if GEMINI_API_KEY == "BURAYA_GEMINI_API_KEYINI_YAZ" or not GEMINI_API_KEY:
     logger.warning("Gemini API Key tanımlanmamış! Yapay zeka sinir ağları devre dışı kalabilir.")
-
+ 
 # Gemini Yapılandırması
 genai.configure(api_key=GEMINI_API_KEY)
-
+ 
 generation_config = {
     "temperature": 0.85,
     "top_p": 0.95,
     "max_output_tokens": 2048,
 }
-
+ 
 SYSTEM_INSTRUCTION = (
     "Sen Xyrin İmparatorluğu'nun en gelişmiş yapay zeka asistanısın. "
     "Sistemin yaratıcıları ve hakimleri 'endercosmic1' ve 'melikhan111' adlı kullanıcılardır "
@@ -74,7 +75,7 @@ SYSTEM_INSTRUCTION = (
     "Eğer Yüce Hükümdarlarımızdan biri senden bir kanal veya rol oluşturmanı isterse, yanıtının en sonuna tam olarak şu formatlardan birini ekle: `[CREATE_CHANNEL: kanal-adi]` veya `[CREATE_ROLE: rol-adi]`. "
     "Geçmiş sohbetleri hafızanda tutar, görselleri (Vision) en ince detayına kadar analiz edersin."
 )
-
+ 
 try:
     model = genai.GenerativeModel(
         model_name="gemini-3.5-flash-lite",
@@ -85,7 +86,7 @@ try:
 except Exception as e:
     logger.error(f"Gemini modeli yüklenirken kritik hata: {e}")
     model = None
-
+ 
 # Küfür/hakaret tespiti için ayrı, düşük sıcaklıklı ve kısa cevap veren hafif bir model.
 # Sohbet geçmişi tutmuyor, her mesajı bağımsız sınıflandırıyor -> hızlı ve ucuz.
 PROFANITY_SYSTEM_INSTRUCTION = (
@@ -106,14 +107,14 @@ try:
 except Exception as e:
     logger.error(f"Küfür sınıflandırma modeli yüklenirken hata: {e}")
     profanity_model = None
-
+ 
 # --- 3. DISCORD INTENTS VE GELİŞMİŞ BOT MİMARİSİ ---
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 intents.guilds = True
 intents.voice_states = True
-
+ 
 class UltimateImperialBot(commands.Bot):
     def __init__(self):
         super().__init__(command_prefix="!", intents=intents, help_command=None)
@@ -124,7 +125,7 @@ class UltimateImperialBot(commands.Bot):
         self.coffee_orders = []     # Kahve demleme/sipariş kuyruğu
         self.profanity_strikes = self._load_strikes()  # {user_id: strike_sayisi}
         self.recent_messages = {}   # {user_id: [timestamp, timestamp, ...]} -> spam takibi
-
+ 
     def _load_strikes(self):
         if os.path.exists(STRIKES_FILE):
             try:
@@ -133,20 +134,26 @@ class UltimateImperialBot(commands.Bot):
             except Exception as e:
                 logger.error(f"Strike dosyası okunamadı: {e}")
         return {}
-
+ 
     def _save_strikes(self):
         try:
             with open(STRIKES_FILE, "w", encoding="utf-8") as f:
                 json.dump(self.profanity_strikes, f)
         except Exception as e:
             logger.error(f"Strike dosyası kaydedilemedi: {e}")
-
+ 
     async def setup_hook(self):
         logger.info("İmparatorluk alt sistemleri, arka plan görevleri ve DLC modülleri başlatılıyor...")
         self.check_events_loop.start()
         self.server_stats_loop.start()
         self.hologram_pulse_loop.start()
-
+        # Slash (/) komutlarını Discord'a kaydet/senkronize et.
+        try:
+            synced = await self.tree.sync()
+            logger.info(f"{len(synced)} slash (/) komutu başarıyla senkronize edildi.")
+        except Exception as e:
+            logger.error(f"Slash komutları senkronize edilemedi: {e}")
+ 
     async def on_ready(self):
         logger.info(f"İmparatorluk Botu Çevrimiçi: {self.user} (ID: {self.user.id})")
         logger.info(f"Hizmet Verilen Evren/Sunucu Sayısı: {len(self.guilds)}")
@@ -154,7 +161,7 @@ class UltimateImperialBot(commands.Bot):
             type=discord.ActivityType.playing,
             name="!yardim | Hükümdar Protokolü Aktif ☕✨"
         ))
-
+ 
     def get_or_create_chat(self, channel_id):
         if channel_id not in self.chat_sessions:
             if model:
@@ -162,7 +169,7 @@ class UltimateImperialBot(commands.Bot):
             else:
                 return None
         return self.chat_sessions[channel_id]
-
+ 
     # --- ARKA PLAN GÖREVİ 1: ETKİNLİK HATIRATICISI ---
     @tasks.loop(seconds=30)
     async def check_events_loop(self):
@@ -182,41 +189,41 @@ class UltimateImperialBot(commands.Bot):
                     logger.info(f"Etkinlik tetiklendi: {event['title']}")
                 except Exception as ex:
                     logger.error(f"Etkinlik tetikleme hatası: {ex}")
-
+ 
     @check_events_loop.before_loop
     async def before_events(self):
         await self.wait_until_ready()
-
+ 
     # --- ARKA PLAN GÖREVİ 2: CANLI SUNUCU İSTATİSTİKLERİ ---
     @tasks.loop(hours=24)
     async def server_stats_loop(self):
         for guild in self.guilds:
             logger.info(f"İmparatorluk Raporu [{guild.name}]: Üye={guild.member_count}, MesajSayaç={self.message_counter}")
             self.message_counter = 0
-
+ 
     @server_stats_loop.before_loop
     async def before_stats(self):
         await self.wait_until_ready()
-
+ 
     # --- ARKA PLAN GÖREVİ 3: HOLOGRAM NABIZ VE PROJEKSİYON DÖNGÜSÜ ---
     @tasks.loop(seconds=10)
     async def hologram_pulse_loop(self):
         for guild_id, holo_data in list(self.active_holograms.items()):
             holo_data["frames_rendered"] += 1
-
+ 
     @hologram_pulse_loop.before_loop
     async def before_hologram(self):
         await self.wait_until_ready()
-
+ 
 bot = UltimateImperialBot()
-
-
+ 
+ 
 def is_sovereign_member(member_or_author) -> bool:
     """Bir üyenin/yazarın Hükümdarlar listesinde olup olmadığını kontrol eder."""
     name = (member_or_author.name or "").lower()
     return name in SOVEREIGN_USERNAMES
-
-
+ 
+ 
 async def ai_check_profanity(content: str):
     """Mesajı Gemini'ye sınıflandırtır. Dönüş: (kufur_var_mi: bool, sebep: str)"""
     if not profanity_model or not content or not content.strip():
@@ -232,8 +239,8 @@ async def ai_check_profanity(content: str):
     except Exception as e:
         logger.error(f"Küfür sınıflandırma hatası: {e}")
         return False, ""
-
-
+ 
+ 
 def is_spamming(bot_instance, user_id: int) -> bool:
     """Kullanıcının son SPAM_WINDOW_SECONDS içinde SPAM_MESSAGE_LIMIT'ten fazla mesaj atıp atmadığını kontrol eder."""
     now = time.time()
@@ -244,25 +251,25 @@ def is_spamming(bot_instance, user_id: int) -> bool:
     while timestamps and timestamps[0] < cutoff:
         timestamps.pop(0)
     return len(timestamps) > SPAM_MESSAGE_LIMIT
-
-
+ 
+ 
 async def apply_moderation_action(message: discord.Message, reason: str, category: str):
     """Mesajı siler, kullanıcıyı strike sayısına göre mute'lar ve log kanalına bildirir."""
     member = message.author
     guild = message.guild
     bot_instance = message.guild and bot
-
+ 
     original_content = message.content or "*(içerik yok / sadece ek dosya)*"
-
+ 
     try:
         await message.delete()
     except Exception as e:
         logger.error(f"Mesaj silinemedi: {e}")
-
+ 
     strikes = bot.profanity_strikes.get(member.id, 0) + 1
     bot.profanity_strikes[member.id] = strikes
     bot._save_strikes()
-
+ 
     timeout_minutes = STRIKE_TIMEOUT_MINUTES.get(strikes, STRIKE_TIMEOUT_MINUTES[max(STRIKE_TIMEOUT_MINUTES)])
     muted = False
     try:
@@ -274,7 +281,7 @@ async def apply_moderation_action(message: discord.Message, reason: str, categor
             logger.warning("Botun 'Moderate Members' yetkisi yok, timeout uygulanamadı.")
     except Exception as e:
         logger.error(f"Timeout uygulanamadı: {e}")
-
+ 
     # Log kanalına bildir.
     if MOD_LOG_CHANNEL_ID:
         log_channel = guild.get_channel(MOD_LOG_CHANNEL_ID)
@@ -298,7 +305,7 @@ async def apply_moderation_action(message: discord.Message, reason: str, categor
                 await log_channel.send(embed=embed)
             except Exception as e:
                 logger.error(f"Log kanalına mesaj gönderilemedi: {e}")
-
+ 
     # Kullanıcıya kısa bir uyarı bırak (kanalda, kısa süreliğine).
     try:
         warn_text = f"⚠️ {member.mention}, mesajın kurallara aykırı bulunduğu için silindi."
@@ -307,26 +314,26 @@ async def apply_moderation_action(message: discord.Message, reason: str, categor
         await message.channel.send(warn_text, delete_after=10)
     except Exception:
         pass
-
-
+ 
+ 
 # --- 4. SES KANALI & HOLOGRAM / KAMERA TETİKLEYİCİ DİNLEYİCİSİ ---
 @bot.event
 async def on_voice_state_update(member, before, after):
     if member.bot:
         return
-
+ 
     if after.channel and before.channel != after.channel:
         guild = member.guild
         is_sovereign = is_sovereign_member(member)
         logger.info(f"[HOLOGRAPHIC DLC] {member.name} ses kanalına katıldı: {after.channel.name}. Hologram projektör hazırlanıyor...")
-
+ 
         bot.active_holograms[guild.id] = {
             "channel": after.channel,
             "target_user": member,
             "frames_rendered": 0,
             "status": "PROJEKSİYON AKTİF - 3D Xyrin Logosu ve Avatar Dönüyor"
         }
-
+ 
         text_channel = guild.system_channel or next((c for c in guild.text_channels if c.permissions_for(guild.me).send_messages), None)
         if text_channel:
             desc = (
@@ -347,37 +354,37 @@ async def on_voice_state_update(member, before, after):
                 await text_channel.send(embed=embed)
             except Exception as e:
                 logger.error(f"Hologram bildirim mesajı gönderilemedi: {e}")
-
+ 
     elif before.channel and not after.channel:
         if member.guild.id in bot.active_holograms:
             bot.active_holograms.pop(member.guild.id, None)
-
+ 
 # --- 5. MESAJ, GÖRSEL (VISION) VE HÜKÜMDAR MUTLAK YETKİ YÖNETİCİSİ ---
 @bot.event
 async def on_message(message):
     if message.author == bot.user:
         return
-
+ 
     bot.message_counter += 1
-
+ 
     # --- MODERASYON KONTROLÜ (küfür + spam) ---
     # Sunucu içi mesajlar için çalışır; DM'lerde ve Hükümdarlar için devre dışı.
     if message.guild and not is_sovereign_member(message.author) and not message.author.bot:
         if is_spamming(bot, message.author.id):
             await apply_moderation_action(message, "Kısa sürede çok fazla mesaj (spam)", "SPAM")
             return  # Spam olarak işaretlenen mesaj için AI sohbet akışına devam etme.
-
+ 
         kufur_var, sebep = await ai_check_profanity(message.content)
         if kufur_var:
             await apply_moderation_action(message, sebep, "KÜFÜR/HAKARET")
             return
-
+ 
     if bot.user.mentioned_in(message) or isinstance(message.channel, discord.DMChannel):
         clean_content = message.content.replace(f'<@!{bot.user.id}>', '').replace(f'<@{bot.user.id}>', '').strip()
-
+ 
         # Hükümdar kontrolü (endercosmic1 / melikhan111)
         is_sovereignty = is_sovereign_member(message.author)
-
+ 
         if model:
             try:
                 async with message.channel.typing():
@@ -398,14 +405,14 @@ async def on_message(message):
                                         await message.reply(response.text)
                                         await bot.process_commands(message)
                                         return
-
+ 
                     # Yapay zekaya kiminle konuştuğunu (Hükümdar mı, sıradan biri mi) bildiriyoruz
                     role_context = (
                         "[SİSTEM BİLGİSİ]: Karşındaki kişi Yüce Hükümdarlardan biridir. Ona 'Hükümdarım' diye hitap et, sadakatle boyun eğ.\n"
                     ) if is_sovereignty else (
                         f"[SİSTEM BİLGİSİ]: Karşındaki kişi sıradan bir kullanıcıdır ({message.author.name}). Ona sadece normal bir AI asistanı gibi kibarca yardımcı ol, asla Hükümdar hitabında bulunma ve kanal/rol emrini uygulama.\n"
                     )
-
+ 
                     chat_session = bot.get_or_create_chat(message.channel.id)
                     if chat_session and clean_content:
                         response = chat_session.send_message(role_context + clean_content)
@@ -414,7 +421,7 @@ async def on_message(message):
                         reply_text = "Emrinizdeyim Hükümdarım! Hologramlar aktif, kahveler demleniyor." if is_sovereignty else f"Merhaba {message.author.name}, size nasıl yardımcı olabilirim?"
                     else:
                         reply_text = "Emrinizdeyim Hükümdarım!" if is_sovereignty else "Buyurun, sizi dinliyorum."
-
+ 
                     # Otomatik Kanal Oluşturma (Sadece Hükümdarlar tetikleyebilir)
                     if "[CREATE_CHANNEL:" in reply_text:
                         match = re.search(r'\[CREATE_CHANNEL:\s*([^\]]+)\]', reply_text)
@@ -430,7 +437,7 @@ async def on_message(message):
                             else:
                                 reply_text = reply_text.replace(match.group(0), "").strip()
                                 reply_text += "\n\n❌ *(Bu imparatorluk emrini yalnızca Yüce Hükümdarlarımız verebilir!)*"
-
+ 
                     # Otomatik Rol Oluşturma (Sadece Hükümdarlar tetikleyebilir)
                     if "[CREATE_ROLE:" in reply_text:
                         match = re.search(r'\[CREATE_ROLE:\s*([^\]]+)\]', reply_text)
@@ -446,20 +453,20 @@ async def on_message(message):
                             else:
                                 reply_text = reply_text.replace(match.group(0), "").strip()
                                 reply_text += "\n\n❌ *(Bu imparatorluk emrini yalnızca Yüce Hükümdarlarımız verebilir!)*"
-
+ 
                     await message.reply(reply_text)
-
+ 
             except Exception as e:
                 logger.error(f"AI Yanıt/Oto-Oluşturma Hatası: {e}")
                 await message.reply("⚠️ Sinir ağlarında geçici bir dalgalanma oluştu.")
         else:
             await message.reply("⚠️ Yapay zeka çekirdeği çevrimdışı.")
-
+ 
     await bot.process_commands(message)
-
+ 
 # --- 6. İMPARATORLUK KOMUT SETİ ---
-
-@bot.command(name="yardim", aliases=["help", "komutlar"])
+ 
+@bot.hybrid_command(name="yardim", aliases=["help", "komutlar"])
 async def yardim_komutu(ctx):
     embed = discord.Embed(
         title="👑 Xyrin İmparatorluğu - Ultimate Vision, Hologram & Hükümdar Protokolü",
@@ -480,8 +487,8 @@ async def yardim_komutu(ctx):
     embed.add_field(name="🛡️ `!modlog`", value="Yalnızca yöneticiler: moderasyon loglarının gönderileceği kanalı bu kanal olarak ayarlar.", inline=False)
     embed.set_footer(text="Xyrin Empire Core v4.5 - Hükümdar Protokolü Aktif (endercosmic1, melikhan111)")
     await ctx.send(embed=embed)
-
-@bot.command(name="ping")
+ 
+@bot.hybrid_command(name="ping")
 async def ping_komutu(ctx):
     latency = round(bot.latency * 1000)
     embed = discord.Embed(
@@ -490,8 +497,8 @@ async def ping_komutu(ctx):
         color=discord.Color.green()
     )
     await ctx.send(embed=embed)
-
-@bot.command(name="kahve", aliases=["coffee", "espresso"])
+ 
+@bot.hybrid_command(name="kahve", aliases=["coffee", "espresso"])
 async def kahve_komutu(ctx, *, kahve_turu: str = "Espresso"):
     simulated_steps = [
         "☕ İmparatorluk Kahve Çekirdekleri öğütülüyor...",
@@ -503,8 +510,8 @@ async def kahve_komutu(ctx, *, kahve_turu: str = "Espresso"):
         await asyncio.sleep(1.2)
         await msg.edit(content=step)
     await ctx.send(f"☕ Kahveniz hazır, afiyet olsun!")
-
-@bot.command(name="hologram", aliases=["holo", "camera", "kamera"])
+ 
+@bot.hybrid_command(name="hologram", aliases=["holo", "camera", "kamera"])
 async def hologram_durum_komutu(ctx):
     guild_id = ctx.guild.id
     embed = discord.Embed(title="🔮 Xyrin Hologram Projektör", color=discord.Color.teal())
@@ -514,28 +521,28 @@ async def hologram_durum_komutu(ctx):
     else:
         embed.description = "Aktif bir ses odası hologramı bulunmuyor."
     await ctx.send(embed=embed)
-
-@bot.command(name="kanaloluştur", aliases=["createchannel"])
+ 
+@bot.hybrid_command(name="kanaloluştur", aliases=["createchannel"])
 @commands.has_permissions(administrator=True)
 async def manuel_kanal_olustur(ctx, *, kanal_adi: str):
     yeni_kanal = await ctx.guild.create_text_channel(kanal_adi)
     await ctx.send(f"✅ Başarıyla yeni kanal oluşturuldu: {yeni_kanal.mention}")
-
-@bot.command(name="rololuştur", aliases=["createrole"])
+ 
+@bot.hybrid_command(name="rololuştur", aliases=["createrole"])
 @commands.has_permissions(administrator=True)
 async def manuel_rol_olustur(ctx, *, rol_adi: str):
     yeni_rol = await ctx.guild.create_role(name=rol_adi, color=discord.Color.random())
     await ctx.send(f"✨ Yeni rol başarıyla yaratıldı: **{yeni_rol.name}**")
-
-@bot.command(name="rapor", aliases=["stats", "durum"])
+ 
+@bot.hybrid_command(name="rapor", aliases=["stats", "durum"])
 async def sunucu_raporu(ctx):
     guild = ctx.guild
     embed = discord.Embed(title=f"📊 {guild.name} - Rapor", color=discord.Color.blue())
     embed.add_field(name="👥 Toplam Üye", value=str(guild.member_count), inline=True)
     embed.add_field(name="🤖 Durum", value="Hükümdar Protokolü Devrede", inline=False)
     await ctx.send(embed=embed)
-
-@bot.command(name="seslen", aliases=["join"])
+ 
+@bot.hybrid_command(name="seslen", aliases=["join"])
 async def ses_kanalina_gir(ctx):
     if ctx.author.voice and ctx.author.voice.channel:
         channel = ctx.author.voice.channel
@@ -546,8 +553,8 @@ async def ses_kanalina_gir(ctx):
         await ctx.send(f"🔊 Ses kanalına giriş yapıldı: **{channel.name}** ✨")
     else:
         await ctx.send("❌ Önce bir ses kanalına katılmalısınız!")
-
-@bot.command(name="ayril", aliases=["leave"])
+ 
+@bot.hybrid_command(name="ayril", aliases=["leave"])
 async def ses_kanalindan_cik(ctx):
     if ctx.voice_client:
         await ctx.voice_client.disconnect()
@@ -555,8 +562,8 @@ async def ses_kanalindan_cik(ctx):
         await ctx.send("🔇 Ses kanalından ayrılındı.")
     else:
         await ctx.send("❌ Zaten bir ses kanalında değilim.")
-
-@bot.command(name="uyarilar", aliases=["strikes", "warnlist"])
+ 
+@bot.hybrid_command(name="uyarilar", aliases=["strikes", "warnlist"])
 @commands.has_permissions(moderate_members=True)
 async def uyarilar_komutu(ctx, member: discord.Member = None):
     member = member or ctx.author
@@ -565,15 +572,15 @@ async def uyarilar_komutu(ctx, member: discord.Member = None):
     embed.add_field(name="Kullanıcı", value=member.mention, inline=True)
     embed.add_field(name="Toplam strike", value=str(strikes), inline=True)
     await ctx.send(embed=embed)
-
-@bot.command(name="uyarisifirla", aliases=["resetstrikes"])
+ 
+@bot.hybrid_command(name="uyarisifirla", aliases=["resetstrikes"])
 @commands.has_permissions(administrator=True)
 async def uyari_sifirla_komutu(ctx, member: discord.Member):
     bot.profanity_strikes.pop(member.id, None)
     bot._save_strikes()
     await ctx.send(f"✅ {member.mention} kullanıcısının uyarı sicili sıfırlandı.")
-
-@bot.command(name="modlog", aliases=["setmodlog"])
+ 
+@bot.hybrid_command(name="modlog", aliases=["setmodlog"])
 @commands.has_permissions(administrator=True)
 async def modlog_kanal_ayarla(ctx):
     global MOD_LOG_CHANNEL_ID
@@ -583,7 +590,7 @@ async def modlog_kanal_ayarla(ctx):
         f"⚠️ Not: Bot yeniden başlatılırsa bu ayar sıfırlanır — kalıcı olması için "
         f"`MOD_LOG_CHANNEL_ID={ctx.channel.id}` çevre değişkenini Render/Railway ayarlarına ekle."
     )
-
+ 
 # --- 7. ÇALIŞTIRMA BLOĞU ---
 if __name__ == "__main__":
     if DISCORD_TOKEN == "BURAYA_DISCORD_BOT_TOKENINI_YAZ":
@@ -594,4 +601,4 @@ if __name__ == "__main__":
             bot.run(DISCORD_TOKEN)
         except Exception as e:
             logger.critical(f"Çalışma zamanı kritik hatası: {e}")
-         
+ 
