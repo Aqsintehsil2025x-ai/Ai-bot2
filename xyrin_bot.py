@@ -1,7 +1,7 @@
 # ==============================================================================
 # DISCORD AI & IMPERIAL ECOSYSTEM BOT - ULTIMATE VISION & HOLOGRAM EDITION
 # ==============================================================================
-# Xyrin İmparatorluğu Core v4.9 - Kararlı ve Optimize Edilmiş Sürüm
+# Xyrin İmparatorluğu Core v5.1 - Ekonomisiz Sadeleştirilmiş Sürüm
 # ==============================================================================
 
 import os
@@ -44,24 +44,6 @@ QUEEN_USERNAMES = {"zifona"}
 # --- SPAM & LİNK FİLTRESİ AYARLARI ---
 SPAM_WINDOW_SECONDS = 7
 SPAM_MESSAGE_LIMIT = 6
-
-# --- EKONOMİ & SEVİYE SİSTEMİ AYARLARI ---
-ECONOMY_FILE = "economy_data.json"
-STARTING_BALANCE = 100
-DAILY_REWARD_MIN = 100
-DAILY_REWARD_MAX = 250
-DAILY_COOLDOWN_HOURS = 24
-XP_PER_MESSAGE_MIN = 5
-XP_PER_MESSAGE_MAX = 15
-XP_MESSAGE_COOLDOWN_SECONDS = 60  
-XP_PER_LEVEL = 150  
-
-LEVEL_ROLES = {5: "Vasal", 15: "Lord", 30: "Asil Lord"}
-
-SHOP_ITEMS = {
-    "vip": {"fiyat": 1000, "aciklama": "VIP rolü ve özel renk.", "rol_adi": "VIP"},
-    "reklam": {"fiyat": 300, "aciklama": "24 saat boyunca #Booster kanalında sabitlenmiş reklamın.", "rol_adi": None},
-}
 
 WELCOME_CHANNEL_ID = int(os.getenv("WELCOME_CHANNEL_ID", "0"))
 WELCOME_ROLE_NAME = os.getenv("WELCOME_ROLE_NAME", "")  
@@ -123,34 +105,6 @@ class UltimateImperialBot(commands.Bot):
         self.active_holograms = {}  
         self.coffee_orders = []     
         self.recent_messages = {}   
-        self.economy = self._load_economy()  
-        self.last_xp_time = {}      
-
-    def _load_economy(self):
-        if os.path.exists(ECONOMY_FILE):
-            try:
-                with open(ECONOMY_FILE, "r", encoding="utf-8") as f:
-                    return {int(k): v for k, v in json.load(f).items()}
-            except Exception as e:
-                logger.error(f"Ekonomi dosyası okunamadı: {e}")
-        return {}
-
-    def _save_economy(self):
-        try:
-            with open(ECONOMY_FILE, "w", encoding="utf-8") as f:
-                json.dump(self.economy, f)
-        except Exception as e:
-            logger.error(f"Ekonomi dosyası kaydedilemedi: {e}")
-
-    def get_account(self, user_id: int) -> dict:
-        if user_id not in self.economy:
-            self.economy[user_id] = {
-                "balance": STARTING_BALANCE,
-                "xp": 0,
-                "level": 0,
-                "last_daily": None
-            }
-        return self.economy[user_id]
 
     async def setup_hook(self):
         logger.info("İmparatorluk alt sistemleri başlatılıyor...")
@@ -207,39 +161,6 @@ def is_spamming(bot_instance, user_id: int) -> bool:
         timestamps.pop(0)
     return len(timestamps) > SPAM_MESSAGE_LIMIT
 
-async def award_xp(member: discord.Member):
-    if member.bot:
-        return
-    now = time.time()
-    last = bot.last_xp_time.get(member.id, 0)
-    if now - last < XP_MESSAGE_COOLDOWN_SECONDS:
-        return
-    bot.last_xp_time[member.id] = now
-
-    account = bot.get_account(member.id)
-    gained = random.randint(XP_PER_MESSAGE_MIN, XP_PER_MESSAGE_MAX)
-    account["xp"] += gained
-    new_level = account["xp"] // XP_PER_LEVEL
-
-    if new_level > account["level"]:
-        old_level = account["level"]
-        account["level"] = new_level
-        bot._save_economy()
-        for lvl in range(old_level + 1, new_level + 1):
-            role_name = LEVEL_ROLES.get(lvl)
-            if role_name:
-                role = discord.utils.get(member.guild.roles, name=role_name)
-                if role:
-                    try:
-                        await member.add_roles(role)
-                    except Exception:
-                        pass
-    else:
-        bot._save_economy()
-
-def format_balance(amount: int) -> str:
-    return f"{amount:,} 🪙".replace(",", ".")
-
 async def check_link_violation(message: discord.Message) -> bool:
     content = message.content or ""
     is_violation = bool(INVITE_LINK_PATTERN.search(content))
@@ -273,8 +194,6 @@ async def on_message(message):
             if link_silindi:
                 return
 
-        await award_xp(message.author)
-
     if bot.user.mentioned_in(message) or isinstance(message.channel, discord.DMChannel):
         clean_content = message.content.replace(f'<@!{bot.user.id}>', '').replace(f'<@{bot.user.id}>', '').strip()
         is_privileged = is_privileged_member(message.author)
@@ -290,7 +209,6 @@ async def on_message(message):
 
                     chat_session = bot.get_or_create_chat(message.channel.id)
                     if chat_session and clean_content:
-                        # Ağır engellemeyi önlemek için ayrı thread'de çalıştırıyoruz
                         response = await asyncio.to_thread(chat_session.send_message, role_context + clean_content)
                         reply_text = response.text
                     else:
@@ -322,9 +240,8 @@ async def yardim_komutu(ctx):
         description="Hükümdarlar, Kral (swaarex) ve Kraliçe (zifona) protokolleri aktif!",
         color=discord.Color.dark_purple()
     )
-    embed.add_field(name="🪙 Ekonomi & Seviye", value="`!bakiye`, `!gunluk`, `!seviye`, `!market`, `!transfer`", inline=False)
     embed.add_field(name="☕ Ekstra", value="`!ping`, `!kahve`, `!hologram`, `!rapor`", inline=False)
-    embed.set_footer(text="Xyrin Empire Core v4.9")
+    embed.set_footer(text="Xyrin Empire Core v5.1")
     await ctx.send(embed=embed)
 
 @bot.hybrid_command(name="ping")
@@ -352,92 +269,6 @@ async def sunucu_raporu(ctx):
     embed = discord.Embed(title=f"📊 {guild.name} - Rapor", color=discord.Color.blue())
     embed.add_field(name="👥 Toplam Üye", value=str(guild.member_count), inline=True)
     embed.add_field(name="🤖 Durum", value="Kral, Kraliçe ve Hükümdar Protokolleri Devrede", inline=False)
-    await ctx.send(embed=embed)
-
-@bot.hybrid_command(name="bakiye", aliases=["balance", "cuzdan"])
-async def bakiye_komutu(ctx, member: discord.Member = None):
-    member = member or ctx.author
-    account = bot.get_account(member.id)
-    embed = discord.Embed(title="🪙 İmparatorluk Hazinesi", color=discord.Color.gold())
-    embed.add_field(name="Kullanıcı", value=member.mention, inline=True)
-    embed.add_field(name="Bakiye", value=format_balance(account["balance"]), inline=True)
-    await ctx.send(embed=embed)
-
-@bot.hybrid_command(name="seviye", aliases=["level", "rank"])
-async def seviye_komutu(ctx, member: discord.Member = None):
-    member = member or ctx.author
-    account = bot.get_account(member.id)
-    embed = discord.Embed(title="📈 Seviye Kartı", color=discord.Color.blurple())
-    embed.add_field(name="Kullanıcı", value=member.mention, inline=True)
-    embed.add_field(name="Seviye", value=str(account["level"]), inline=True)
-    embed.add_field(name="XP", value=f"{account['xp']}", inline=False)
-    await ctx.send(embed=embed)
-
-@bot.hybrid_command(name="gunluk", aliases=["daily"])
-async def gunluk_komutu(ctx):
-    account = bot.get_account(ctx.author.id)
-    now = datetime.now()
-    if account["last_daily"]:
-        last = datetime.fromisoformat(account["last_daily"])
-        remaining = timedelta(hours=DAILY_COOLDOWN_HOURS) - (now - last)
-        if remaining.total_seconds() > 0:
-            hours = int(remaining.total_seconds() // 3600)
-            minutes = int((remaining.total_seconds() % 3600) // 60)
-            await ctx.send(f"⏳ Günlük ödülünü zaten aldın! {hours} saat {minutes} dakika sonra tekrar gel.")
-            return
-
-    reward = random.randint(DAILY_REWARD_MIN, DAILY_REWARD_MAX)
-    account["balance"] += reward
-    account["last_daily"] = now.isoformat()
-    bot._save_economy()
-    await ctx.send(f"🎁 Günlük ödülün: **{format_balance(reward)}**! Yeni bakiye: {format_balance(account['balance'])}")
-
-@bot.hybrid_command(name="transfer", aliases=["pay", "gonder"])
-async def transfer_komutu(ctx, member: discord.Member, miktar: int):
-    if miktar <= 0 or member.id == ctx.author.id:
-        await ctx.send("❌ Geçersiz işlem.")
-        return
-    sender = bot.get_account(ctx.author.id)
-    if sender["balance"] < miktar:
-        await ctx.send("❌ Yetersiz bakiye!")
-        return
-    receiver = bot.get_account(member.id)
-    sender["balance"] -= miktar
-    receiver["balance"] += miktar
-    bot._save_economy()
-    await ctx.send(f"✅ {member.mention} kullanıcısına **{format_balance(miktar)}** gönderildi!")
-
-@bot.hybrid_command(name="market", aliases=["shop"])
-async def market_komutu(ctx):
-    embed = discord.Embed(title="🏪 İmparatorluk Marketi", color=discord.Color.purple())
-    for key, item in SHOP_ITEMS.items():
-        embed.add_field(name=f"{key} — {format_balance(item['fiyat'])}", value=item["aciklama"], inline=False)
-    await ctx.send(embed=embed)
-
-@bot.hybrid_command(name="satinal", aliases=["buy"])
-async def satinal_komutu(ctx, item_adi: str):
-    item_adi = item_adi.lower().strip()
-    item = SHOP_ITEMS.get(item_adi)
-    if not item:
-        await ctx.send("❌ Böyle bir eşya yok.")
-        return
-    account = bot.get_account(ctx.author.id)
-    if account["balance"] < item["fiyat"]:
-        await ctx.send("❌ Yetersiz bakiye!")
-        return
-    account["balance"] -= item["fiyat"]
-    bot._save_economy()
-    await ctx.send(f"✅ **{item_adi}** satın alındı!")
-
-@bot.hybrid_command(name="siralama", aliases=["top"])
-async def siralama_komutu(ctx):
-    if not bot.economy:
-        await ctx.send("Henüz kimsenin hesabı yok.")
-        return
-    sirali = sorted(bot.economy.items(), key=lambda kv: kv[1]["balance"], reverse=True)[:10]
-    embed = discord.Embed(title="🏆 Zenginlik Sıralaması", color=discord.Color.gold())
-    lines = [f"**{i}.** <@{uid}> — {format_balance(data['balance'])}" for i, (uid, data)]
-    embed.description = "\n".join(lines)
     await ctx.send(embed=embed)
 
 # --- ÇALIŞTIRMA BLOĞU ---
