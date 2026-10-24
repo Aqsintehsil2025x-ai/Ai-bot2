@@ -1,7 +1,7 @@
 # ==============================================================================
 # DISCORD AI & IMPERIAL ECOSYSTEM BOT - ULTIMATE VISION & HOLOGRAM EDITION
 # ==============================================================================
-# Xyrin İmparatorluğu Core v4.8 - Küfür Yasaksız Tam Sürüm
+# Xyrin İmparatorluğu Core v4.9 - Kararlı ve Optimize Edilmiş Sürüm
 # ==============================================================================
 
 import os
@@ -195,7 +195,6 @@ class UltimateImperialBot(commands.Bot):
 bot = UltimateImperialBot()
 
 def is_privileged_member(member_or_author) -> bool:
-    """Hükümdar, Kral veya Kraliçe kontrolü yapar."""
     name = (member_or_author.name or "").lower()
     return name in SOVEREIGN_USERNAMES or name in KING_USERNAMES or name in QUEEN_USERNAMES
 
@@ -261,7 +260,6 @@ async def on_message(message):
 
     bot.message_counter += 1
 
-    # --- SPAM VE LİNK KONTROLÜ ---
     if message.guild and not is_privileged_member(message.author) and not message.author.bot:
         if is_spamming(bot, message.author.id):
             try:
@@ -277,7 +275,6 @@ async def on_message(message):
 
         await award_xp(message.author)
 
-    # --- YAPAY ZEKA SOHBET KONTROLÜ ---
     if bot.user.mentioned_in(message) or isinstance(message.channel, discord.DMChannel):
         clean_content = message.content.replace(f'<@!{bot.user.id}>', '').replace(f'<@{bot.user.id}>', '').strip()
         is_privileged = is_privileged_member(message.author)
@@ -293,7 +290,8 @@ async def on_message(message):
 
                     chat_session = bot.get_or_create_chat(message.channel.id)
                     if chat_session and clean_content:
-                        response = chat_session.send_message(role_context + clean_content)
+                        # Ağır engellemeyi önlemek için ayrı thread'de çalıştırıyoruz
+                        response = await asyncio.to_thread(chat_session.send_message, role_context + clean_content)
                         reply_text = response.text
                     else:
                         reply_text = "Emrinizdeyim!"
@@ -306,7 +304,6 @@ async def on_message(message):
                             yeni_kanal = await message.guild.create_text_channel(c_name)
                             reply_text += f"\n\n✨ *(#{yeni_kanal.name} kanalı oluşturuldu!)*"
 
-                    # TEK BİR YANIT GÖNDER VE ÇIK (Çift yanıtı kesin engeller)
                     await message.reply(reply_text)
                     return
 
@@ -317,7 +314,7 @@ async def on_message(message):
 
     await bot.process_commands(message)
 
-# --- TEMEL İMPARATORLUK KOMUTLARI ---
+# --- İMPARATORLUK KOMUTLARI ---
 @bot.hybrid_command(name="yardim", aliases=["help", "komutlar"])
 async def yardim_komutu(ctx):
     embed = discord.Embed(
@@ -327,7 +324,7 @@ async def yardim_komutu(ctx):
     )
     embed.add_field(name="🪙 Ekonomi & Seviye", value="`!bakiye`, `!gunluk`, `!seviye`, `!market`, `!transfer`", inline=False)
     embed.add_field(name="☕ Ekstra", value="`!ping`, `!kahve`, `!hologram`, `!rapor`", inline=False)
-    embed.set_footer(text="Xyrin Empire Core v4.8")
+    embed.set_footer(text="Xyrin Empire Core v4.9")
     await ctx.send(embed=embed)
 
 @bot.hybrid_command(name="ping")
@@ -357,7 +354,6 @@ async def sunucu_raporu(ctx):
     embed.add_field(name="🤖 Durum", value="Kral, Kraliçe ve Hükümdar Protokolleri Devrede", inline=False)
     await ctx.send(embed=embed)
 
-# EKONOMİ SİSTEMİ
 @bot.hybrid_command(name="bakiye", aliases=["balance", "cuzdan"])
 async def bakiye_komutu(ctx, member: discord.Member = None):
     member = member or ctx.author
