@@ -1,7 +1,7 @@
 # ==============================================================================
 # DISCORD AI & IMPERIAL ECOSYSTEM BOT - ULTIMATE VISION & HOLOGRAM EDITION
 # ==============================================================================
-# Xyrin İmparatorluğu Core v5.1 - Ekonomisiz Sadeleştirilmiş Sürüm
+# Xyrin İmparatorluğu Core v5.2 - Render Web Service Uyumlu Tam Sürüm
 # ==============================================================================
 
 import os
@@ -12,7 +12,7 @@ import json
 import random
 import asyncio
 import logging
-import traceback
+import threading
 import re
 import contextlib
 from datetime import datetime, timedelta
@@ -20,6 +20,18 @@ import aiohttp
 import discord
 from discord.ext import commands, tasks
 import google.generativeai as genai
+from flask import Flask
+
+# --- 0. RENDER PORT BAĞLANTISI İÇİN MİNİ WEB SUNUCUSU ---
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Xyrin Imperial Bot Aktif ve Çalışıyor! 👑"
+
+def run_web():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
 
 # --- 1. GELİŞMİŞ LOGLAMA VE SİSTEM ÇEKİRDEĞİ YAPILANDIRMASI ---
 logging.basicConfig(
@@ -241,7 +253,7 @@ async def yardim_komutu(ctx):
         color=discord.Color.dark_purple()
     )
     embed.add_field(name="☕ Ekstra", value="`!ping`, `!kahve`, `!hologram`, `!rapor`", inline=False)
-    embed.set_footer(text="Xyrin Empire Core v5.1")
+    embed.set_footer(text="Xyrin Empire Core v5.2")
     await ctx.send(embed=embed)
 
 @bot.hybrid_command(name="ping")
@@ -268,10 +280,16 @@ async def sunucu_raporu(ctx):
     guild = ctx.guild
     embed = discord.Embed(title=f"📊 {guild.name} - Rapor", color=discord.Color.blue())
     embed.add_field(name="👥 Toplam Üye", value=str(guild.member_count), inline=True)
-    embed.add_field(name="🤖 Durum", value="Kral, Kraliçe ve Hükümdar Protokolleri Devrede", inline=False)
+    embed.add_field(name="🤖 Durum", value="Kral, Kraliçe ve Hükümdار Protokolleri Devrede", inline=False)
     await ctx.send(embed=embed)
 
 # --- ÇALIŞTIRMA BLOĞU ---
 if __name__ == "__main__":
     if DISCORD_TOKEN != "BURAYA_DISCORD_BOT_TOKENINI_YAZ":
+        # Flask sunucusunu arka plandaki ayrı bir thread'de başlatıyoruz
+        t = threading.Thread(target=run_web)
+        t.daemon = True
+        t.start()
+        
+        # Discord botunu çalıştırıyoruz
         bot.run(DISCORD_TOKEN)
