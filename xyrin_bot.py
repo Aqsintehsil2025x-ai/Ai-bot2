@@ -40,7 +40,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "BURAYA_GEMINI_API_KEYINI_YAZ")
 PORT = int(os.getenv("PORT", "10000"))  # Render'ın atadığı port
 
 # Hükümdarlar, Kraliçe ve Özel İmparatorluk Üyeleri
-SOVEREIGN_USERNAMES = {"endercosmic1", "melikhan111", "kralice zifon", "swaarex zifon"}
+SOVEREIGN_USERNAMES = {"endercosmic1", "melikhan111", "zifona", "swaarex"}
 
 # --- MODERASYON (KÜFÜR/SPAM FİLTRESİ) AYARLARI ---
 MOD_LOG_CHANNEL_ID = int(os.getenv("MOD_LOG_CHANNEL_ID", "0"))
