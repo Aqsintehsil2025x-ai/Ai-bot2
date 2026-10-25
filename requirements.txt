@@ -3,3 +3,4 @@ google-genai>=1.0
 tzdata
 PyNaCl>=1.5
 davey
+flask
