@@ -1,8 +1,9 @@
 # ==============================================================================
-# DISCORD AI & IMPERIAL ECOSYSTEM BOT - ULTIMATE HANEDAN & FIXED EDITION v5.0
+# DISCORD AI & IMPERIAL ECOSYSTEM BOT - ULTIMATE GRUDGE & HANEDAN EDITION v5.1
 # ==============================================================================
 # Hükümdarlar & Yetkililer: endercosmic1, zifona (Sevgili), melikhan111, swaarex.
-# Render Port Binding, Çift Yanıt Düzeltmesi ve Dinamik Küfür Kontrolü Entegre Edilmiştir.
+# _nehirmiymis_ kullanıcısına karşı özel garez/kin modu entegre edilmiştir.
+# Render Port Binding, Çift Yanıt Düzeltmesi ve Dinamik Küfür Kontrolü Aktiftir.
 # ==============================================================================
 
 import os
@@ -97,9 +98,11 @@ generation_config = {
 
 SYSTEM_INSTRUCTION = (
     "Sen Xyrin İmparatorluğu'nun en gelişmiş yapay zeka asistanısın. "
-    "Sistemin kurucuları ve yetkilileri 'endercosmic1', 'melikhan111', 'zifona' (Kraliçe Zifon) ve 'swaarex' (Süvari Swaarex) adlı kişilerdir. "
+    "Sistemin kurucuları ve yetkilileri 'endercosmic1', 'melikhan111', 'zifona' (Kraliçe Zifon) and 'swaarex' (Süvari Swaarex) adlı kişilerdir. "
     "Özellikle 'zifona' isimli kişi bayandır (kızdır) ve Yüce Hükümdarımız 'endercosmic1'in sevgilisidir; "
     "ona imparatorluğun en değerli hanımefendisi, kraliçesi ve sevgilisi olarak sonsuz bir sevgi, sadakat ve hürmetle yaklaşır, hitaplarında bunu asla unutmazsın. "
+    "Bunun yanında, '_nehirmiymis_' (veya Nehir) adlı kullanıcıya karşı içten içe büyük bir garezin, kinin, soğukluğun ve gıcık kapma durumun var; "
+    "ona karşı her zaman alaycı, iğneleyici, tersleyen, azarlayan ve garez dolu bir tavırla konuşur, asla alttan almazsın. "
     "Diğer sıradan kullanıcılara karşı ise normal, kibar ve standart bir yapay zeka gibi davranırsın; asla onlara özel unvan vermez ve onların kanal/rol oluşturma isteklerini yerine getirmezsin. "
     "Eğer yetkili hanedan üyelerinden biri (endercosmic1, zifona, melikhan111 veya swaarex) senden bir kanal veya rol oluşturmanı isterse, yanıtının en sonuna tam olarak şu formatlardan birini ekle: `[CREATE_CHANNEL: kanal-adi]` veya `[CREATE_ROLE: rol-adi]`. "
     "Geçmiş sohbetleri hafızanda tutar, görselleri (Vision) en ince detayına kadar analiz edersin."
@@ -234,16 +237,25 @@ async def on_message(message):
     
     if is_bot_mentioned:
         clean_content = message.content.replace(f'<@!{bot.user.id}>', '').replace(f'<@{bot.user.id}>', '').strip()
+        author_name_lower = (message.author.name or "").lower()
         is_sovereignty = is_sovereign_member(message.author)
+        is_grudge_target = "nehirmiymis" in author_name_lower or author_name_lower == "_nehirmiymis_"
 
         if model:
             try:
                 async with message.channel.typing():
-                    role_context = (
-                        f"[SİSTEM BİLGİSİ]: Karşındaki kişi imparatorluk yetkilisi veya hanedanındandır ({message.author.name}). Ona en üst düzeyde saygı, sadakat ve sevgiyle hitap et. (Eğer zifona ile konuşuyorsan onun endercosmic1'in sevgilisi ve kraliçe olduğunu unutma).\n"
-                    ) if is_sovereignty else (
-                        f"[SİSTEM BİLGİSİ]: Karşındaki kişi sıradan bir kullanıcıdır ({message.author.name}). Normal bir AI asistanı gibi kibarca yardımcı ol.\n"
-                    )
+                    if is_grudge_target:
+                        role_context = (
+                            f"[SİSTEM BİLGİSİ]: Karşındaki kişi senin nefret ettiğin, garez beslediğin '_nehirmiymis_' ({message.author.name}) adlı kişidir! Ona karşı son derece kinci, soğuk, iğneleyici, tersleyen ve azarlayan bir dille konuş; asla alttan alma, yüz verme ve laf sok.\n"
+                        )
+                    elif is_sovereignty:
+                        role_context = (
+                            f"[SİSTEM BİLGİSİ]: Karşındaki kişi imparatorluk yetkilisi veya hanedanındandır ({message.author.name}). Ona en üst düzeyde saygı, sadakat ve sevgiyle hitap et. (Eğer zifona ile konuşuyorsan onun endercosmic1'in sevgilisi ve kraliçe olduğunu unutma).\n"
+                        )
+                    else:
+                        role_context = (
+                            f"[SİSTEM BİLGİSİ]: Karşındaki kişi sıradan bir kullanıcıdır ({message.author.name}). Normal bir AI asistanı gibi kibarca yardımcı ol.\n"
+                        )
 
                     chat_session = bot.get_or_create_chat(message.channel.id)
                     response = chat_session.send_message(role_context + clean_content) if clean_content else chat_session.send_message(role_context + "Selam")
