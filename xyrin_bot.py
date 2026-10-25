@@ -43,10 +43,8 @@ PORT = int(os.getenv("PORT", "10000"))  # Render port uyumluluğu için
 SOVEREIGN_USERNAMES = {
     "endercosmic1", 
     "melikhan111", 
-    "zifona", 
-    "kralice zifon", 
-    "swaarex", 
-    "swaarex zifon"
+    "zifona",  
+    "swaarex"
 }
 
 # --- MODERASYON & KÜFÜR FİLTRESİ ---
