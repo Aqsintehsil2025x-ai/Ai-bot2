@@ -2,3 +2,4 @@ discord.py>=2.5,<3
 google-genai>=1.0
 tzdata
 PyNaCl>=1.5
+davey
