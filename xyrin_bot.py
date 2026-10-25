@@ -1113,8 +1113,14 @@ def is_sovereign_member(user) -> bool:
     if SOVEREIGN_IDS:
         return user.id in SOVEREIGN_IDS
     return (getattr(user, "name", "") or "").lower() in SOVEREIGN_USERNAMES
-
-
+ 
+  def owner_or_sovereign():
+    async def predicate(ctx):
+        if is_sovereign_member(ctx.author) or await ctx.bot.is_owner(ctx.author):
+            return True
+        raise commands.CheckFailure("owner only")
+    return commands.check(predicate)     
+ 
 def is_mod_exempt(member) -> bool:
     if is_sovereign_member(member):
         return True
