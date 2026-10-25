@@ -1507,6 +1507,10 @@ async def moderate_message(message: discord.Message, edited: bool = False) -> bo
     member = message.author
     if not message.guild or member.bot or is_mod_exempt(member):
         return False
+
+    # Küfür filtresi bu sunucuda kapatılmış mı kontrol et
+    profanity_enabled = bot.settings.value(message.guild.id, "profanity_filter", True)
+    
     content = message.content or ""
 
     if not edited:
@@ -1524,16 +1528,19 @@ async def moderate_message(message: discord.Message, edited: bool = False) -> bo
         await delete_messages_safe([message])
         return True
 
-    hit = bot.word_filter.find(content)
-    if hit:
-        await apply_moderation_action(message, f"Yasaklı kelime", "KÜFÜR")
-        return True
-
-    if bot.ai is not None:
-        is_bad, reason = await bot.ai.classify_profanity(content)
-        if is_bad:
-            await apply_moderation_action(message, reason or "Uygunsuz", "KÜFÜR")
+    # Eğer küfür filtresi AÇIKSA küfür/argo denetimlerini yap
+    if profanity_enabled:
+        hit = bot.word_filter.find(content)
+        if hit:
+            await apply_moderation_action(message, f"Yasaklı kelime", "KÜFÜR")
             return True
+
+        if bot.ai is not None:
+            is_bad, reason = await bot.ai.classify_profanity(content)
+            if is_bad:
+                await apply_moderation_action(message, reason or "Uygunsuz", "KÜFÜR")
+                return True
+
     return False
 
 
@@ -1711,6 +1718,7 @@ def help_pages() -> dict:
         ]),
         "moderasyon": ("🛡️", "Moderasyon", "Mod komutları", [
             (f"`{p}uyarilar`", "Strike sicili."),
+            (f"`{p}kufur ac` / `{p}kufur kapa`", "Küfür filtresini açar/kapatır."),
         ]),
     }
 
@@ -1799,6 +1807,30 @@ async def hatirlat_komutu(ctx, sure: str, *, mesaj: str):
     due = utcnow() + delta
     rid = bot.reminders.add("reminder", ctx.guild.id if ctx.guild else None, ctx.channel.id, ctx.author.id, mesaj, due)
     await ctx.send(f"⏰ Hatırlatıcı kuruldu (ID: `{rid}`).")
+
+
+# --- KÜFÜR FİLTRESİ AÇ / KAPA KOMUTLARI ---
+@bot.hybrid_group(name="kufur", fallback="durum", description="Küfür filtresini açar veya kapatır.")
+@commands.guild_only()
+@perm_or_sovereign()
+async def kufur_group(ctx):
+    status = bot.settings.value(ctx.guild.id, "profanity_filter", True)
+    state_text = "✅ **Açık (Aktif)**" if status else "❌ **Kapalı (Devre Dışı)**"
+    await ctx.send(f"🛡️ Sunucudaki küfür filtresi durumu: {state_text}\nKullanım: `{COMMAND_PREFIX}kufur ac` veya `{COMMAND_PREFIX}kufur kapa`")
+
+
+@kufur_group.command(name="ac", description="Küfür filtresini açar.")
+@perm_or_sovereign()
+async def kufur_ac(ctx):
+    bot.settings.set(ctx.guild.id, "profanity_filter", True)
+    await ctx.send("✅ Küfür ve argo filtresi bu sunucuda **aktif edildi**.")
+
+
+@kufur_group.command(name="kapa", description="Küfür filtresini kapatır.")
+@perm_or_sovereign()
+async def kufur_kapa(ctx):
+    bot.settings.set(ctx.guild.id, "profanity_filter", False)
+    await ctx.send("⚠️ Küfür ve argo filtresi bu sunucuda **devre dışı bırakıldı**.")
 
 
 @bot.hybrid_command(name="sync", description="Komutları eşitle")
