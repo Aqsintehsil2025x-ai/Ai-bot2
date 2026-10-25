@@ -1,7 +1,8 @@
 # ==============================================================================
-# DISCORD AI & IMPERIAL ECOSYSTEM BOT - ULTIMATE VISION & HOLOGRAM EDITION
+# DISCORD AI & IMPERIAL ECOSYSTEM BOT - ULTIMATE WEB-PORT & RENDER EDITION
 # ==============================================================================
-# Xyrin İmparatorluğu Core v4.6 - Hükümdarlar, Kraliçe, Süvari Swaarex Zifon ve Dinamik Küür Kontrolü Entegre Edilmiştir.
+# Xyrin İmparatorluğu Core v4.7 - Render Port Binding, Kraliçe Zifon, 
+# Süvari Swaarex Zifon (endercosmic1 sevgilisi) ve Dinamik Küfür Kontrolü Entegre Edilmiştir.
 # ==============================================================================
 
 import os
@@ -17,6 +18,7 @@ import re
 import contextlib
 from datetime import datetime, timedelta
 import aiohttp
+from aiohttp import web
 import discord
 from discord.ext import commands, tasks
 import google.generativeai as genai
@@ -35,6 +37,7 @@ logger = logging.getLogger("XyrinImperialCore")
 # --- 2. ÇEVRESEL DEĞİŞKENLER VE GÜVENLİK ---
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN", "BURAYA_DISCORD_BOT_TOKENINI_YAZ")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "BURAYA_GEMINI_API_KEYINI_YAZ")
+PORT = int(os.getenv("PORT", "10000"))  # Render'ın atadığı port
 
 # Hükümdarlar, Kraliçe ve Özel İmparatorluk Üyeleri
 SOVEREIGN_USERNAMES = {"endercosmic1", "melikhan111", "kralice zifon", "swaarex zifon"}
@@ -147,7 +150,7 @@ class UltimateImperialBot(commands.Bot):
         self.recent_messages = {}
         self.economy = self._load_economy()
         self.last_xp_time = {}
-        self.profanity_enabled = True  # Küfür sisteminin açma/kapama durumu
+        self.profanity_enabled = True  # Küfür korumasını açıp kapatma durumu
 
     def _load_strikes(self):
         if os.path.exists(STRIKES_FILE):
@@ -192,7 +195,7 @@ class UltimateImperialBot(commands.Bot):
         return self.economy[user_id]
 
     async def setup_hook(self):
-        logger.info("İmparatorluk alt sistemleri, arka plan görevleri ve DLC modülleri başlatılıyor...")
+        logger.info("İmparatorluk alt sistemleri, arka plan görevleri ve web sunucusu başlatılıyor...")
         self.check_events_loop.start()
         self.server_stats_loop.start()
         self.hologram_pulse_loop.start()
@@ -233,7 +236,6 @@ class UltimateImperialBot(commands.Bot):
                     )
                     content = model.generate_content(prompt).text if model else f"🚨 **Zamanı Geldi!** Etkinlik: **{event['title']}**"
                     await channel.send(f"🔔 <@{event['author_id']}> Hükümdarım, emrettiğiniz etkinlik vakti geldi!\n\n{content}")
-                    logger.info(f"Etkinlik tetiklendi: {event['title']}")
                 except Exception as ex:
                     logger.error(f"Etkinlik tetikleme hatası: {ex}")
 
@@ -321,20 +323,12 @@ async def apply_moderation_action(message: discord.Message, reason: str, categor
     if MOD_LOG_CHANNEL_ID:
         log_channel = guild.get_channel(MOD_LOG_CHANNEL_ID)
         if log_channel:
-            embed = discord.Embed(
-                title=f"🚫 Moderasyon Eylemi — {category}",
-                color=discord.Color.red()
-            )
+            embed = discord.Embed(title=f"🚫 Moderasyon Eylemi — {category}", color=discord.Color.red())
             embed.add_field(name="Kullanıcı", value=f"{member.mention} (`{member.name}`)", inline=True)
             embed.add_field(name="Strike sayısı", value=str(strikes), inline=True)
             embed.add_field(name="Kanal", value=message.channel.mention, inline=True)
             embed.add_field(name="Sebep", value=reason or "Belirtilmedi", inline=False)
-            embed.add_field(name="Silinen mesaj (tam içerik)", value=original_content[:1024], inline=False)
-            embed.add_field(
-                name="Uygulanan eylem",
-                value=(f"Mesaj silindi + {timeout_minutes} dakika mute" if muted else "Mesaj silindi (mute yetkisi yok)"),
-                inline=False
-            )
+            embed.add_field(name="Silinen mesaj", value=original_content[:1024], inline=False)
             embed.timestamp = discord.utils.utcnow()
             try:
                 await log_channel.send(embed=embed)
@@ -344,7 +338,7 @@ async def apply_moderation_action(message: discord.Message, reason: str, categor
     try:
         warn_text = f"⚠️ {member.mention}, mesajın kurallara aykırı bulunduğu için silindi."
         if muted:
-            warn_text += f" {timeout_minutes} dakika susturuldun. (Strike: {strikes})"
+            warn_text += f" {timeout_minutes} dakika susturuldun."
         await message.channel.send(warn_text, delete_after=10)
     except Exception:
         pass
@@ -375,8 +369,8 @@ async def award_xp(member: discord.Member):
                 if role:
                     try:
                         await member.add_roles(role, reason=f"Seviye {lvl}'e ulaştı")
-                    except Exception as e:
-                        logger.error(f"Seviye rolü verilemedi: {e}")
+                    except Exception:
+                        pass
         try:
             channel = member.guild.system_channel
             if channel:
@@ -400,27 +394,12 @@ async def check_link_violation(message: discord.Message) -> bool:
         return False
     try:
         await message.delete()
-    except Exception as e:
-        logger.error(f"Link mesajı silinemedi: {e}")
-    try:
-        await message.channel.send(
-            f"🔗 {message.author.mention}, sunucu davet linki/izinsiz link paylaşımı yasak, mesajın silindi.",
-            delete_after=10
-        )
     except Exception:
         pass
-    if MOD_LOG_CHANNEL_ID:
-        log_channel = message.guild.get_channel(MOD_LOG_CHANNEL_ID)
-        if log_channel:
-            embed = discord.Embed(title="🔗 Link/Davet Engellendi", color=discord.Color.gold())
-            embed.add_field(name="Kullanıcı", value=message.author.mention, inline=True)
-            embed.add_field(name="Kanal", value=message.channel.mention, inline=True)
-            embed.add_field(name="İçerik", value=content[:1024], inline=False)
-            embed.timestamp = discord.utils.utcnow()
-            try:
-                await log_channel.send(embed=embed)
-            except Exception:
-                pass
+    try:
+        await message.channel.send(f"🔗 {message.author.mention}, davet/izinsiz link paylaşımı yasak.", delete_after=10)
+    except Exception:
+        pass
     return True
 
 
@@ -448,11 +427,7 @@ async def on_voice_state_update(member, before, after):
                 f"**{member.mention} ses kanalına katıldı.**\n"
                 f"🌐 Ses Kanalı: `{after.channel.name}`"
             )
-            embed = discord.Embed(
-                title="✨ [HOLO-CAM] Optik Yükseltme & Hologram Devrede",
-                description=desc,
-                color=discord.Color.teal()
-            )
+            embed = discord.Embed(title="✨ [HOLO-CAM] Optik Yükseltme & Hologram Devrede", description=desc, color=discord.Color.teal())
             try:
                 await text_channel.send(embed=embed)
             except Exception:
@@ -476,17 +451,11 @@ async def on_member_join(member: discord.Member):
             except Exception:
                 pass
 
-    channel = None
-    if WELCOME_CHANNEL_ID:
-        channel = member.guild.get_channel(WELCOME_CHANNEL_ID)
-    channel = channel or member.guild.system_channel
+    channel = WELCOME_CHANNEL_ID and member.guild.get_channel(WELCOME_CHANNEL_ID) or member.guild.system_channel
     if channel:
         embed = discord.Embed(
             title="✨ Xyrin İmparatorluğu'na Hoş Geldin!",
-            description=(
-                f"{member.mention}, imparatorluğumuzun {member.guild.member_count}. üyesi oldun!\n"
-                f"`!yardim` ile bota göz atabilirsin."
-            ),
+            description=f"{member.mention}, imparatorluğumuzun {member.guild.member_count}. neferi oldun!",
             color=discord.Color.dark_purple()
         )
         if member.display_avatar:
@@ -500,18 +469,8 @@ async def on_member_join(member: discord.Member):
 @bot.event
 async def on_command_error(ctx, error):
     if isinstance(error, (commands.CommandNotFound, commands.CheckFailure)):
-        if isinstance(error, commands.CheckFailure):
-            try:
-                await ctx.send("❌ Bu komutu kullanmak için yetkin yok.", delete_after=8)
-            except Exception:
-                pass
         return
-
     logger.error(f"Komut hatası ({ctx.command}): {error}")
-    try:
-        await ctx.send("⚠️ Komut çalıştırılırken bir hata oluştu.", delete_after=8)
-    except Exception:
-        pass
 
 
 @bot.event
@@ -523,12 +482,11 @@ async def on_message(message):
 
     if message.guild and not is_sovereign_member(message.author) and not message.author.bot:
         if is_spamming(bot, message.author.id):
-            await apply_moderation_action(message, "Kısa sürede çok fazla mesaj (spam)", "SPAM")
+            await apply_moderation_action(message, "Spam koruması tetiklendi", "SPAM")
             return
 
         if not message.author.guild_permissions.administrator:
-            link_silindi = await check_link_violation(message)
-            if link_silindi:
+            if await check_link_violation(message):
                 return
 
         kufur_var, sebep = await ai_check_profanity(message.content)
@@ -552,11 +510,8 @@ async def on_message(message):
                                 async with session.get(attachment.url) as resp:
                                     if resp.status == 200:
                                         image_bytes = await resp.read()
-                                        image_part = {
-                                            "mime_type": attachment.content_type,
-                                            "data": image_bytes
-                                        }
-                                        prompt = clean_content if clean_content else "Bu görseli tarayın Hükümdarım/Kraliçem/Süvari hazretleri."
+                                        image_part = {"mime_type": attachment.content_type, "data": image_bytes}
+                                        prompt = clean_content if clean_content else "Bu görseli analiz et Hükümdarım/Kraliçem/Süvari hazretleri."
                                         response = model.generate_content([prompt, image_part])
                                         await message.reply(response.text)
                                         await bot.process_commands(message)
@@ -581,39 +536,36 @@ async def on_message(message):
                         match = re.search(r'\[CREATE_CHANNEL:\s*([^\]]+)\]', reply_text)
                         if match and message.guild:
                             if is_sovereignty:
-                                channel_name = match.group(1).strip().lower().replace(" ", "-")
+                                c_name = match.group(1).strip().lower().replace(" ", "-")
                                 reply_text = reply_text.replace(match.group(0), "").strip()
                                 try:
-                                    yeni_kanal = await message.guild.create_text_channel(channel_name)
-                                    reply_text += f"\n\n✨ *(Emriniz üzerine **#{yeni_kanal.name}** kanalı otomatik olarak oluşturuldu!)*"
+                                    yeni_kanal = await message.guild.create_text_channel(c_name)
+                                    reply_text += f"\n\n✨ *(Emriniz üzerine **#{yeni_kanal.name}** kanalı açıldı!)*"
                                 except Exception as ex:
-                                    reply_text += f"\n\n⚠️ *(Kanal oluşturulamadı: {ex})*"
+                                    reply_text += f"\n\n⚠️ *(Kanal kurulamadı: {ex})*"
                             else:
                                 reply_text = reply_text.replace(match.group(0), "").strip()
-                                reply_text += "\n\n❌ *(Bu imparatorluk emrini yalnızca hanedan üyeleri verebilir!)*"
+                                reply_text += "\n\n❌ *(Bu imtiyaz yalnızca hanedan üyelerine aittir!)*"
 
                     if "[CREATE_ROLE:" in reply_text:
                         match = re.search(r'\[CREATE_ROLE:\s*([^\]]+)\]', reply_text)
                         if match and message.guild:
                             if is_sovereignty:
-                                role_name = match.group(1).strip()
+                                r_name = match.group(1).strip()
                                 reply_text = reply_text.replace(match.group(0), "").strip()
                                 try:
-                                    yeni_rol = await message.guild.create_role(name=role_name, color=discord.Color.random())
-                                    reply_text += f"\n\n✨ *(Emriniz üzerine **{yeni_rol.name}** rolü otomatik olarak oluşturuldu!)*"
+                                    yeni_rol = await message.guild.create_role(name=r_name, color=discord.Color.random())
+                                    reply_text += f"\n\n✨ *(Emriniz üzerine **{yeni_rol.name}** rolü oluşturuldu!)*"
                                 except Exception as ex:
-                                    reply_text += f"\n\n⚠️ *(Rol oluşturulamadı: {ex})*"
+                                    reply_text += f"\n\n⚠️ *(Rol kurulamadı: {ex})*"
                             else:
                                 reply_text = reply_text.replace(match.group(0), "").strip()
-                                reply_text += "\n\n❌ *(Bu imparatorluk emrini yalnızca hanedan üyeleri verebilir!)*"
+                                reply_text += "\n\n❌ *(Bu imtiyaz yalnızca hanedan üyelerine aittir!)*"
 
                     await message.reply(reply_text)
-
             except Exception as e:
                 logger.error(f"AI Yanıt Hatası: {e}")
                 await message.reply("⚠️ Sinir ağlarında geçici bir dalgalanma oluştu.")
-        else:
-            await message.reply("⚠️ Yapay zeka çekirdeği çevrimdışı.")
 
     await bot.process_commands(message)
 
@@ -629,11 +581,11 @@ async def yardim_komutu(ctx):
     )
     embed.add_field(name="@BotAdı <mesaj>", value="Yapay zeka sohbeti (Hanedan üyelerine özel hitap ve oto-inşa yetkisi).", inline=False)
     embed.add_field(name="`!ping`", value="🏓 Botun gecikme süresini ölçer.", inline=False)
-    embed.add_field(name="`!kahve <tür>`", value="☕ Kahve simülasyonu tetikler.", inline=False)
-    embed.add_field(name="`!hologram`", value="🔮 Ses kanalındaki hologram durumunu gösterir.", inline=False)
+    embed.add_field(name="`!kahve <tür>`", value="☕ Kahve simülasyonu.", inline=False)
+    embed.add_field(name="`!hologram`", value="🔮 Hologram durumu.", inline=False)
     embed.add_field(name="`!kufur ac` / `!kufur kapa`", value="🛡️ Küfür koruma sistemini açar veya kapatır (Yönetici).", inline=False)
     embed.add_field(name="`!bakiye` `!gunluk` `!transfer`", value="Ekonomi sistemi.", inline=False)
-    embed.add_field(name="`!market` `!satinal`", value="Marketten eşya satın al.", inline=False)
+    embed.add_field(name="`!market` `!satinal`", value="Marketten eşya al.", inline=False)
     embed.set_footer(text="Xyrin Empire Core - Hükümdar, Kraliçe ve Süvari Swaarex Zifon Protokolü Aktif")
     await ctx.send(embed=embed)
 
@@ -660,7 +612,6 @@ async def hologram_durum_komutu(ctx):
         embed.description = "Aktif bir ses odası hologramı bulunmuyor."
     await ctx.send(embed=embed)
 
-# --- KÜFÜR SİSTEMİ AÇMA / KAPAMA KOMUTU ---
 @bot.hybrid_command(name="kufur", aliases=["profanity"])
 @commands.has_permissions(administrator=True)
 async def kufur_kontrol_komutu(ctx, durum: str):
@@ -755,12 +706,32 @@ async def satinal_komutu(ctx, item_adi: str):
                 pass
     await ctx.send(f"✅ {ctx.author.mention}, **{item_adi}** satın alındı!")
 
-if __name__ == "__main__":
+
+# --- 7. RENDER PORT BINDING WEB SUNUCUSU ---
+async def handle_ping(request):
+    return web.Response(text="Xyrin Empire Bot is alive and active!")
+
+async def start_web_server():
+    app = web.Application()
+    app.router.add_get("/", handle_ping)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", PORT)
+    await site.start()
+    logger.info(f"Render Web Sunucusu {PORT} portunda dinlemeye başladı.")
+
+async def main():
     if DISCORD_TOKEN == "BURAYA_DISCORD_BOT_TOKENINI_YAZ":
         logger.critical("Geçerli bir Discord Token yapılandırılmadı!")
-    else:
-        try:
-            logger.info("İmparatorluk Botu başlatılıyor...")
-            bot.run(DISCORD_TOKEN)
-        except Exception as e:
-            logger.critical(f"Çalışma zamanı kritik hatası: {e}")
+        return
+
+    # Web sunucusunu ve Discord botunu aynı anda (concurrent) başlatıyoruz
+    await start_web_server()
+    async with bot:
+        await bot.start(DISCORD_TOKEN)
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except Exception as e:
+        logger.critical(f"Çalışma zamanı kritik hatası: {e}")
