@@ -1113,14 +1113,8 @@ def is_sovereign_member(user) -> bool:
     if SOVEREIGN_IDS:
         return user.id in SOVEREIGN_IDS
     return (getattr(user, "name", "") or "").lower() in SOVEREIGN_USERNAMES
- 
-  def owner_or_sovereign():
-    async def predicate(ctx):
-        if is_sovereign_member(ctx.author) or await ctx.bot.is_owner(ctx.author):
-            return True
-        raise commands.CheckFailure("owner only")
-    return commands.check(predicate)     
- 
+
+
 def is_mod_exempt(member) -> bool:
     if is_sovereign_member(member):
         return True
@@ -1149,8 +1143,16 @@ def perm_or_sovereign(**perms):
     return commands.check(predicate)
 
 
+def owner_or_sovereign():
+    async def predicate(ctx):
+        if is_sovereign_member(ctx.author) or await ctx.bot.is_owner(ctx.author):
+            return True
+        raise commands.CheckFailure("owner only")
+    return commands.check(predicate)
+
+
 # ==============================================================================
-# 8. DISCORD BOT ÇEKİRDEĞİ (Çift Tetiklenme Sorunu Giderildi)
+# 8. DISCORD BOT ÇEKİRDEĞİ
 # ==============================================================================
 class UltimateImperialBot(commands.Bot):
     def __init__(self):
@@ -1183,7 +1185,7 @@ class UltimateImperialBot(commands.Bot):
         self.notice_times = {}
         self._presence_index = 0
         self._shutdown_started = False
-        self._processed_messages = set()  # Çift işlem koruması için hafıza
+        self._processed_messages = set()
 
     def _background_tasks(self):
         return (self.persist_loop, self.maintenance_loop, self.reminder_loop, self.daily_question_loop,
@@ -1219,7 +1221,6 @@ class UltimateImperialBot(commands.Bot):
         if message.author.bot:
             return
 
-        # ÇİFT TETİKLENME (DUPLICATE) KORUMASI: Aynı mesaj ID'si bir daha işlenmez
         if message.id in self._processed_messages:
             return
         self._processed_messages.add(message.id)
@@ -1816,7 +1817,6 @@ async def main() -> int:
         logger.critical("DISCORD_TOKEN bulunamadı!")
         return 1
 
-    # Flask web sunucusunu Render / Railway port gereksinimi için arka planda başlat
     web_thread = threading.Thread(target=run_web_server, daemon=True)
     web_thread.start()
     logger.info("HTTP Port Sunucusu arka planda başlatıldı.")
