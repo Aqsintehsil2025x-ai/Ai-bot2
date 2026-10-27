@@ -1,13 +1,20 @@
 # ==============================================================================
-# XYRİN İMPARATORLUĞU — DISCORD AI & İMPARATORLUK BOTU (v5.1 Ultimate)
+# XYRİN İMPARATORLUĞU — DISCORD AI & İMPARATORLUK BOTU
 # ==============================================================================
-# ÇEVRE DEĞİŞKENLERİ (Render / Railway > Variables):
+# Xyrin Empire Core v5.1 — Hükümdar Protokolü
+#
+# ÇEVRE DEĞİŞKENLERİ (Render / Railway > Environment / Variables):
 #   Zorunlu      : DISCORD_TOKEN, GEMINI_API_KEY
-#   ÇOK ÖNERİLEN : SOVEREIGN_IDS=111,222  -> Hükümdarların Discord ID'leri
-#                  DATA_DIR=/data         -> Kalıcı Volume yolu
+#   ÇOK ÖNERİLEN : SOVEREIGN_IDS=111,222  -> Hükümdarların Discord ID'leri (ID'ni öğrenmek için !kimlik yaz).
+#                  BACKUP_CHANNEL_ID=123  -> Özel bir kanal. Diski olmayan hostlarda (Render Free) veriler her yeniden
+#                                            başlatmada silinir; bot verileri bu kanala yedekler ve açılışta geri yükler.
+#                  DATA_DIR=/data         -> Kalıcı diskin yolu (Render paid Disk / Railway Volume varsa).
+#   PORT         : Render/Railway otomatik tanımlar; bot bu portta küçük bir /health sayfası açar (Render Web Service şartı).
+#   Önerilen     : BOT_OWNER_ID, MOD_LOG_CHANNEL_ID, WELCOME_CHANNEL_ID
 # ==============================================================================
 
 import asyncio
+import io
 import json
 import logging
 import os
@@ -28,19 +35,6 @@ from typing import Any, Optional
 import discord
 from discord import app_commands
 from discord.ext import commands, tasks
-
-# --- PORT ÇÖZÜCÜ VE WEB SUNUCUSU (Render / Railway Uyumlu) ---
-from flask import Flask
-
-web_app = Flask(__name__)
-
-@web_app.route('/')
-def web_home():
-    return "Xyrin Imperial Core v5.1 - Saray Protokolleri Aktif 👑"
-
-def run_web_server():
-    port = int(os.environ.get("PORT", 10000))
-    web_app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
 
 try:
     from google import genai
@@ -160,6 +154,27 @@ BOT_OWNER_ID = env_int("BOT_OWNER_ID", 0)
 SOVEREIGN_IDS = env_ids("SOVEREIGN_IDS")
 SOVEREIGN_USERNAMES = {"endercosmic1", "melikhan111"}
 
+def detect_platform() -> str:
+    if os.getenv("RENDER"):
+        return "Render"
+    if os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("RAILWAY_PROJECT_ID"):
+        return "Railway"
+    if os.getenv("FLY_APP_NAME"):
+        return "Fly.io"
+    return "yerel"
+
+
+PLATFORM = detect_platform()
+INSTANCE_ID = f"{random.randrange(0x10000):04x}"
+HEALTH_PORT = env_int("PORT", 0)
+HEALTH_SERVER = env_bool("HEALTH_SERVER", True)
+STARTUP_DELAY_SECONDS = env_int("STARTUP_DELAY_SECONDS", 20 if PLATFORM == "Render" else 0)
+
+BACKUP_CHANNEL_ID = env_int("BACKUP_CHANNEL_ID", 0)
+BACKUP_INTERVAL_MINUTES = max(1, env_int("BACKUP_INTERVAL_MINUTES", 10))
+BACKUP_KEEP = max(1, env_int("BACKUP_KEEP", 5))
+BACKUP_PREFIX = "xyrin_backup"
+
 # --- MODERASYON AYARLARI ---
 MOD_LOG_CHANNEL_ID = env_int("MOD_LOG_CHANNEL_ID", 0)
 STRIKE_TIMEOUT_MINUTES = {1: 5, 2: 15, 3: 60, 4: 1440}
@@ -198,7 +213,7 @@ DAILY_COOLDOWN_HOURS = 24
 DAILY_STREAK_BONUS = 20
 DAILY_STREAK_MAX_DAYS = 7
 XP_PER_MESSAGE_MIN = 5
-XP_MESSAGE_MAX = 15
+XP_PER_MESSAGE_MAX = 15
 XP_MESSAGE_COOLDOWN_SECONDS = 60
 XP_PER_LEVEL = 150
 BET_MAX = max(1, env_int("BET_MAX", 5000))
@@ -550,6 +565,7 @@ class JsonStore:
         self.default_factory = default_factory
         self.int_keys = int_keys
         self.dirty = False
+        self.revision = 0
         self._last_backup = 0.0
         self._write_lock = threading.Lock()
         self.data = self._load()
@@ -583,6 +599,19 @@ class JsonStore:
 
     def mark_dirty(self):
         self.dirty = True
+        self.revision += 1
+
+    def replace_data(self, raw):
+        expected = self.default_factory()
+        if not isinstance(raw, type(expected)):
+            raise TypeError(f"{self.path.name}: beklenen tür {type(expected).__name__}, gelen {type(raw).__name__}")
+        if isinstance(expected, dict):
+            if self.int_keys:
+                raw = {int(k): v for k, v in raw.items()}
+            expected.update(raw)
+            raw = expected
+        self.data = raw
+        self.mark_dirty()
 
     def _serialize(self) -> str:
         return json.dumps(self.data, ensure_ascii=False)
@@ -1184,16 +1213,20 @@ class UltimateImperialBot(commands.Bot):
         self.holo_last_announce = {}
         self.notice_times = {}
         self._presence_index = 0
+        self._last_backup_signature = None
         self._shutdown_started = False
-        self._processed_messages = set()
 
     def _background_tasks(self):
-        return (self.persist_loop, self.maintenance_loop, self.reminder_loop, self.daily_question_loop,
-                self.presence_loop, self.server_stats_loop, self.hologram_pulse_loop)
+        tasks_list = [self.persist_loop, self.maintenance_loop, self.reminder_loop, self.daily_question_loop,
+                      self.presence_loop, self.server_stats_loop, self.hologram_pulse_loop]
+        if BACKUP_CHANNEL_ID:
+            tasks_list.append(self.backup_loop)
+        return tuple(tasks_list)
 
     async def setup_hook(self):
-        logger.info("İmparatorluk alt sistemleri başlatılıyor...")
+        logger.info(f"İmparatorluk alt sistemleri başlatılıyor... [platform={PLATFORM}, örnek={INSTANCE_ID}]")
         self.ai = AIService()
+        await self.restore_from_backup_if_needed()
         for task in self._background_tasks():
             task.start()
         if AUTO_SYNC:
@@ -1210,6 +1243,11 @@ class UltimateImperialBot(commands.Bot):
         for task in self._background_tasks():
             task.cancel()
         JsonStore.flush_all_sync()
+        if BACKUP_CHANNEL_ID and self.is_ready():
+            try:
+                await asyncio.wait_for(self.backup_now(reason="kapanış"), timeout=10)
+            except Exception as e:
+                logger.warning(f"Kapanış yedeği alınamadı: {e}")
         if self.ai is not None:
             await self.ai.aclose()
         await super().close()
@@ -1217,16 +1255,107 @@ class UltimateImperialBot(commands.Bot):
     async def on_ready(self):
         logger.info(f"İmparatorluk Botu Çevrimiçi: {self.user} (ID: {self.user.id})")
 
+    async def notify_owner(self, text: str, key: str = "generic", cooldown: int = 600):
+        owner_id = BOT_OWNER_ID or self.owner_id
+        if not owner_id or on_cooldown(self.notice_times, key, cooldown):
+            return
+        self.notice_times[key] = time.monotonic()
+        try:
+            owner = self.get_user(owner_id) or await self.fetch_user(owner_id)
+            await owner.send(truncate(text, 1900))
+        except Exception:
+            pass
+
+    def modlog_channel(self, guild: discord.Guild):
+        channel_id = self.settings.value(guild.id, "mod_log") or MOD_LOG_CHANNEL_ID
+        channel = guild.get_channel(channel_id) if channel_id else None
+        return channel if isinstance(channel, discord.abc.Messageable) else None
+
+    async def send_modlog(self, guild: discord.Guild, embed: discord.Embed):
+        channel = self.modlog_channel(guild)
+        if channel is not None:
+            try:
+                await channel.send(embed=embed)
+            except discord.HTTPException:
+                pass
+
+    def announce_channel(self, guild: discord.Guild):
+        channel_id = self.settings.value(guild.id, "welcome") or WELCOME_CHANNEL_ID
+        channel = guild.get_channel(channel_id) if channel_id else None
+        channel = channel or guild.system_channel
+        if channel is not None and channel.permissions_for(guild.me).send_messages:
+            return channel
+        return None
+
+    async def _backup_channel(self):
+        if not BACKUP_CHANNEL_ID:
+            return None
+        channel = self.get_channel(BACKUP_CHANNEL_ID)
+        if channel is None:
+            try:
+                channel = await self.fetch_channel(BACKUP_CHANNEL_ID)
+            except discord.HTTPException:
+                return None
+        return channel if isinstance(channel, discord.abc.Messageable) else None
+
+    @staticmethod
+    def _backup_signature() -> tuple:
+        return tuple(store.revision for store in JsonStore._all)
+
+    async def backup_now(self, force: bool = False, reason: str = "zamanlanmış") -> str:
+        if not BACKUP_CHANNEL_ID:
+            return "disabled"
+        signature = self._backup_signature()
+        if not force and signature == self._last_backup_signature:
+            return "unchanged"
+        channel = await self._backup_channel()
+        if channel is None:
+            return "no-channel"
+        bundle = {"version": 1, "created": utcnow().isoformat(), "files": {s.path.name: s.data for s in JsonStore._all}}
+        payload = json.dumps(bundle, ensure_ascii=False).encode("utf-8")
+        filename = f"{BACKUP_PREFIX}_{utcnow().strftime('%Y%m%d_%H%M%S')}.json"
+        try:
+            await channel.send(
+                content=f"📦 Otomatik yedek ({reason}) • örnek `{INSTANCE_ID}`",
+                file=discord.File(io.BytesIO(payload), filename=filename),
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+        except discord.HTTPException:
+            return "failed"
+        self._last_backup_signature = signature
+        return "ok"
+
+    async def restore_from_backup_if_needed(self):
+        if not BACKUP_CHANNEL_ID or any(store.path.exists() for store in JsonStore._all):
+            return
+        channel = await self._backup_channel()
+        if channel is None:
+            return
+        try:
+            async for msg in channel.history(limit=100):
+                if msg.author.id != self.user.id:
+                    continue
+                attachment = next((a for a in msg.attachments if a.filename.startswith(BACKUP_PREFIX)), None)
+                if attachment is None:
+                    continue
+                try:
+                    files = json.loads((await attachment.read()).decode("utf-8"))["files"]
+                except Exception:
+                    continue
+                for store in JsonStore._all:
+                    if store.path.name in files:
+                        try:
+                            store.replace_data(files[store.path.name])
+                        except Exception:
+                            pass
+                self._last_backup_signature = self._backup_signature()
+                return
+        except discord.HTTPException:
+            pass
+
     async def on_message(self, message: discord.Message):
         if message.author.bot:
             return
-
-        if message.id in self._processed_messages:
-            return
-        self._processed_messages.add(message.id)
-        if len(self._processed_messages) > 1000:
-            self._processed_messages.pop()
-
         self.message_counter += 1
 
         if message.guild:
@@ -1338,6 +1467,14 @@ class UltimateImperialBot(commands.Bot):
             return
         logger.error(f"Komut hatası ({ctx.command}): {error}")
 
+    @tasks.loop(minutes=BACKUP_INTERVAL_MINUTES)
+    async def backup_loop(self):
+        await self.backup_now(reason="zamanlanmış")
+
+    @backup_loop.before_loop
+    async def before_backup(self):
+        await self.wait_until_ready()
+
     @tasks.loop(seconds=20)
     async def persist_loop(self):
         await JsonStore.flush_all()
@@ -1432,27 +1569,6 @@ class UltimateImperialBot(commands.Bot):
     async def before_hologram(self):
         await self.wait_until_ready()
 
-    def modlog_channel(self, guild: discord.Guild):
-        channel_id = self.settings.value(guild.id, "mod_log") or MOD_LOG_CHANNEL_ID
-        channel = guild.get_channel(channel_id) if channel_id else None
-        return channel if isinstance(channel, discord.abc.Messageable) else None
-
-    async def send_modlog(self, guild: discord.Guild, embed: discord.Embed):
-        channel = self.modlog_channel(guild)
-        if channel is not None:
-            try:
-                await channel.send(embed=embed)
-            except discord.HTTPException:
-                pass
-
-    def announce_channel(self, guild: discord.Guild):
-        channel_id = self.settings.value(guild.id, "welcome") or WELCOME_CHANNEL_ID
-        channel = guild.get_channel(channel_id) if channel_id else None
-        channel = channel or guild.system_channel
-        if channel is not None and channel.permissions_for(guild.me).send_messages:
-            return channel
-        return None
-
 
 bot = UltimateImperialBot()
 
@@ -1508,9 +1624,7 @@ async def moderate_message(message: discord.Message, edited: bool = False) -> bo
     if not message.guild or member.bot or is_mod_exempt(member):
         return False
 
-    # Küfür filtresi bu sunucuda kapatılmış mı kontrol et
     profanity_enabled = bot.settings.value(message.guild.id, "profanity_filter", True)
-    
     content = message.content or ""
 
     if not edited:
@@ -1528,7 +1642,6 @@ async def moderate_message(message: discord.Message, edited: bool = False) -> bo
         await delete_messages_safe([message])
         return True
 
-    # Eğer küfür filtresi AÇIKSA küfür/argo denetimlerini yap
     if profanity_enabled:
         hit = bot.word_filter.find(content)
         if hit:
@@ -1553,7 +1666,7 @@ async def award_xp(member: discord.Member, channel):
     bot.last_xp_time[member.id] = time.monotonic()
 
     account = bot.economy.get(member.id)
-    account["xp"] += random.randint(XP_PER_MESSAGE_MIN, XP_MESSAGE_MAX)
+    account["xp"] += random.randint(XP_PER_MESSAGE_MIN, XP_PER_MESSAGE_MAX)
     old_level = account["level"]
     new_level = account["xp"] // XP_PER_LEVEL
     if new_level > old_level:
@@ -1673,7 +1786,7 @@ async def pick_daily_question() -> str:
 def build_daily_question_embed(question: str) -> discord.Embed:
     line = "────────────⁉️─────────────────"
     return discord.Embed(
-        title=f"❔ {DAILY_QUESTION_TITLE}",
+        title=f"Glitchy Flowers | GÜNÜN SORUSU",
         description=f"{line}\n\n🌸 **{question}**\n\n{line}\n🏹 Sohbet vakti! Cevaplarınızı bekliyoruz dostlar.",
         color=discord.Color.from_rgb(255, 182, 193),
     )
@@ -1842,19 +1955,83 @@ async def sync_komutu(ctx):
 
 
 # ==============================================================================
-# 15. ANA ÇALIŞTIRMA (Flask + Discord Bot Paralel Başlatma)
+# 15. ÇALIŞTIRMA BLOĞU
 # ==============================================================================
+async def start_health_server():
+    if not HEALTH_SERVER or HEALTH_PORT <= 0:
+        return None
+    from aiohttp import web
+
+    async def health(request):
+        latency = None
+        try:
+            if bot.is_ready():
+                latency = round(bot.latency * 1000)
+        except (ValueError, OverflowError):
+            pass
+        return web.json_response({
+            "status": "ok",
+            "ready": bot.is_ready(),
+            "platform": PLATFORM,
+            "instance": INSTANCE_ID,
+            "uptime_seconds": int((utcnow() - bot.start_time).total_seconds()),
+            "latency_ms": latency,
+        })
+
+    app = web.Application()
+    app.router.add_get("/", health)
+    app.router.add_get("/health", health)
+    runner = web.AppRunner(app, access_log=None)
+    try:
+        await runner.setup()
+        await web.TCPSite(runner, "0.0.0.0", HEALTH_PORT).start()
+    except OSError as e:
+        logger.error(f"Sağlık sunucusu {HEALTH_PORT} portunda açılamadı: {e}")
+        await runner.cleanup()
+        return None
+    logger.info(f"Sağlık kontrolü sunucusu 0.0.0.0:{HEALTH_PORT} üzerinde dinliyor (/health).")
+    return runner
+
+
 async def main() -> int:
     if not DISCORD_TOKEN:
-        logger.critical("DISCORD_TOKEN bulunamadı!")
+        logger.critical("Geçerli bir Discord Token yapılandırılmadı! DISCORD_TOKEN çevre değişkenini ayarla.")
         return 1
+    logger.info(f"İmparatorluk Botu Başlatılıyor... [platform={PLATFORM}, örnek={INSTANCE_ID}]")
+    stop_event = asyncio.Event()
+    started = False
+    background = set()
 
-    web_thread = threading.Thread(target=run_web_server, daemon=True)
-    web_thread.start()
-    logger.info("HTTP Port Sunucusu arka planda başlatıldı.")
+    def request_shutdown():
+        stop_event.set()
+        if started:
+            task = asyncio.create_task(bot.close())
+            background.add(task)
+            task.add_done_callback(background.discard)
 
-    async with bot:
-        await bot.start(DISCORD_TOKEN)
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            loop.add_signal_handler(sig, request_shutdown)
+        except (NotImplementedError, RuntimeError, ValueError):
+            pass
+
+    health_runner = await start_health_server()
+    try:
+        if STARTUP_DELAY_SECONDS > 0:
+            logger.info(f"Eski kopyanın kapanması için {STARTUP_DELAY_SECONDS} sn bekleniyor...")
+            try:
+                await asyncio.wait_for(stop_event.wait(), timeout=STARTUP_DELAY_SECONDS)
+            except asyncio.TimeoutError:
+                pass
+        if stop_event.is_set():
+            return 0
+        started = True
+        async with bot:
+            await bot.start(DISCORD_TOKEN)
+    finally:
+        if health_runner is not None:
+            await health_runner.cleanup()
     return 0
 
 
@@ -1863,3 +2040,9 @@ if __name__ == "__main__":
         sys.exit(asyncio.run(main()))
     except KeyboardInterrupt:
         pass
+    except discord.LoginFailure:
+        logger.critical("Discord girişi başarısız: DISCORD_TOKEN geçersiz.")
+        sys.exit(1)
+    except Exception:
+        logger.critical("Çalışma zamanı kritik hatası", exc_info=True)
+        sys.exit(1)
