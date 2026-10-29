@@ -1,7 +1,7 @@
 # ==============================================================================
 # XYRİN İMPARATORLUĞU — DISCORD AI & İMPARATORLUK BOTU
 # ==============================================================================
-# Xyrin Empire Core v5.0 — Hükümdar Protokolü
+# Xyrin Empire Core v6.0 — Hükümdar Protokolü (Genişletilmiş)
 #
 # ÇEVRE DEĞİŞKENLERİ (Render / Railway > Environment / Variables):
 #   Zorunlu      : DISCORD_TOKEN, GEMINI_API_KEY
@@ -220,6 +220,10 @@ SETTINGS_FILE = "guild_settings.json"
 REMINDERS_FILE = "reminders.json"
 QUESTIONS_FILE = "daily_questions.json"
 WORDLIST_FILE = "blocked_words.txt"
+AFK_FILE = "afk_data.json"
+GIVEAWAYS_FILE = "giveaways.json"
+SUGGESTIONS_FILE = "suggestions.json"
+INVENTORY_FILE = "inventory_data.json"
 
 # --- EKONOMİ & SEVİYE SİSTEMİ ---
 STARTING_BALANCE = 100
@@ -233,15 +237,49 @@ XP_PER_MESSAGE_MAX = 15
 XP_MESSAGE_COOLDOWN_SECONDS = 60
 XP_PER_LEVEL = 150  # level = xp // XP_PER_LEVEL
 BET_MAX = max(1, env_int("BET_MAX", 5000))
+WORK_COOLDOWN_SECONDS = env_int("WORK_COOLDOWN_SECONDS", 3600)
+WORK_REWARD_MIN = 40
+WORK_REWARD_MAX = 120
+CRIME_COOLDOWN_SECONDS = env_int("CRIME_COOLDOWN_SECONDS", 7200)
+CRIME_REWARD_MIN = 80
+CRIME_REWARD_MAX = 280
+CRIME_FAIL_FINE_MIN = 30
+CRIME_FAIL_FINE_MAX = 150
+CRIME_SUCCESS_CHANCE = 0.45
+ROB_COOLDOWN_SECONDS = env_int("ROB_COOLDOWN_SECONDS", 5400)
+ROB_SUCCESS_CHANCE = 0.35
+ROB_MAX_PERCENT = 0.25
+ROB_MIN_TARGET_BALANCE = 50
 
 # Seviye eşiğine göre otomatik rol: {seviye: "rol adı"} — rol yoksa sadece log'a uyarı yazılır.
-LEVEL_ROLES = {5: "Vasal", 15: "Lord", 30: "Asil Lord"}
+LEVEL_ROLES = {5: "Vasal", 15: "Lord", 30: "Asil Lord", 50: "Dük", 75: "Prens", 100: "İmparator"}
 
 # Market: {"komut_adi": {"fiyat": int, "aciklama": str, "rol_adi": str|None}}
 SHOP_ITEMS = {
     "vip": {"fiyat": 1000, "aciklama": "VIP rolü ve özel renk.", "rol_adi": "VIP"},
     "reklam": {"fiyat": 300, "aciklama": "24 saat boyunca #Booster kanalında sabitlenmiş reklamın.", "rol_adi": None},
+    "kalkan": {"fiyat": 500, "aciklama": "24 saat boyunca soyguna karşı koruma.", "rol_adi": None},
+    "boost": {"fiyat": 750, "aciklama": "12 saat boyunca 1.5x XP kazancı.", "rol_adi": None},
 }
+
+WORK_JOBS = [
+    ("Demircide çıraklık yaptın", 1.0),
+    ("İmparatorluk arşivlerini düzenledin", 1.1),
+    ("Pazarda tezgâh açtın", 0.9),
+    ("Kale duvarlarını onardın", 1.2),
+    ("Elçi olarak komşu krallığa gittin", 1.3),
+    ("Tarlada hasat topladın", 0.85),
+    ("Saray mutfağında yardımcı oldun", 1.0),
+    ("Kütüphanede el yazmalarını kopyaladın", 1.15),
+]
+
+CRIME_ACTIONS = [
+    "Hazine odasına sızmaya çalıştın",
+    "Vergi kasasını boşaltmayı denedin",
+    "Tüccar kervanını soydun",
+    "Saray mutfağından altın çalmaya kalktın",
+    "Gümrük memurunu rüşvetle kandırdın",
+]
 
 # --- KARŞILAMA / SES / HATIRLATMA ---
 WELCOME_CHANNEL_ID = env_int("WELCOME_CHANNEL_ID", 0)
@@ -739,9 +777,13 @@ class JsonStore:
 
 
 class EconomyManager:
-    """{user_id: {"balance", "xp", "level", "last_daily", "streak"}}"""
+    """{user_id: {"balance", "xp", "level", "last_daily", "streak", "last_work", "last_crime", "last_rob", "shield_until", "xp_boost_until"}}"""
 
-    _DEFAULTS = (("balance", STARTING_BALANCE), ("xp", 0), ("level", 0), ("last_daily", None), ("streak", 0))
+    _DEFAULTS = (
+        ("balance", STARTING_BALANCE), ("xp", 0), ("level", 0), ("last_daily", None), ("streak", 0),
+        ("last_work", None), ("last_crime", None), ("last_rob", None),
+        ("shield_until", None), ("xp_boost_until", None),
+    )
 
     def __init__(self):
         self.store = JsonStore(ECONOMY_FILE, dict, int_keys=True)
@@ -780,6 +822,132 @@ class EconomyManager:
         for position, (uid, _) in enumerate(rows, start=1):
             if uid == user_id:
                 return position
+        return None
+
+    def has_shield(self, user_id: int) -> bool:
+        acc = self.get(user_id)
+        until = parse_iso(acc.get("shield_until"))
+        return until is not None and until > utcnow()
+
+    def has_xp_boost(self, user_id: int) -> bool:
+        acc = self.get(user_id)
+        until = parse_iso(acc.get("xp_boost_until"))
+        return until is not None and until > utcnow()
+
+    def set_shield(self, user_id: int, hours: float = 24):
+        acc = self.get(user_id)
+        acc["shield_until"] = (utcnow() + timedelta(hours=hours)).isoformat()
+        self.save()
+
+    def set_xp_boost(self, user_id: int, hours: float = 12):
+        acc = self.get(user_id)
+        acc["xp_boost_until"] = (utcnow() + timedelta(hours=hours)).isoformat()
+        self.save()
+
+
+class AFKManager:
+    """{user_id: {"reason": str, "since": iso}}"""
+
+    def __init__(self):
+        self.store = JsonStore(AFK_FILE, dict, int_keys=True)
+
+    def set(self, user_id: int, reason: str):
+        self.store.data[user_id] = {"reason": reason[:200], "since": utcnow().isoformat()}
+        self.store.mark_dirty()
+
+    def clear(self, user_id: int) -> Optional[dict]:
+        entry = self.store.data.pop(user_id, None)
+        if entry is not None:
+            self.store.mark_dirty()
+        return entry
+
+    def get(self, user_id: int) -> Optional[dict]:
+        return self.store.data.get(user_id)
+
+
+class GiveawayManager:
+    """Aktif çekilişler: [{id, guild_id, channel_id, message_id, prize, winners, ends, host_id, entries}]"""
+
+    def __init__(self):
+        self.store = JsonStore(GIVEAWAYS_FILE, lambda: {"next_id": 1, "items": []})
+        self.store.data.setdefault("next_id", 1)
+        self.store.data.setdefault("items", [])
+
+    @property
+    def items(self) -> list:
+        return self.store.data["items"]
+
+    def add(self, guild_id: int, channel_id: int, message_id: int, prize: str,
+            winners: int, ends: datetime, host_id: int) -> int:
+        gid = self.store.data["next_id"]
+        self.store.data["next_id"] = gid + 1
+        self.items.append({
+            "id": gid, "guild_id": guild_id, "channel_id": channel_id, "message_id": message_id,
+            "prize": prize, "winners": winners, "ends": ends.astimezone(timezone.utc).isoformat(),
+            "host_id": host_id, "entries": [], "ended": False,
+        })
+        self.store.mark_dirty()
+        return gid
+
+    def find(self, gid: int) -> Optional[dict]:
+        return next((i for i in self.items if i.get("id") == gid), None)
+
+    def find_by_message(self, message_id: int) -> Optional[dict]:
+        return next((i for i in self.items if i.get("message_id") == message_id and not i.get("ended")), None)
+
+    def pop_due(self, now: datetime) -> list:
+        due, keep = [], []
+        for item in self.items:
+            if item.get("ended"):
+                keep.append(item)
+                continue
+            when = parse_iso(item.get("ends"))
+            if when is None or when <= now:
+                item["ended"] = True
+                due.append(item)
+            else:
+                keep.append(item)
+        if due:
+            active = [i for i in keep if not i.get("ended")]
+            ended_hist = [i for i in keep if i.get("ended")] + due
+            self.store.data["items"] = active + ended_hist[-30:]
+            self.store.mark_dirty()
+        return due
+
+    def add_entry(self, gid: int, user_id: int) -> bool:
+        item = self.find(gid)
+        if not item or item.get("ended"):
+            return False
+        if user_id in item.get("entries", []):
+            return False
+        item.setdefault("entries", []).append(user_id)
+        self.store.mark_dirty()
+        return True
+
+
+class SuggestionManager:
+    def __init__(self):
+        self.store = JsonStore(SUGGESTIONS_FILE, lambda: {"next_id": 1, "items": []})
+        self.store.data.setdefault("next_id", 1)
+        self.store.data.setdefault("items", [])
+
+    def add(self, guild_id: int, author_id: int, text: str, channel_id: int, message_id: int) -> int:
+        sid = self.store.data["next_id"]
+        self.store.data["next_id"] = sid + 1
+        self.store.data["items"].append({
+            "id": sid, "guild_id": guild_id, "author_id": author_id, "text": text[:1000],
+            "channel_id": channel_id, "message_id": message_id, "status": "pending",
+            "created": utcnow().isoformat(),
+        })
+        self.store.mark_dirty()
+        return sid
+
+    def set_status(self, sid: int, status: str) -> Optional[dict]:
+        for item in self.store.data["items"]:
+            if item.get("id") == sid:
+                item["status"] = status
+                self.store.mark_dirty()
+                return item
         return None
 
 
@@ -1317,6 +1485,9 @@ class UltimateImperialBot(commands.Bot):
         self.strikes = StrikeManager()
         self.settings = GuildSettings()
         self.reminders = ReminderManager()
+        self.afk = AFKManager()
+        self.giveaways = GiveawayManager()
+        self.suggestions = SuggestionManager()
         self.questions = JsonStore(QUESTIONS_FILE, lambda: {"recent": []})
         self.word_filter = WordFilter(DATA_DIR / WORDLIST_FILE)
         self.spam = SpamTracker()
@@ -1335,7 +1506,7 @@ class UltimateImperialBot(commands.Bot):
     # ---------- yaşam döngüsü ----------
     def _background_tasks(self):
         tasks_list = [self.persist_loop, self.maintenance_loop, self.reminder_loop, self.daily_question_loop,
-                      self.presence_loop, self.server_stats_loop, self.hologram_pulse_loop]
+                      self.presence_loop, self.server_stats_loop, self.hologram_pulse_loop, self.giveaway_loop]
         if BACKUP_CHANNEL_ID:
             tasks_list.append(self.backup_loop)
         return tuple(tasks_list)
@@ -1521,6 +1692,37 @@ class UltimateImperialBot(commands.Bot):
         if message.author.bot:  # kendimiz dahil tüm botlar: döngüleri ve bot-bot saldırılarını önler
             return
         self.message_counter += 1
+
+        # AFK dönüşü: kullanıcı mesaj atınca AFK'sını kaldır
+        afk_entry = self.afk.clear(message.author.id)
+        if afk_entry is not None:
+            since = parse_iso(afk_entry.get("since"))
+            duration = format_duration(utcnow() - since) if since else "?"
+            try:
+                await message.channel.send(
+                    f"👋 {message.author.mention}, AFK modundan çıktın. (Süre: **{duration}**)",
+                    delete_after=8,
+                )
+            except discord.HTTPException:
+                pass
+
+        # Bahsedilen AFK kullanıcıları bildir
+        if message.guild and message.mentions:
+            for mentioned in message.mentions[:5]:
+                if mentioned.bot or mentioned.id == message.author.id:
+                    continue
+                entry = self.afk.get(mentioned.id)
+                if entry:
+                    reason = entry.get("reason") or "Sebep belirtilmedi"
+                    since = parse_iso(entry.get("since"))
+                    duration = format_duration(utcnow() - since) if since else "?"
+                    try:
+                        await message.channel.send(
+                            f"💤 {mentioned.display_name} şu an AFK: **{truncate(reason, 80)}** (süre: {duration})",
+                            delete_after=12,
+                        )
+                    except discord.HTTPException:
+                        pass
 
         if message.guild:
             if await moderate_message(message):
@@ -1845,6 +2047,49 @@ class UltimateImperialBot(commands.Bot):
     async def before_hologram(self):
         await self.wait_until_ready()
 
+    # ---------- ARKA PLAN GÖREVİ 8: ÇEKİLİŞ SONUÇLANDIRMA ----------
+    @tasks.loop(seconds=20)
+    async def giveaway_loop(self):
+        try:
+            for item in self.giveaways.pop_due(utcnow()):
+                await self.finish_giveaway(item)
+        except Exception:
+            logger.exception("Çekiliş döngüsü hatası")
+
+    @giveaway_loop.before_loop
+    async def before_giveaway(self):
+        await self.wait_until_ready()
+
+    async def finish_giveaway(self, item: dict):
+        channel = self.get_channel(item.get("channel_id") or 0)
+        entries = list(dict.fromkeys(item.get("entries") or []))  # unique, order-preserving
+        winners_n = max(1, int(item.get("winners") or 1))
+        prize = item.get("prize", "Ödül")
+        if not entries:
+            text = f"🎉 **Çekiliş bitti!** Ödül: **{prize}**\nKatılımcı olmadığı için kazanan seçilemedi."
+        else:
+            chosen = random.sample(entries, min(winners_n, len(entries)))
+            mentions = ", ".join(f"<@{uid}>" for uid in chosen)
+            text = (
+                f"🎉 **Çekiliş bitti!**\n"
+                f"**Ödül:** {prize}\n"
+                f"**Kazanan{'lar' if len(chosen) > 1 else ''}:** {mentions}\n"
+                f"Katılımcı: {len(entries)}"
+            )
+        try:
+            if channel is not None:
+                await channel.send(text)
+                try:
+                    msg = await channel.fetch_message(item.get("message_id") or 0)
+                    embed = msg.embeds[0] if msg.embeds else discord.Embed(title="🎉 Çekiliş")
+                    embed.color = discord.Color.dark_grey()
+                    embed.set_footer(text="Bu çekiliş sona erdi.")
+                    await msg.edit(embed=embed, view=None)
+                except (discord.HTTPException, IndexError, AttributeError):
+                    pass
+        except discord.HTTPException as e:
+            logger.warning(f"Çekiliş sonucu gönderilemedi: {e}")
+
 
 bot = UltimateImperialBot()
 
@@ -2001,7 +2246,10 @@ async def award_xp(member: discord.Member, channel):
     bot.last_xp_time[member.id] = time.monotonic()
 
     account = bot.economy.get(member.id)
-    account["xp"] += random.randint(XP_PER_MESSAGE_MIN, XP_PER_MESSAGE_MAX)
+    gained = random.randint(XP_PER_MESSAGE_MIN, XP_PER_MESSAGE_MAX)
+    if bot.economy.has_xp_boost(member.id):
+        gained = int(gained * 1.5)
+    account["xp"] += gained
     old_level = account["level"]
     new_level = account["xp"] // XP_PER_LEVEL
     if new_level > old_level:
@@ -2259,6 +2507,12 @@ def help_pages() -> dict:
             (f"`{p}ping`", "🏓 Botun gecikme süresini ölçer."),
             (f"`{p}rapor`", "📊 Sunucu ve bot raporunu gösterir."),
             (f"`{p}kimlik`", "🪪 Discord ID'ni ve Hükümdar durumunu gösterir."),
+            (f"`{p}kullanici [@üye]`", "Kullanıcı bilgilerini gösterir."),
+            (f"`{p}sunucu`", "Sunucu bilgilerini gösterir."),
+            (f"`{p}avatar [@üye]`", "Avatarını büyük gösterir."),
+            (f"`{p}afk [sebep]`", "AFK moduna geçer; bahsedilince bildirilir."),
+            (f"`{p}anket <soru> | seçenek1 | seçenek2 ...`", "Anket oluşturur (2-10 seçenek)."),
+            (f"`{p}oneri <metin>`", "Öneri kutusu (yetkililere iletilir)."),
             (f"`{p}kahve <tür>`", "☕ **[DLC]** Kahve simülasyonu."),
             (f"`{p}hologram`", "🔮 **[DLC]** Ses kanalındaki hologram durumu."),
             (f"`{p}seslen` / `{p}ayril`", "Ses kanalına katılır / ayrılır."),
@@ -2273,10 +2527,12 @@ def help_pages() -> dict:
         ]),
         "ekonomi": ("🪙", "Ekonomi", "Bakiye, market, seviye, oyunlar", [
             (f"`{p}bakiye` `{p}gunluk` `{p}transfer`", "Bakiyeni gör, günlük ödül (seri bonuslu) al, başkasına gönder."),
-            (f"`{p}market` `{p}satinal <eşya>`", "Marketten VIP rol gibi eşyalar satın al."),
+            (f"`{p}calis` `{p}suc` `{p}soy @üye`", "Çalış, suç işle veya başka üyeyi soy (riskli!)."),
+            (f"`{p}market` `{p}satinal <eşya>`", "VIP, kalkan (soy koruması), XP boost vb."),
             (f"`{p}seviye` `{p}siralama [bakiye|seviye]`", "Seviye kartın ve sunucu sıralaması."),
             (f"`{p}zar` `{p}yazitura`", "Mini oyunlar."),
             (f"`{p}bahis yazi|tura <miktar>`", f"Bakiyeni ikiye katlamayı dene (en fazla {BET_MAX} 🪙)."),
+            (f"`{p}cekilis <süre> <kazanan> <ödül>`", "Yönetici: çekiliş başlatır (🎉 ile katılım)."),
         ]),
         "zaman": ("⏰", "Zaman", "Hatırlatma, etkinlik, Günün Sorusu", [
             (f"`{p}hatirlat <süre> <mesaj>`", "Örn: `30m`, `2h`, `1h30m`, `45dk`, `1g` sonra seni etiketler."),
@@ -2286,13 +2542,16 @@ def help_pages() -> dict:
         ]),
         "moderasyon": ("🛡️", "Moderasyon", "Filtreler ve yönetici komutları", [
             ("Otomatik filtreler", "Spam, toplu etiket, davet linki ve küfür/hakaret (yapay zeka destekli)."),
-            (f"`{p}kufur ac` `{p}kufur kapa`", "Yönetici: küfür/hakaret filtresini açar/kapatır (spam ve link koruması açık kalır)."),
-            (f"`{p}uyarilar [@kullanıcı]`", "Strike sayısını gösterir."),
-            (f"`{p}uyarisifirla @kullanıcı`", "Yönetici: strike sicilini sıfırlar."),
-            (f"`{p}modlog`", "Yönetici: log kanalını bu kanal yapar (kalıcı)."),
-            (f"`{p}hosgeldin`", "Yönetici: karşılama kanalını bu kanal yapar (kalıcı)."),
-            (f"`{p}kanaloluştur` `{p}rololuştur`", "Yönetici: manuel kanal / rol açar."),
-            (f"`{p}yedekle` `{p}sync`", "Bot sahibi / Hükümdar: veri yedeği al, slash komutlarını eşitle."),
+            (f"`{p}kufur ac` `{p}kufur kapa`", "Küfür/hakaret filtresini açar/kapatır."),
+            (f"`{p}kick` `{p}ban` `{p}unban` `{p}mute` `{p}unmute`", "Manuel ceza komutları."),
+            (f"`{p}temizle <adet>` `{p}slowmode <sn>`", "Mesaj silme ve yavaş mod."),
+            (f"`{p}kilitle` `{p}kilita`", "Kanalı kilitle / aç."),
+            (f"`{p}rolver` `{p}rolal` `{p}nick`", "Rol ve isim yönetimi."),
+            (f"`{p}duyuru <mesaj>`", "Embed ile duyuru yapar."),
+            (f"`{p}uyarilar` `{p}uyarisifirla`", "Strike sicili."),
+            (f"`{p}modlog` `{p}hosgeldin`", "Log / karşılama kanalı ayarı."),
+            (f"`{p}kanaloluştur` `{p}rololuştur`", "Manuel kanal / rol."),
+            (f"`{p}yedekle` `{p}sync`", "Bot sahibi / Hükümdar araçları."),
         ]),
     }
 
@@ -2307,7 +2566,7 @@ def build_help_embed(key: str) -> discord.Embed:
     )
     for name, value in fields:
         embed.add_field(name=name, value=value, inline=False)
-    embed.set_footer(text="Xyrin Empire Core v5.0 - Hükümdar Protokolü Aktif (endercosmic1, melikhan111)")
+    embed.set_footer(text="Xyrin Empire Core v6.0 - Hükümdar Protokolü Aktif (endercosmic1, melikhan111)")
     return embed
 
 
@@ -2656,6 +2915,15 @@ async def bakiye_komutu(ctx, member: Optional[discord.Member] = None):
     embed.add_field(name="Bakiye", value=format_balance(account["balance"]), inline=True)
     if account.get("streak"):
         embed.add_field(name="🔥 Günlük serisi", value=f"{account['streak']} gün", inline=True)
+    buffs = []
+    if bot.economy.has_shield(member.id):
+        until = parse_iso(account.get("shield_until"))
+        buffs.append(f"🛡️ Kalkan (<t:{int(until.timestamp())}:R>)" if until else "🛡️ Kalkan")
+    if bot.economy.has_xp_boost(member.id):
+        until = parse_iso(account.get("xp_boost_until"))
+        buffs.append(f"⚡ XP Boost (<t:{int(until.timestamp())}:R>)" if until else "⚡ XP Boost")
+    if buffs:
+        embed.add_field(name="Aktif bufflar", value="\n".join(buffs), inline=False)
     await ctx.send(embed=embed)
 
 
@@ -2780,13 +3048,20 @@ async def satinal_komutu(ctx, item_adi: str):
         account["balance"] -= item["fiyat"]
         bot.economy.save()
 
-    if role is None:  # Elle teslim edilecek eşya (ör. reklam): yetkililere haber ver.
+    extra = ""
+    if key == "kalkan":
+        bot.economy.set_shield(ctx.author.id, 24)
+        extra = " 24 saat boyunca soyguna karşı korunuyorsun!"
+    elif key == "boost":
+        bot.economy.set_xp_boost(ctx.author.id, 12)
+        extra = " 12 saat boyunca 1.5x XP kazanacaksın!"
+    elif role is None:
         embed = discord.Embed(title="🛒 Market Satın Alma — Teslimat Bekliyor", color=discord.Color.gold())
         embed.add_field(name="Üye", value=ctx.author.mention, inline=True)
         embed.add_field(name="Eşya", value=key, inline=True)
         embed.timestamp = discord.utils.utcnow()
         await bot.send_modlog(ctx.guild, embed)
-    extra = "" if role is not None else " Yetkililer seninle iletişime geçecek."
+        extra = " Yetkililer seninle iletişime geçecek."
     await ctx.send(f"✅ {ctx.author.mention}, **{key}** satın alındı! Kalan bakiye: {format_balance(account['balance'])}.{extra}")
 
 
@@ -3002,7 +3277,546 @@ async def gs_kapat(ctx):
     await ctx.send("🔕 Otomatik Günün Sorusu kapatıldı.")
 
 
-# --- 14G. BOT SAHİBİ KOMUTLARI ---
+# --- 14G. EKONOMİ GENİŞLETME (çalış / suç / soy) ---
+@bot.hybrid_command(name="calis", aliases=["work", "çalış"], description="Çalışarak bakiye kazan.")
+@commands.cooldown(1, 5, commands.BucketType.user)
+async def calis_komutu(ctx):
+    account = bot.economy.get(ctx.author.id)
+    last = parse_iso(account.get("last_work"))
+    if last is not None:
+        remaining = timedelta(seconds=WORK_COOLDOWN_SECONDS) - (utcnow() - last)
+        if remaining.total_seconds() > 0:
+            await ctx.send(f"⏳ Biraz dinlen! **{format_duration(remaining)}** sonra tekrar çalışabilirsin.")
+            return
+    job, mult = random.choice(WORK_JOBS)
+    reward = max(1, int(random.randint(WORK_REWARD_MIN, WORK_REWARD_MAX) * mult))
+    account["balance"] += reward
+    account["last_work"] = utcnow().isoformat()
+    bot.economy.save()
+    await ctx.send(f"💼 {ctx.author.mention}, {job} ve **{format_balance(reward)}** kazandın! Bakiye: {format_balance(account['balance'])}")
+
+
+@bot.hybrid_command(name="suc", aliases=["crime", "suç"], description="Riskli suç işle — kazanırsan çok, yakalanırsan ceza.")
+@commands.cooldown(1, 5, commands.BucketType.user)
+async def suc_komutu(ctx):
+    account = bot.economy.get(ctx.author.id)
+    last = parse_iso(account.get("last_crime"))
+    if last is not None:
+        remaining = timedelta(seconds=CRIME_COOLDOWN_SECONDS) - (utcnow() - last)
+        if remaining.total_seconds() > 0:
+            await ctx.send(f"⏳ Polis hâlâ peşinde! **{format_duration(remaining)}** bekle.")
+            return
+    action = random.choice(CRIME_ACTIONS)
+    account["last_crime"] = utcnow().isoformat()
+    if random.random() < CRIME_SUCCESS_CHANCE:
+        reward = random.randint(CRIME_REWARD_MIN, CRIME_REWARD_MAX)
+        account["balance"] += reward
+        bot.economy.save()
+        await ctx.send(f"🕶️ {ctx.author.mention}, {action}... **Başarılı!** +{format_balance(reward)} | Bakiye: {format_balance(account['balance'])}")
+    else:
+        fine = min(account["balance"], random.randint(CRIME_FAIL_FINE_MIN, CRIME_FAIL_FINE_MAX))
+        account["balance"] -= fine
+        bot.economy.save()
+        await ctx.send(f"🚨 {ctx.author.mention}, {action}... **Yakalandın!** Ceza: -{format_balance(fine)} | Bakiye: {format_balance(account['balance'])}")
+
+
+@bot.hybrid_command(name="soy", aliases=["rob", "çal"], description="Başka bir üyeyi soymaya çalış (riskli!).")
+@app_commands.describe(member="Soyulacak üye")
+@commands.guild_only()
+@commands.cooldown(1, 8, commands.BucketType.user)
+async def soy_komutu(ctx, member: discord.Member):
+    if member.bot or member.id == ctx.author.id:
+        await ctx.send("❌ Geçerli bir hedef seç.")
+        return
+    if is_mod_exempt(member) or is_sovereign_member(member):
+        await ctx.send("❌ Bu kişiyi soyamazsın.")
+        return
+    attacker = bot.economy.get(ctx.author.id)
+    last = parse_iso(attacker.get("last_rob"))
+    if last is not None:
+        remaining = timedelta(seconds=ROB_COOLDOWN_SECONDS) - (utcnow() - last)
+        if remaining.total_seconds() > 0:
+            await ctx.send(f"⏳ Soygun için **{format_duration(remaining)}** beklemen lazım.")
+            return
+    if bot.economy.has_shield(member.id):
+        await ctx.send(f"🛡️ {member.display_name} kalkanlı! Soygun başarısız.")
+        attacker["last_rob"] = utcnow().isoformat()
+        bot.economy.save()
+        return
+    target = bot.economy.get(member.id)
+    if target["balance"] < ROB_MIN_TARGET_BALANCE:
+        await ctx.send(f"❌ {member.display_name} çok fakir, soymaya değmez.")
+        return
+    attacker["last_rob"] = utcnow().isoformat()
+    if random.random() < ROB_SUCCESS_CHANCE:
+        stolen = max(1, int(target["balance"] * random.uniform(0.05, ROB_MAX_PERCENT)))
+        stolen = min(stolen, target["balance"])
+        target["balance"] -= stolen
+        attacker["balance"] += stolen
+        bot.economy.save()
+        await ctx.send(f"💰 {ctx.author.mention}, {member.mention} kullanıcısından **{format_balance(stolen)}** çaldı!")
+    else:
+        fine = min(attacker["balance"], random.randint(20, 80))
+        attacker["balance"] -= fine
+        bot.economy.save()
+        await ctx.send(f"🚔 {ctx.author.mention} soygun sırasında yakalandı! Ceza: -{format_balance(fine)}")
+
+
+# --- 14H. GENEL YARDIMCI KOMUTLAR ---
+@bot.hybrid_command(name="afk", description="AFK moduna geçer. Birisi seni etiketleyince sebep gösterilir.")
+@app_commands.describe(sebep="AFK sebebin (isteğe bağlı)")
+async def afk_komutu(ctx, *, sebep: str = "Belirtilmedi"):
+    bot.afk.set(ctx.author.id, sebep)
+    await ctx.send(f"💤 {ctx.author.mention} artık AFK: **{truncate(sebep, 100)}**")
+
+
+@bot.hybrid_command(name="kullanici", aliases=["userinfo", "user", "üye"], description="Kullanıcı bilgilerini gösterir.")
+@app_commands.describe(member="Bilgisine bakılacak üye")
+@commands.guild_only()
+async def kullanici_komutu(ctx, member: Optional[discord.Member] = None):
+    member = member or ctx.author
+    roles = [r.mention for r in reversed(member.roles) if not r.is_default()][:15]
+    embed = discord.Embed(title=f"👤 {member.display_name}", color=member.color or discord.Color.blurple())
+    embed.set_thumbnail(url=member.display_avatar.url)
+    embed.add_field(name="Kullanıcı", value=f"{member.mention}\n`{member}`", inline=True)
+    embed.add_field(name="ID", value=f"`{member.id}`", inline=True)
+    embed.add_field(name="Bot mu?", value="Evet" if member.bot else "Hayır", inline=True)
+    if member.joined_at:
+        embed.add_field(name="Katılma", value=f"<t:{int(member.joined_at.timestamp())}:R>", inline=True)
+    if member.created_at:
+        embed.add_field(name="Hesap oluşturma", value=f"<t:{int(member.created_at.timestamp())}:R>", inline=True)
+    embed.add_field(name="Hükümdar", value="👑 Evet" if is_sovereign_member(member) else "Hayır", inline=True)
+    account = bot.economy.get(member.id)
+    embed.add_field(name="Seviye / XP", value=f"Sv. {account['level']} • {account['xp']} XP", inline=True)
+    embed.add_field(name="Bakiye", value=format_balance(account["balance"]), inline=True)
+    embed.add_field(name="Strike", value=str(bot.strikes.get(member.id)), inline=True)
+    if roles:
+        embed.add_field(name=f"Roller ({len(member.roles) - 1})", value=" ".join(roles) or "-", inline=False)
+    if member.premium_since:
+        embed.add_field(name="Boost", value=f"<t:{int(member.premium_since.timestamp())}:R>", inline=True)
+    await ctx.send(embed=embed)
+
+
+@bot.hybrid_command(name="sunucu", aliases=["serverinfo", "server"], description="Sunucu bilgilerini gösterir.")
+@commands.guild_only()
+async def sunucu_komutu(ctx):
+    g = ctx.guild
+    humans = sum(1 for m in g.members if not m.bot)
+    bots_n = (g.member_count or 0) - humans
+    online = sum(1 for m in g.members if m.status != discord.Status.offline)
+    embed = discord.Embed(title=f"🏰 {g.name}", color=discord.Color.dark_purple(),
+                          description=g.description or None)
+    if g.icon:
+        embed.set_thumbnail(url=g.icon.url)
+    embed.add_field(name="Sahip", value=g.owner.mention if g.owner else "?", inline=True)
+    embed.add_field(name="ID", value=f"`{g.id}`", inline=True)
+    embed.add_field(name="Oluşturulma", value=f"<t:{int(g.created_at.timestamp())}:R>", inline=True)
+    embed.add_field(name="Üyeler", value=f"{g.member_count} (👤 {humans} / 🤖 {bots_n})", inline=True)
+    embed.add_field(name="Çevrimiçi", value=str(online), inline=True)
+    embed.add_field(name="Boost", value=f"Seviye {g.premium_tier} • {g.premium_subscription_count} boost", inline=True)
+    embed.add_field(name="Kanallar", value=f"💬 {len(g.text_channels)} / 🔊 {len(g.voice_channels)} / 📁 {len(g.categories)}", inline=True)
+    embed.add_field(name="Roller", value=str(len(g.roles)), inline=True)
+    embed.add_field(name="Emojiler", value=str(len(g.emojis)), inline=True)
+    if g.banner:
+        embed.set_image(url=g.banner.url)
+    await ctx.send(embed=embed)
+
+
+@bot.hybrid_command(name="avatar", aliases=["pp", "av"], description="Avatarı büyük gösterir.")
+@app_commands.describe(member="Avatarına bakılacak üye")
+async def avatar_komutu(ctx, member: Optional[discord.Member] = None):
+    member = member or ctx.author
+    embed = discord.Embed(title=f"🖼️ {member.display_name}", color=member.color or discord.Color.blurple())
+    embed.set_image(url=member.display_avatar.replace(size=1024).url)
+    await ctx.send(embed=embed)
+
+
+@bot.hybrid_command(name="anket", aliases=["poll", "oylama"], description="Anket oluşturur. Seçenekleri | ile ayır.")
+@app_commands.describe(metin="Soru | seçenek1 | seçenek2 | ...")
+@commands.guild_only()
+@commands.cooldown(1, 15, commands.BucketType.user)
+async def anket_komutu(ctx, *, metin: str):
+    parts = [p.strip() for p in metin.split("|") if p.strip()]
+    if len(parts) < 3:
+        await ctx.send(f"❌ Kullanım: `{COMMAND_PREFIX}anket Soru | Seçenek1 | Seçenek2` (en az 2 seçenek)")
+        return
+    question, options = parts[0], parts[1:11]
+    if len(options) < 2:
+        await ctx.send("❌ En az 2 seçenek gerekli.")
+        return
+    emojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
+    lines = [f"{emojis[i]} {opt}" for i, opt in enumerate(options)]
+    embed = discord.Embed(title="📊 Anket", description=f"**{truncate(question, 200)}**\n\n" + "\n".join(lines),
+                          color=discord.Color.blurple())
+    embed.set_footer(text=f"Oluşturan: {ctx.author.display_name}")
+    msg = await ctx.send(embed=embed)
+    for i in range(len(options)):
+        try:
+            await msg.add_reaction(emojis[i])
+        except discord.HTTPException:
+            break
+
+
+@bot.hybrid_command(name="oneri", aliases=["öneri", "suggest", "suggestion"], description="Öneri kutusu — yetkililere iletilir.")
+@app_commands.describe(metin="Önerin")
+@commands.guild_only()
+@commands.cooldown(1, 30, commands.BucketType.user)
+async def oneri_komutu(ctx, *, metin: str):
+    text = truncate(metin.strip(), 1000)
+    if len(text) < 5:
+        await ctx.send("❌ Öneri çok kısa.")
+        return
+    embed = discord.Embed(title="💡 Yeni Öneri", description=text, color=discord.Color.gold())
+    embed.add_field(name="Gönderen", value=ctx.author.mention, inline=True)
+    embed.timestamp = discord.utils.utcnow()
+    channel = bot.modlog_channel(ctx.guild) or ctx.channel
+    try:
+        msg = await channel.send(embed=embed)
+        sid = bot.suggestions.add(ctx.guild.id, ctx.author.id, text, channel.id, msg.id)
+        embed.set_footer(text=f"Öneri #{sid}")
+        await msg.edit(embed=embed)
+        for emoji in ("👍", "👎"):
+            await msg.add_reaction(emoji)
+    except discord.HTTPException as e:
+        await ctx.send(f"❌ Öneri gönderilemedi: {e}")
+        return
+    if channel.id != ctx.channel.id:
+        await ctx.send(f"✅ Önerin iletildi! (#{sid})", ephemeral=True)
+    else:
+        await ctx.send(f"✅ Öneri kaydedildi: **#{sid}**", delete_after=8)
+
+
+# --- 14I. MANUEL MODERASYON ---
+def _can_moderate(ctx, target: discord.Member) -> Optional[str]:
+    if target.id == ctx.author.id:
+        return "Kendine işlem uygulayamazsın."
+    if target.id == ctx.guild.me.id:
+        return "Bana işlem uygulayamazsın."
+    if is_sovereign_member(target):
+        return "Hükümdarlara işlem uygulanamaz."
+    if (ctx.author.top_role <= target.top_role and not is_sovereign_member(ctx.author)
+            and not ctx.author.guild_permissions.administrator):
+        return "Bu üyenin rolü senden yüksek veya eşit."
+    if ctx.guild.me.top_role <= target.top_role:
+        return "Botun rolü bu üyenin rolünden düşük."
+    return None
+
+
+@bot.hybrid_command(name="kick", aliases=["at"], description="Üyeyi sunucudan atar.")
+@app_commands.describe(member="Atılacak üye", sebep="Sebep")
+@commands.guild_only()
+@perm_or_sovereign(kick_members=True)
+async def kick_komutu(ctx, member: discord.Member, *, sebep: str = "Sebep belirtilmedi"):
+    err = _can_moderate(ctx, member)
+    if err:
+        await ctx.send(f"❌ {err}")
+        return
+    reason = f"{ctx.author}: {sebep}"[:500]
+    try:
+        await member.kick(reason=reason)
+    except discord.HTTPException as e:
+        await ctx.send(f"❌ Kick başarısız: {e}")
+        return
+    embed = discord.Embed(title="👢 Kick", color=discord.Color.orange())
+    embed.add_field(name="Üye", value=f"{member} (`{member.id}`)", inline=True)
+    embed.add_field(name="Yetkili", value=ctx.author.mention, inline=True)
+    embed.add_field(name="Sebep", value=truncate(sebep, 500), inline=False)
+    embed.timestamp = discord.utils.utcnow()
+    await bot.send_modlog(ctx.guild, embed)
+    await ctx.send(f"✅ **{member}** sunucudan atıldı.")
+
+
+@bot.hybrid_command(name="ban", aliases=["yasakla"], description="Üyeyi sunucudan yasaklar.")
+@app_commands.describe(member="Yasaklanacak üye", sebep="Sebep", sil_gun="Mesaj silme günü (0-7)")
+@commands.guild_only()
+@perm_or_sovereign(ban_members=True)
+async def ban_komutu(ctx, member: discord.Member, sil_gun: commands.Range[int, 0, 7] = 0, *, sebep: str = "Sebep belirtilmedi"):
+    err = _can_moderate(ctx, member)
+    if err:
+        await ctx.send(f"❌ {err}")
+        return
+    reason = f"{ctx.author}: {sebep}"[:500]
+    try:
+        await member.ban(reason=reason, delete_message_days=sil_gun)
+    except discord.HTTPException as e:
+        await ctx.send(f"❌ Ban başarısız: {e}")
+        return
+    embed = discord.Embed(title="🔨 Ban", color=discord.Color.red())
+    embed.add_field(name="Üye", value=f"{member} (`{member.id}`)", inline=True)
+    embed.add_field(name="Yetkili", value=ctx.author.mention, inline=True)
+    embed.add_field(name="Sebep", value=truncate(sebep, 500), inline=False)
+    embed.timestamp = discord.utils.utcnow()
+    await bot.send_modlog(ctx.guild, embed)
+    await ctx.send(f"✅ **{member}** yasaklandı.")
+
+
+@bot.hybrid_command(name="unban", aliases=["yasakkaldir"], description="Yasağı kaldırır (kullanıcı ID ile).")
+@app_commands.describe(user_id="Yasağı kaldırılacak kullanıcının ID'si")
+@commands.guild_only()
+@perm_or_sovereign(ban_members=True)
+async def unban_komutu(ctx, user_id: str):
+    if not user_id.isdigit():
+        await ctx.send("❌ Geçerli bir kullanıcı ID'si gir.")
+        return
+    uid = int(user_id)
+    try:
+        user = await bot.fetch_user(uid)
+        await ctx.guild.unban(user, reason=f"{ctx.author} tarafından kaldırıldı")
+    except discord.NotFound:
+        await ctx.send("❌ Bu kullanıcı yasaklı değil veya bulunamadı.")
+        return
+    except discord.HTTPException as e:
+        await ctx.send(f"❌ Unban başarısız: {e}")
+        return
+    await ctx.send(f"✅ **{user}** yasağı kaldırıldı.")
+    embed = discord.Embed(title="🕊️ Unban", color=discord.Color.green())
+    embed.add_field(name="Kullanıcı", value=f"{user} (`{user.id}`)", inline=True)
+    embed.add_field(name="Yetkili", value=ctx.author.mention, inline=True)
+    await bot.send_modlog(ctx.guild, embed)
+
+
+@bot.hybrid_command(name="mute", aliases=["sustur", "timeout"], description="Üyeyi belirli süre susturur.")
+@app_commands.describe(member="Susturulacak üye", sure="Süre (örn: 10m, 1h, 1d)", sebep="Sebep")
+@commands.guild_only()
+@perm_or_sovereign(moderate_members=True)
+async def mute_komutu(ctx, member: discord.Member, sure: str, *, sebep: str = "Sebep belirtilmedi"):
+    err = _can_moderate(ctx, member)
+    if err:
+        await ctx.send(f"❌ {err}")
+        return
+    delta = parse_duration(sure)
+    if delta is None or delta < timedelta(seconds=10) or delta > timedelta(days=28):
+        await ctx.send("❌ Süre 10 sn – 28 gün arasında olmalı (`10m`, `1h`, `1d` gibi).")
+        return
+    until = discord.utils.utcnow() + delta
+    try:
+        await member.timeout(until, reason=f"{ctx.author}: {sebep}"[:500])
+    except discord.HTTPException as e:
+        await ctx.send(f"❌ Mute başarısız: {e}")
+        return
+    embed = discord.Embed(title="🔇 Mute", color=discord.Color.dark_orange())
+    embed.add_field(name="Üye", value=member.mention, inline=True)
+    embed.add_field(name="Süre", value=format_duration(delta), inline=True)
+    embed.add_field(name="Yetkili", value=ctx.author.mention, inline=True)
+    embed.add_field(name="Sebep", value=truncate(sebep, 500), inline=False)
+    await bot.send_modlog(ctx.guild, embed)
+    await ctx.send(f"✅ {member.mention} **{format_duration(delta)}** susturuldu.")
+
+
+@bot.hybrid_command(name="unmute", aliases=["susturkaldir"], description="Üyenin susturmasını kaldırır.")
+@app_commands.describe(member="Susturması kaldırılacak üye")
+@commands.guild_only()
+@perm_or_sovereign(moderate_members=True)
+async def unmute_komutu(ctx, member: discord.Member):
+    try:
+        await member.timeout(None, reason=f"{ctx.author} tarafından kaldırıldı")
+    except discord.HTTPException as e:
+        await ctx.send(f"❌ Unmute başarısız: {e}")
+        return
+    await ctx.send(f"✅ {member.mention} susturması kaldırıldı.")
+    embed = discord.Embed(title="🔊 Unmute", color=discord.Color.green())
+    embed.add_field(name="Üye", value=member.mention, inline=True)
+    embed.add_field(name="Yetkili", value=ctx.author.mention, inline=True)
+    await bot.send_modlog(ctx.guild, embed)
+
+
+@bot.hybrid_command(name="temizle", aliases=["clear", "purge", "sil"], description="Kanaldan belirli sayıda mesaj siler.")
+@app_commands.describe(adet="Silinecek mesaj sayısı (1-100)")
+@commands.guild_only()
+@perm_or_sovereign(manage_messages=True)
+async def temizle_komutu(ctx, adet: commands.Range[int, 1, 100]):
+    try:
+        deleted = await ctx.channel.purge(limit=adet + (0 if ctx.interaction else 1))
+        count = max(0, len(deleted) - (0 if ctx.interaction else 1))
+    except discord.HTTPException as e:
+        await ctx.send(f"❌ Mesajlar silinemedi: {e}")
+        return
+    await ctx.send(f"🧹 **{count}** mesaj silindi.", delete_after=5)
+    embed = discord.Embed(title="🧹 Temizleme", color=discord.Color.blue())
+    embed.add_field(name="Kanal", value=ctx.channel.mention, inline=True)
+    embed.add_field(name="Adet", value=str(count), inline=True)
+    embed.add_field(name="Yetkili", value=ctx.author.mention, inline=True)
+    await bot.send_modlog(ctx.guild, embed)
+
+
+@bot.hybrid_command(name="slowmode", aliases=["yavasmod", "yavaşmod"], description="Kanal yavaş modunu ayarlar (saniye).")
+@app_commands.describe(saniye="0 = kapat, max 21600")
+@commands.guild_only()
+@perm_or_sovereign(manage_channels=True)
+async def slowmode_komutu(ctx, saniye: commands.Range[int, 0, 21600]):
+    try:
+        await ctx.channel.edit(slowmode_delay=saniye)
+    except discord.HTTPException as e:
+        await ctx.send(f"❌ Ayarlanamadı: {e}")
+        return
+    if saniye == 0:
+        await ctx.send("✅ Yavaş mod kapatıldı.")
+    else:
+        await ctx.send(f"✅ Yavaş mod **{saniye} saniye** olarak ayarlandı.")
+
+
+@bot.hybrid_command(name="kilitle", aliases=["lock"], description="Kanalı kilitler (@everyone yazamasın).")
+@commands.guild_only()
+@perm_or_sovereign(manage_channels=True)
+async def kilitle_komutu(ctx):
+    overwrite = ctx.channel.overwrites_for(ctx.guild.default_role)
+    overwrite.send_messages = False
+    try:
+        await ctx.channel.set_permissions(ctx.guild.default_role, overwrite=overwrite, reason=f"{ctx.author}")
+    except discord.HTTPException as e:
+        await ctx.send(f"❌ Kilitlenemedi: {e}")
+        return
+    await ctx.send("🔒 Kanal kilitlendi.")
+
+
+@bot.hybrid_command(name="kilita", aliases=["unlock", "kilitac", "kilitaç"], description="Kanal kilidini açar.")
+@commands.guild_only()
+@perm_or_sovereign(manage_channels=True)
+async def kilita_komutu(ctx):
+    overwrite = ctx.channel.overwrites_for(ctx.guild.default_role)
+    overwrite.send_messages = None
+    try:
+        await ctx.channel.set_permissions(ctx.guild.default_role, overwrite=overwrite, reason=f"{ctx.author}")
+    except discord.HTTPException as e:
+        await ctx.send(f"❌ Açılamadı: {e}")
+        return
+    await ctx.send("🔓 Kanal kilidi açıldı.")
+
+
+@bot.hybrid_command(name="rolver", aliases=["addrole", "giverole"], description="Üyeye rol verir.")
+@app_commands.describe(member="Üye", role="Rol")
+@commands.guild_only()
+@perm_or_sovereign(manage_roles=True)
+async def rolver_komutu(ctx, member: discord.Member, role: discord.Role):
+    if role >= ctx.guild.me.top_role:
+        await ctx.send("❌ Bu rol botun en yüksek rolünden yüksek veya eşit.")
+        return
+    if role in member.roles:
+        await ctx.send("ℹ️ Üye zaten bu role sahip.")
+        return
+    try:
+        await member.add_roles(role, reason=f"{ctx.author}")
+    except discord.HTTPException as e:
+        await ctx.send(f"❌ Rol verilemedi: {e}")
+        return
+    await ctx.send(f"✅ {member.mention} kullanıcısına {role.mention} verildi.")
+
+
+@bot.hybrid_command(name="rolal", aliases=["removerole", "takerole"], description="Üyeden rol alır.")
+@app_commands.describe(member="Üye", role="Rol")
+@commands.guild_only()
+@perm_or_sovereign(manage_roles=True)
+async def rolal_komutu(ctx, member: discord.Member, role: discord.Role):
+    if role >= ctx.guild.me.top_role:
+        await ctx.send("❌ Bu rol botun en yüksek rolünden yüksek veya eşit.")
+        return
+    if role not in member.roles:
+        await ctx.send("ℹ️ Üyede bu rol yok.")
+        return
+    try:
+        await member.remove_roles(role, reason=f"{ctx.author}")
+    except discord.HTTPException as e:
+        await ctx.send(f"❌ Rol alınamadı: {e}")
+        return
+    await ctx.send(f"✅ {member.mention} kullanıcısından {role.mention} alındı.")
+
+
+@bot.hybrid_command(name="nick", aliases=["isim", "nickname"], description="Üyenin takma adını değiştirir.")
+@app_commands.describe(member="Üye", yeni_isim="Yeni isim (boş = sıfırla)")
+@commands.guild_only()
+@perm_or_sovereign(manage_nicknames=True)
+async def nick_komutu(ctx, member: discord.Member, *, yeni_isim: Optional[str] = None):
+    if member.id != ctx.author.id:
+        err = _can_moderate(ctx, member)
+        if err and not is_sovereign_member(ctx.author):
+            await ctx.send(f"❌ {err}")
+            return
+    name = (yeni_isim or "")[:32] or None
+    try:
+        await member.edit(nick=name, reason=f"{ctx.author}")
+    except discord.HTTPException as e:
+        await ctx.send(f"❌ İsim değiştirilemedi: {e}")
+        return
+    await ctx.send(f"✅ {member.mention} yeni isim: **{name or member.name}**")
+
+
+@bot.hybrid_command(name="duyuru", aliases=["announce", "say"], description="Embed duyuru gönderir.")
+@app_commands.describe(mesaj="Duyuru metni")
+@commands.guild_only()
+@perm_or_sovereign(manage_messages=True)
+async def duyuru_komutu(ctx, *, mesaj: str):
+    embed = discord.Embed(
+        title="📢 İmparatorluk Duyurusu",
+        description=truncate(mesaj, 4000),
+        color=discord.Color.dark_purple(),
+    )
+    embed.set_footer(text=f"Duyuran: {ctx.author.display_name}")
+    embed.timestamp = discord.utils.utcnow()
+    if ctx.interaction:
+        await ctx.send("✅ Duyuru gönderildi.", ephemeral=True)
+        await ctx.channel.send(embed=embed)
+    else:
+        try:
+            await ctx.message.delete()
+        except discord.HTTPException:
+            pass
+        await ctx.channel.send(embed=embed)
+
+
+# --- 14J. ÇEKİLİŞ ---
+class GiveawayJoinView(discord.ui.View):
+    def __init__(self, giveaway_id: int):
+        super().__init__(timeout=None)
+        self.giveaway_id = giveaway_id
+
+    @discord.ui.button(label="Katıl", style=discord.ButtonStyle.success, emoji="🎉")
+    async def join(self, interaction: discord.Interaction, button: discord.ui.Button):
+        item = bot.giveaways.find_by_message(interaction.message.id) if interaction.message else None
+        if item is None:
+            item = bot.giveaways.find(self.giveaway_id)
+        if item is None or item.get("ended"):
+            await interaction.response.send_message("Bu çekiliş sona ermiş.", ephemeral=True)
+            return
+        if interaction.user.bot:
+            await interaction.response.send_message("Botlar katılamaz.", ephemeral=True)
+            return
+        ok = bot.giveaways.add_entry(item["id"], interaction.user.id)
+        if ok:
+            await interaction.response.send_message("✅ Çekilişe katıldın! Bol şans.", ephemeral=True)
+            try:
+                embed = interaction.message.embeds[0]
+                embed.set_field_at(0, name="Katılımcı", value=str(len(item.get("entries", []))), inline=True)
+                await interaction.message.edit(embed=embed)
+            except (IndexError, discord.HTTPException, AttributeError):
+                pass
+        else:
+            await interaction.response.send_message("ℹ️ Zaten katılmışsın.", ephemeral=True)
+
+
+@bot.hybrid_command(name="cekilis", aliases=["giveaway", "çekiliş", "gw"], description="Çekiliş başlatır.")
+@app_commands.describe(sure="Süre (örn: 1h, 30m, 1d)", kazanan="Kazanan sayısı", odul="Ödül açıklaması")
+@commands.guild_only()
+@perm_or_sovereign(manage_guild=True)
+async def cekilis_komutu(ctx, sure: str, kazanan: commands.Range[int, 1, 20], *, odul: str):
+    delta = parse_duration(sure)
+    if delta is None or delta < timedelta(seconds=30) or delta > timedelta(days=30):
+        await ctx.send("❌ Süre 30 sn – 30 gün arasında olmalı.")
+        return
+    ends = utcnow() + delta
+    prize = truncate(sanitize_inline(odul, 200), 200)
+    embed = discord.Embed(
+        title="🎉 Çekiliş!",
+        description=f"**Ödül:** {prize}\n**Kazanan:** {kazanan}\n**Bitiş:** <t:{int(ends.timestamp())}:R>",
+        color=discord.Color.gold(),
+    )
+    embed.add_field(name="Katılımcı", value="0", inline=True)
+    embed.set_footer(text=f"Başlatan: {ctx.author.display_name}")
+    msg = await ctx.send(embed=embed, view=GiveawayJoinView(0))
+    gid = bot.giveaways.add(ctx.guild.id, ctx.channel.id, msg.id, prize, kazanan, ends, ctx.author.id)
+    await msg.edit(view=GiveawayJoinView(gid))
+
+
+# --- 14K. BOT SAHİBİ KOMUTLARI ---
 @bot.hybrid_command(name="yedekle", aliases=["backup"], description="Verileri hemen yedek kanalına yükler (bot sahibi / Hükümdar).")
 @owner_or_sovereign()
 async def yedekle_komutu(ctx):
