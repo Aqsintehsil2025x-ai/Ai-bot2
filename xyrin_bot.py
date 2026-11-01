@@ -301,6 +301,7 @@ AI_MAX_IMAGE_BYTES = env_int("AI_MAX_IMAGE_BYTES", 8 * 1024 * 1024)
 AI_ACTION_CONFIRM = env_bool("AI_ACTION_CONFIRM", False)  # True: kanal/rol açmadan önce Hükümdardan buton onayı ister.
 MAX_AI_ACTIONS = 3
 EVOLUTION_INTERVAL_MINUTES = max(30, env_int("EVOLUTION_INTERVAL_MINUTES", 360))
+EVOLUTION_BATCH = max(2, min(8, env_int("EVOLUTION_BATCH", 6)))
 _EVOLUTION_FORBIDDEN = re.compile(
     r"(__import__|\beval\s*\(|\bexec\s*\(|\bcompile\s*\(|subprocess|socket|DISCORD_TOKEN|GEMINI_API_KEY|"
     r"\bimport\s+os\b|\bimport\s+sys\b|\bos\.system\b|\bopen\s*\()",
@@ -2109,12 +2110,15 @@ class UltimateImperialBot(commands.Bot):
                 return
             if self.ai is None or not self.ai.enabled:
                 return
-            name, summary, command_name = await draft_evolution(self.ai, self)
-            logger.info(f"Evrim komutu sanal ortamda geçti ve eklendi: !{command_name} ({name})")
+            result = await draft_evolution(self.ai, self)
+            if not result:
+                logger.info("Evrim: eklenecek yeni eksik komut bulunamadı.")
+                return
+            name, summary, added = result
+            logger.info(f"Evrim komutları sanal ortamda geçti ve eklendi: {summary} ({name})")
             await self.notify_owner(
-                f"🧬 Evrim komutu kullanıma alındı: `{COMMAND_PREFIX}{command_name}`\n"
-                f"Dosya: `{name}`\n{summary}\n"
-                "Önce token'sız sanal ortamda import testi yapıldı.",
+                f"🧬 Bu turda eklenen komutlar: {summary}\nDosya: `{name}`\n"
+                "Hepsi önce token'sız sanal ortamda import edildi.",
                 key="evolution-draft",
                 cooldown=60,
             )
@@ -2148,32 +2152,47 @@ def save_evolution_state(data: dict):
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def _evolution_command_name(code: str) -> str:
+def _evolution_command_names(code: str) -> list:
     import ast
     tree = ast.parse(code)
     funcs = []
+    safe_modules = {"discord", "random", "re", "math"}
+    safe_from = {"datetime", "discord", "discord.ext", "discord.ext.commands"}
     for node in tree.body:
         if isinstance(node, ast.AsyncFunctionDef):
             funcs.append(node.name)
             continue
         if isinstance(node, ast.Import):
-            bad = [a.name for a in node.names if a.name != "discord"]
+            bad = [a.name for a in node.names if a.name.split(".")[0] not in safe_modules]
             if bad:
-                raise AIError("Taslakta yalnızca discord import edilebilir.", "safety")
+                raise AIError("Taslakta yalnızca discord, random, re ve math import edilebilir.", "safety")
             continue
         if isinstance(node, ast.ImportFrom):
-            if node.module not in ("discord", "discord.ext", "discord.ext.commands"):
-                raise AIError("Taslakta yalnızca discord import edilebilir.", "safety")
+            if (node.module or "").split(".")[0] not in {m.split(".")[0] for m in safe_from} and node.module not in safe_from:
+                raise AIError("Taslakta bu importa izin yok.", "safety")
             continue
         if isinstance(node, ast.Expr) and isinstance(getattr(node, "value", None), ast.Constant):
             continue
-        raise AIError("Taslakta yalnızca import ve tek async fonksiyon olabilir.", "safety")
-    if len(funcs) != 1:
-        raise AIError("Taslakta tam olarak bir async fonksiyon olmalı.", "empty")
-    name = funcs[0]
-    if not re.fullmatch(r"[a-z][a-z0-9_]{0,31}", name):
-        raise AIError("Komut adı küçük harf ve alt çizgi olmalı.", "empty")
-    return name
+        raise AIError("Taslakta yalnızca import ve async komut fonksiyonları olabilir.", "safety")
+    if not funcs or len(funcs) > EVOLUTION_BATCH:
+        raise AIError(f"Taslakta 1 ile {EVOLUTION_BATCH} arasında komut olmalı.", "empty")
+    for name in funcs:
+        if not re.fullmatch(r"[a-z][a-z0-9_]{0,31}", name):
+            raise AIError(f"`{name}` geçersiz komut adı.", "empty")
+    if len(set(funcs)) != len(funcs):
+        raise AIError("Aynı komut adı iki kez yazılmış.", "empty")
+    return funcs
+
+
+def known_command_names(bot) -> list:
+    names = set()
+    for cmd in bot.walk_commands():
+        names.add(cmd.name)
+        names.update(cmd.aliases)
+    for item in load_evolution_state().get("accepted") or []:
+        if item.get("command"):
+            names.add(str(item["command"]))
+    return sorted(names)
 
 
 def ensure_evolution_venv() -> Path:
@@ -2207,9 +2226,9 @@ def sandbox_test_draft(path: Path) -> str:
         "mod = importlib.util.module_from_spec(spec)\n"
         "spec.loader.exec_module(mod)\n"
         "names = [n for n, v in vars(mod).items() if inspect.iscoroutinefunction(v) and not n.startswith('_')]\n"
-        "if len(names) != 1:\n"
+        "if not names:\n"
         "    sys.exit(2)\n"
-        "print(names[0])\n",
+        "print('\\n'.join(names))\n",
         encoding="utf-8",
     )
     env = {
@@ -2224,84 +2243,109 @@ def sandbox_test_draft(path: Path) -> str:
     if proc.returncode != 0:
         detail = (proc.stderr or proc.stdout or "sanal ortam testi başarısız").strip()
         raise AIError(f"Sanal ortam testi geçmedi: {detail[:300]}", "empty")
-    return (proc.stdout or "").strip().splitlines()[-1].strip()
+    return [line.strip() for line in (proc.stdout or "").splitlines() if line.strip()]
 
 
-def register_evolved_command(bot, path: Path, command_name: str) -> str:
+def register_evolved_file(bot, path: Path, command_names: list) -> list:
     import importlib.util
-    if bot.get_command(command_name):
-        raise AIError(f"`{command_name}` adında bir komut zaten var.", "empty")
     spec = importlib.util.spec_from_file_location(f"xyrin_evo_{path.stem}", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    fn = getattr(module, command_name, None)
-    if fn is None:
-        raise AIError("Testten geçen fonksiyon dosyada yok.", "empty")
-    bot.add_command(commands.Command(fn, name=command_name))
-    return command_name
+    added = []
+    for command_name in command_names:
+        if bot.get_command(command_name):
+            continue
+        fn = getattr(module, command_name, None)
+        if fn is None:
+            continue
+        bot.add_command(commands.Command(fn, name=command_name))
+        added.append(command_name)
+    return added
 
 
 def load_accepted_commands(bot) -> list:
-    loaded = []
+    grouped = {}
     for item in load_evolution_state().get("accepted") or []:
-        path = evolution_dir() / str(item.get("file") or "")
+        filename = str(item.get("file") or "")
         command_name = str(item.get("command") or "")
-        if not path.is_file() or not command_name:
+        if filename and command_name:
+            grouped.setdefault(filename, []).append(command_name)
+    loaded = []
+    for filename, names in grouped.items():
+        path = evolution_dir() / filename
+        if not path.is_file():
             continue
         try:
             code = path.read_text(encoding="utf-8")
             if _EVOLUTION_FORBIDDEN.search(code):
                 continue
-            register_evolved_command(bot, path, command_name)
-            loaded.append(command_name)
+            loaded.extend(register_evolved_file(bot, path, names))
         except Exception as exc:
-            logger.warning(f"Evrim komutu yüklenemedi ({path.name}): {exc}")
+            logger.warning(f"Evrim dosyası yüklenemedi ({filename}): {exc}")
     return loaded
 
 
-async def draft_evolution(ai, bot) -> tuple:
-    """Taslak yaz, sanal ortamda dene, geçerse canlı bota komut olarak ekle."""
+async def draft_evolution(ai, bot) -> Optional[tuple]:
+    """Eksik komutları topluca yaz, sanal ortamda dene, geçenlerin hepsini ekle. Eksik yoksa None."""
+    existing = known_command_names(bot)
     prompt = (
-        "Xyrin Discord botuna eklenebilecek TEK bir yeni komut yaz. Yalnızca Python kodu döndür.\n"
+        "Bir Discord imparatorluk botunun komut listesi aşağıda.\n"
+        f"MEVCUT KOMUTLAR: {', '.join(existing) or '(yok)'}\n\n"
+        f"Bu listede OLMAYAN, sunucunun gerçekten işine yarayacak eksik komutların HEPSİNİ yaz. "
+        f"En az 2, en fazla {EVOLUTION_BATCH} komut. Tek komutla yetinme. Şaka komutu yazma; "
+        "eksik olan araçları yaz (bilgi, eğlence, küçük hesap, hatırlatma benzeri, üye araçları).\n"
+        "Hiç önemli bir eksik kalmadıysa yalnızca YETERLI yaz.\n"
         "Kurallar:\n"
-        "- İstersen yalnız `import discord` yaz. Dekoratör kullanma.\n"
-        "- Tam olarak bir tane `async def` yaz. Adı küçük harf olsun, örn `async def saka(ctx):`.\n"
-        "- Fonksiyon ctx.send ile kısa bir cevap versin. Başka argüman zorunlu olmasın.\n"
-        "- os, sys, subprocess, socket, eval, exec, open, ağ, dosya YOK.\n"
-        "- 60 satırı geçme."
+        "- Yalnızca Python kodu. Dekoratör yok.\n"
+        "- İzinli import: discord, random, re, math, datetime.\n"
+        "- Her komut ayrı bir `async def ad(ctx):` olsun. Ad küçük harf. Zorunlu ekstra argüman olmasın.\n"
+        "- ctx.send ile kısa Türkçe cevap versin.\n"
+        "- os, sys, subprocess, socket, eval, exec, open, ağ, dosya, token YOK.\n"
+        "- Var olan komutların adını tekrarlama.\n"
+        "- 150 satırı geçme."
     )
     raw = await ai.generate_text(
         prompt,
-        system="Sen yalnızca güvenli Discord.py komut taslağı yazan bir yardımcısın.",
-        max_tokens=700,
-        timeout=40,
+        system="Sen Discord botundaki eksik komutları bulan ve yalnızca güvenli kod yazan bir yardımcısın.",
+        max_tokens=1800,
+        timeout=50,
     )
-    code = re.sub(r"^```(?:python)?\s*|```$", "", (raw or "").strip(), flags=re.IGNORECASE | re.MULTILINE).strip()
+    text = (raw or "").strip()
+    if text.upper().startswith("YETERLI") and "async def" not in text:
+        return None
+    code = re.sub(r"^```(?:python)?\s*|```$", "", text, flags=re.IGNORECASE | re.MULTILINE).strip()
     if _EVOLUTION_FORBIDDEN.search(code):
         raise AIError("Evrim taslağı yasaklı çağrı içeriyor, kaydedilmedi.", "safety")
-    if len(code) > 4000:
+    if len(code) > 12000:
         raise AIError("Evrim taslağı çok uzun.", "empty")
-    command_name = _evolution_command_name(code)
+    wanted = [n for n in _evolution_command_names(code) if n not in set(existing)]
+    if not wanted:
+        return None
     stamp = utcnow().strftime("%Y%m%d_%H%M%S")
     path = evolution_dir() / f"draft_{stamp}.py"
     path.write_text(code + "\n", encoding="utf-8")
     try:
         tested = await asyncio.to_thread(sandbox_test_draft, path)
-        if tested != command_name:
-            raise AIError("Sanal ortam farklı bir fonksiyon gördü.", "empty")
-        register_evolved_command(bot, path, command_name)
+        if set(wanted) - set(tested):
+            raise AIError("Sanal ortam beklenen komutların hepsini görmedi.", "empty")
+        added = register_evolved_file(bot, path, wanted)
+        if not added:
+            raise AIError("Eklenecek yeni komut kalmadı.", "empty")
     except Exception:
         path.unlink(missing_ok=True)
         raise
     state = load_evolution_state()
-    accepted = [i for i in (state.get("accepted") or []) if i.get("command") != command_name]
-    accepted.append({"file": path.name, "command": command_name, "at": utcnow().isoformat()})
-    state["accepted"] = accepted[-20:]
+    accepted = [i for i in (state.get("accepted") or []) if i.get("command") not in set(added)]
+    now = utcnow().isoformat()
+    for command_name in added:
+        accepted.append({"file": path.name, "command": command_name, "at": now})
+    state["accepted"] = accepted[-40:]
     state["last_file"] = path.name
-    state["last_at"] = utcnow().isoformat()
-    state["last_summary"] = f"{COMMAND_PREFIX}{command_name}"
+    state["last_at"] = now
+    summary = ", ".join(f"`{COMMAND_PREFIX}{n}`" for n in added)
+    state["last_summary"] = summary
     save_evolution_state(state)
-    return path.name, f"{COMMAND_PREFIX}{command_name}", command_name
+    return path.name, summary, added
 
 
 bot = UltimateImperialBot()
@@ -4052,14 +4096,21 @@ async def evrim_yaz(ctx):
         return
     await ctx.defer()
     try:
-        name, summary, command_name = await draft_evolution(bot.ai, bot)
+        result = await draft_evolution(bot.ai, bot)
+        if not result:
+            await ctx.send("ℹ️ Gemini bakınca eklenecek yeni bir eksik komut bulamadı.")
+            return
+        _name, summary, added = result
+        if not added:
+            await ctx.send("ℹ️ Gemini bakınca eklenecek yeni bir eksik komut bulamadı.")
+            return
     except AIError as exc:
         await ctx.send(exc.user_message)
         return
     except Exception as exc:
         await ctx.send(f"❌ Evrim başarısız: {truncate(str(exc), 300)}")
         return
-    await ctx.send(f"🧬 Sanal ortam testi geçti. Komut eklendi: `{COMMAND_PREFIX}{command_name}` (`{name}`)")
+    await ctx.send(f"🧬 Sanal ortam testi geçti. Bu turda eklenenler: {summary}")
 
 
 @evrim_group.command(name="ac", aliases=["aç"], description="Belirli aralıklarla yeni taslak yazmayı açar.")
@@ -4068,7 +4119,10 @@ async def evrim_ac(ctx):
     state = load_evolution_state()
     state["enabled"] = True
     save_evolution_state(state)
-    await ctx.send(f"✅ Otomatik evrim açık. En sık {EVOLUTION_INTERVAL_MINUTES} dakikada bir taslak yazar, sanal ortamda dener, geçerse komutu ekler.")
+    await ctx.send(
+        f"✅ Otomatik evrim açık. En sık {EVOLUTION_INTERVAL_MINUTES} dakikada bir mevcut komutlara bakar, "
+        f"eksik olanların hepsini (tur başına en fazla {EVOLUTION_BATCH}) yazar, sanal ortamda dener ve ekler."
+    )
 
 
 @evrim_group.command(name="kapa", description="Otomatik taslak yazmayı kapatır.")
