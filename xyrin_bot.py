@@ -295,11 +295,17 @@ AI_MAX_OUTPUT_TOKENS = env_int("AI_MAX_OUTPUT_TOKENS", 2048)
 AI_HISTORY_TURNS = env_int("AI_HISTORY_TURNS", 12)  # Kanal başına hatırlanan soru-cevap çifti sayısı.
 AI_HISTORY_TTL_SECONDS = env_int("AI_HISTORY_TTL_SECONDS", 7200)  # Kanal 2 saat sessizse hafıza silinir.
 AI_USER_COOLDOWN = env_int("AI_USER_COOLDOWN", 4)  # Kullanıcı başına yapay zeka bekleme süresi (sn).
-AI_TIMEOUT_SECONDS = env_int("AI_TIMEOUT_SECONDS", 60)
+AI_TIMEOUT_SECONDS = env_int("AI_TIMEOUT_SECONDS", 30)
 AI_CHAT_CONCURRENCY = env_int("AI_CHAT_CONCURRENCY", 4)
 AI_MAX_IMAGE_BYTES = env_int("AI_MAX_IMAGE_BYTES", 8 * 1024 * 1024)
 AI_ACTION_CONFIRM = env_bool("AI_ACTION_CONFIRM", False)  # True: kanal/rol açmadan önce Hükümdardan buton onayı ister.
 MAX_AI_ACTIONS = 3
+EVOLUTION_INTERVAL_MINUTES = max(30, env_int("EVOLUTION_INTERVAL_MINUTES", 360))
+_EVOLUTION_FORBIDDEN = re.compile(
+    r"(__import__|\beval\s*\(|\bexec\s*\(|\bcompile\s*\(|subprocess|socket|DISCORD_TOKEN|GEMINI_API_KEY|"
+    r"\bimport\s+os\b|\bimport\s+sys\b|\bos\.system\b|\bopen\s*\()",
+    re.IGNORECASE,
+)
 SUPPORTED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/webp", "image/heic", "image/heif"}
 
 SYSTEM_INSTRUCTION = (
@@ -1506,7 +1512,8 @@ class UltimateImperialBot(commands.Bot):
     # ---------- yaşam döngüsü ----------
     def _background_tasks(self):
         tasks_list = [self.persist_loop, self.maintenance_loop, self.reminder_loop, self.daily_question_loop,
-                      self.presence_loop, self.server_stats_loop, self.hologram_pulse_loop, self.giveaway_loop]
+                      self.presence_loop, self.server_stats_loop, self.hologram_pulse_loop, self.giveaway_loop,
+                      self.evolution_loop]
         if BACKUP_CHANNEL_ID:
             tasks_list.append(self.backup_loop)
         return tuple(tasks_list)
@@ -1522,6 +1529,9 @@ class UltimateImperialBot(commands.Bot):
             )
         if self.word_filter.count:
             logger.info(f"Yasaklı kelime listesi yüklendi ({self.word_filter.count} kelime).")
+        loaded = load_accepted_commands(self)
+        if loaded:
+            logger.info("Evrim komutları sanal testi geçmiş olarak yüklendi: " + ", ".join(loaded))
         for task in self._background_tasks():
             task.start()
         if AUTO_SYNC:
@@ -2090,6 +2100,209 @@ class UltimateImperialBot(commands.Bot):
         except discord.HTTPException as e:
             logger.warning(f"Çekiliş sonucu gönderilemedi: {e}")
 
+    # ---------- ARKA PLAN GÖREVİ 9: EVRİM TASLAĞI (çalışan kodu değiştirmez) ----------
+    @tasks.loop(minutes=EVOLUTION_INTERVAL_MINUTES)
+    async def evolution_loop(self):
+        try:
+            state = load_evolution_state()
+            if not state.get("enabled"):
+                return
+            if self.ai is None or not self.ai.enabled:
+                return
+            name, summary, command_name = await draft_evolution(self.ai, self)
+            logger.info(f"Evrim komutu sanal ortamda geçti ve eklendi: !{command_name} ({name})")
+            await self.notify_owner(
+                f"🧬 Evrim komutu kullanıma alındı: `{COMMAND_PREFIX}{command_name}`\n"
+                f"Dosya: `{name}`\n{summary}\n"
+                "Önce token'sız sanal ortamda import testi yapıldı.",
+                key="evolution-draft",
+                cooldown=60,
+            )
+        except Exception:
+            logger.exception("Evrim döngüsü hatası")
+
+    @evolution_loop.before_loop
+    async def before_evolution(self):
+        await self.wait_until_ready()
+
+
+def evolution_dir() -> Path:
+    path = DATA_DIR / "evolution"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def load_evolution_state() -> dict:
+    path = evolution_dir() / "state.json"
+    if not path.exists():
+        return {"enabled": False}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {"enabled": False}
+    except (OSError, ValueError):
+        return {"enabled": False}
+
+
+def save_evolution_state(data: dict):
+    path = evolution_dir() / "state.json"
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _evolution_command_name(code: str) -> str:
+    import ast
+    tree = ast.parse(code)
+    funcs = []
+    for node in tree.body:
+        if isinstance(node, ast.AsyncFunctionDef):
+            funcs.append(node.name)
+            continue
+        if isinstance(node, ast.Import):
+            bad = [a.name for a in node.names if a.name != "discord"]
+            if bad:
+                raise AIError("Taslakta yalnızca discord import edilebilir.", "safety")
+            continue
+        if isinstance(node, ast.ImportFrom):
+            if node.module not in ("discord", "discord.ext", "discord.ext.commands"):
+                raise AIError("Taslakta yalnızca discord import edilebilir.", "safety")
+            continue
+        if isinstance(node, ast.Expr) and isinstance(getattr(node, "value", None), ast.Constant):
+            continue
+        raise AIError("Taslakta yalnızca import ve tek async fonksiyon olabilir.", "safety")
+    if len(funcs) != 1:
+        raise AIError("Taslakta tam olarak bir async fonksiyon olmalı.", "empty")
+    name = funcs[0]
+    if not re.fullmatch(r"[a-z][a-z0-9_]{0,31}", name):
+        raise AIError("Komut adı küçük harf ve alt çizgi olmalı.", "empty")
+    return name
+
+
+def ensure_evolution_venv() -> Path:
+    """Kalıcı bir sanal ortam kurar ve içine discord.py koyar. Python yolunu döndürür."""
+    import subprocess
+    venv = evolution_dir() / "venv"
+    python = venv / "bin" / "python"
+    if not python.exists():
+        subprocess.run([sys.executable, "-m", "venv", str(venv)], check=True, timeout=180)
+    probe = subprocess.run(
+        [str(python), "-c", "import discord"],
+        capture_output=True, text=True, timeout=60,
+        env={"PATH": os.environ.get("PATH", ""), "PYTHONDONTWRITEBYTECODE": "1"},
+    )
+    if probe.returncode != 0:
+        subprocess.run(
+            [str(python), "-m", "pip", "install", "--disable-pip-version-check", "discord.py"],
+            check=True, timeout=300,
+        )
+    return python
+
+
+def sandbox_test_draft(path: Path) -> str:
+    """Taslağı token görmeyen sanal ortamda import eder. Geçerse fonksiyon adını döndürür."""
+    import subprocess
+    python = ensure_evolution_venv()
+    runner = evolution_dir() / "_sandbox_runner.py"
+    runner.write_text(
+        "import importlib.util, inspect, sys\n"
+        "spec = importlib.util.spec_from_file_location('evo_under_test', sys.argv[1])\n"
+        "mod = importlib.util.module_from_spec(spec)\n"
+        "spec.loader.exec_module(mod)\n"
+        "names = [n for n, v in vars(mod).items() if inspect.iscoroutinefunction(v) and not n.startswith('_')]\n"
+        "if len(names) != 1:\n"
+        "    sys.exit(2)\n"
+        "print(names[0])\n",
+        encoding="utf-8",
+    )
+    env = {
+        "PATH": os.environ.get("PATH", ""),
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONNOUSERSITE": "1",
+    }
+    proc = subprocess.run(
+        [str(python), str(runner), str(path)],
+        capture_output=True, text=True, timeout=40, env=env,
+    )
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout or "sanal ortam testi başarısız").strip()
+        raise AIError(f"Sanal ortam testi geçmedi: {detail[:300]}", "empty")
+    return (proc.stdout or "").strip().splitlines()[-1].strip()
+
+
+def register_evolved_command(bot, path: Path, command_name: str) -> str:
+    import importlib.util
+    if bot.get_command(command_name):
+        raise AIError(f"`{command_name}` adında bir komut zaten var.", "empty")
+    spec = importlib.util.spec_from_file_location(f"xyrin_evo_{path.stem}", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    fn = getattr(module, command_name, None)
+    if fn is None:
+        raise AIError("Testten geçen fonksiyon dosyada yok.", "empty")
+    bot.add_command(commands.Command(fn, name=command_name))
+    return command_name
+
+
+def load_accepted_commands(bot) -> list:
+    loaded = []
+    for item in load_evolution_state().get("accepted") or []:
+        path = evolution_dir() / str(item.get("file") or "")
+        command_name = str(item.get("command") or "")
+        if not path.is_file() or not command_name:
+            continue
+        try:
+            code = path.read_text(encoding="utf-8")
+            if _EVOLUTION_FORBIDDEN.search(code):
+                continue
+            register_evolved_command(bot, path, command_name)
+            loaded.append(command_name)
+        except Exception as exc:
+            logger.warning(f"Evrim komutu yüklenemedi ({path.name}): {exc}")
+    return loaded
+
+
+async def draft_evolution(ai, bot) -> tuple:
+    """Taslak yaz, sanal ortamda dene, geçerse canlı bota komut olarak ekle."""
+    prompt = (
+        "Xyrin Discord botuna eklenebilecek TEK bir yeni komut yaz. Yalnızca Python kodu döndür.\n"
+        "Kurallar:\n"
+        "- İstersen yalnız `import discord` yaz. Dekoratör kullanma.\n"
+        "- Tam olarak bir tane `async def` yaz. Adı küçük harf olsun, örn `async def saka(ctx):`.\n"
+        "- Fonksiyon ctx.send ile kısa bir cevap versin. Başka argüman zorunlu olmasın.\n"
+        "- os, sys, subprocess, socket, eval, exec, open, ağ, dosya YOK.\n"
+        "- 60 satırı geçme."
+    )
+    raw = await ai.generate_text(
+        prompt,
+        system="Sen yalnızca güvenli Discord.py komut taslağı yazan bir yardımcısın.",
+        max_tokens=700,
+        timeout=40,
+    )
+    code = re.sub(r"^```(?:python)?\s*|```$", "", (raw or "").strip(), flags=re.IGNORECASE | re.MULTILINE).strip()
+    if _EVOLUTION_FORBIDDEN.search(code):
+        raise AIError("Evrim taslağı yasaklı çağrı içeriyor, kaydedilmedi.", "safety")
+    if len(code) > 4000:
+        raise AIError("Evrim taslağı çok uzun.", "empty")
+    command_name = _evolution_command_name(code)
+    stamp = utcnow().strftime("%Y%m%d_%H%M%S")
+    path = evolution_dir() / f"draft_{stamp}.py"
+    path.write_text(code + "\n", encoding="utf-8")
+    try:
+        tested = await asyncio.to_thread(sandbox_test_draft, path)
+        if tested != command_name:
+            raise AIError("Sanal ortam farklı bir fonksiyon gördü.", "empty")
+        register_evolved_command(bot, path, command_name)
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise
+    state = load_evolution_state()
+    accepted = [i for i in (state.get("accepted") or []) if i.get("command") != command_name]
+    accepted.append({"file": path.name, "command": command_name, "at": utcnow().isoformat()})
+    state["accepted"] = accepted[-20:]
+    state["last_file"] = path.name
+    state["last_at"] = utcnow().isoformat()
+    state["last_summary"] = f"{COMMAND_PREFIX}{command_name}"
+    save_evolution_state(state)
+    return path.name, f"{COMMAND_PREFIX}{command_name}", command_name
+
 
 bot = UltimateImperialBot()
 
@@ -2551,7 +2764,7 @@ def help_pages() -> dict:
             (f"`{p}uyarilar` `{p}uyarisifirla`", "Strike sicili."),
             (f"`{p}modlog` `{p}hosgeldin`", "Log / karşılama kanalı ayarı."),
             (f"`{p}kanaloluştur` `{p}rololuştur`", "Manuel kanal / rol."),
-            (f"`{p}yedekle` `{p}sync`", "Bot sahibi / Hükümdar araçları."),
+            (f"`{p}yedekle` `{p}sync` `{p}evrim`", "Yedek, slash eşitleme. Evrim: sanal ortamda dener, geçerse komutu ekler."),
         ]),
     }
 
@@ -3816,7 +4029,58 @@ async def cekilis_komutu(ctx, sure: str, kazanan: commands.Range[int, 1, 20], *,
     await msg.edit(view=GiveawayJoinView(gid))
 
 
-# --- 14K. BOT SAHİBİ KOMUTLARI ---
+# --- 14K. EVRİM (yalnızca taslak; kendi dosyasını yeniden yazmaz) ---
+@bot.hybrid_group(name="evrim", fallback="durum", invoke_without_command=True,
+                  description="Botun kendi yazdığı komut taslaklarını yönetir.")
+@owner_or_sovereign()
+async def evrim_group(ctx):
+    state = load_evolution_state()
+    embed = discord.Embed(title="🧬 Evrim", color=discord.Color.purple())
+    accepted = state.get("accepted") or []
+    embed.add_field(name="Otomatik", value="Açık" if state.get("enabled") else "Kapalı", inline=True)
+    embed.add_field(name="Aralık", value=f"{EVOLUTION_INTERVAL_MINUTES} dk", inline=True)
+    embed.add_field(name="Aktif evrim komutları", value=", ".join(f"`{COMMAND_PREFIX}{i.get('command')}`" for i in accepted[-10:]) or "yok", inline=False)
+    embed.set_footer(text="Önce DATA_DIR/evolution/venv içinde tokensız import testi. Ana dosya değişmez.")
+    await ctx.send(embed=embed)
+
+
+@evrim_group.command(name="yaz", description="Hemen bir komut taslağı yazdırır.")
+@owner_or_sovereign()
+async def evrim_yaz(ctx):
+    if bot.ai is None or not bot.ai.enabled:
+        await ctx.send("⚠️ Yapay zeka çevrimdışı.")
+        return
+    await ctx.defer()
+    try:
+        name, summary, command_name = await draft_evolution(bot.ai, bot)
+    except AIError as exc:
+        await ctx.send(exc.user_message)
+        return
+    except Exception as exc:
+        await ctx.send(f"❌ Evrim başarısız: {truncate(str(exc), 300)}")
+        return
+    await ctx.send(f"🧬 Sanal ortam testi geçti. Komut eklendi: `{COMMAND_PREFIX}{command_name}` (`{name}`)")
+
+
+@evrim_group.command(name="ac", aliases=["aç"], description="Belirli aralıklarla yeni taslak yazmayı açar.")
+@owner_or_sovereign()
+async def evrim_ac(ctx):
+    state = load_evolution_state()
+    state["enabled"] = True
+    save_evolution_state(state)
+    await ctx.send(f"✅ Otomatik evrim açık. En sık {EVOLUTION_INTERVAL_MINUTES} dakikada bir taslak yazar, sanal ortamda dener, geçerse komutu ekler.")
+
+
+@evrim_group.command(name="kapa", description="Otomatik taslak yazmayı kapatır.")
+@owner_or_sovereign()
+async def evrim_kapa(ctx):
+    state = load_evolution_state()
+    state["enabled"] = False
+    save_evolution_state(state)
+    await ctx.send("🔕 Otomatik evrim taslağı kapatıldı.")
+
+
+# --- 14L. BOT SAHİBİ KOMUTLARI ---
 @bot.hybrid_command(name="yedekle", aliases=["backup"], description="Verileri hemen yedek kanalına yükler (bot sahibi / Hükümdar).")
 @owner_or_sovereign()
 async def yedekle_komutu(ctx):
