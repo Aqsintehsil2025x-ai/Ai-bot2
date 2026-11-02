@@ -153,6 +153,7 @@ if GEMINI_API_KEY in _PLACEHOLDERS:
     GEMINI_API_KEY = ""
 
 GEMINI_MODEL = env_str("GEMINI_MODEL", "gemini-3.5-flash-lite")
+SEARCH_MODEL = env_str("SEARCH_MODEL", "") or GEMINI_MODEL
 COMMAND_PREFIX = env_str("COMMAND_PREFIX", "!")
 AUTO_SYNC = env_bool("AUTO_SYNC", True)
 BOT_OWNER_ID = env_int("BOT_OWNER_ID", 0)  # Kritik hata olursa bu kullanıcıya DM ile haber verilir.
@@ -302,11 +303,6 @@ AI_ACTION_CONFIRM = env_bool("AI_ACTION_CONFIRM", False)  # True: kanal/rol açm
 MAX_AI_ACTIONS = 3
 EVOLUTION_INTERVAL_MINUTES = max(30, env_int("EVOLUTION_INTERVAL_MINUTES", 360))
 EVOLUTION_BATCH = max(2, min(8, env_int("EVOLUTION_BATCH", 6)))
-_EVOLUTION_FORBIDDEN = re.compile(
-    r"(__import__|\beval\s*\(|\bexec\s*\(|\bcompile\s*\(|subprocess|socket|DISCORD_TOKEN|GEMINI_API_KEY|"
-    r"\bimport\s+os\b|\bimport\s+sys\b|\bos\.system\b|\bopen\s*\()",
-    re.IGNORECASE,
-)
 SUPPORTED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/webp", "image/heic", "image/heif"}
 
 SYSTEM_INSTRUCTION = (
@@ -1301,10 +1297,39 @@ class AIService:
         logger.error(f"Gemini hatası: {type(exc).__name__}: {exc}")
         return AIError("⚠️ Sinir ağlarında geçici bir dalgalanma oluştu.", "unknown")
 
-    async def _call(self, contents, config, timeout: float):
+    def _google_search_tool(self):
+        if genai_types is None or not hasattr(genai_types, "Tool") or not hasattr(genai_types, "GoogleSearch"):
+            return None
+        try:
+            return genai_types.Tool(google_search=genai_types.GoogleSearch())
+        except Exception:
+            logger.warning("Google arama aracı kurulamadı.", exc_info=True)
+            return None
+
+    @staticmethod
+    def _sources_block(response) -> str:
+        sources = []
+        seen = set()
+        for cand in getattr(response, "candidates", None) or []:
+            meta = getattr(cand, "grounding_metadata", None)
+            for chunk in getattr(meta, "grounding_chunks", None) or []:
+                web = getattr(chunk, "web", None)
+                uri = getattr(web, "uri", None) if web is not None else None
+                if not uri or uri in seen:
+                    continue
+                seen.add(uri)
+                title = truncate(getattr(web, "title", None) or uri, 80)
+                sources.append(f"• {title}: {uri}")
+                if len(sources) >= 3:
+                    return "\n\n**Kaynaklar**\n" + "\n".join(sources)
+        return ("\n\n**Kaynaklar**\n" + "\n".join(sources)) if sources else ""
+
+    async def _call(self, contents, config, timeout: float, model: Optional[str] = None):
         try:
             return await asyncio.wait_for(
-                self.client.aio.models.generate_content(model=GEMINI_MODEL, contents=contents, config=config),
+                self.client.aio.models.generate_content(
+                    model=model or GEMINI_MODEL, contents=contents, config=config,
+                ),
                 timeout=timeout,
             )
         except AIError:
@@ -1313,7 +1338,8 @@ class AIService:
             raise self._translate(exc) from exc
 
     # ---------- sohbet ----------
-    async def chat(self, channel_id: int, header: str, user_text: str, image: Optional[tuple] = None) -> str:
+    async def chat(self, channel_id: int, header: str, user_text: str, image: Optional[tuple] = None,
+                   search: bool = False) -> str:
         """Kanalın geçmişiyle konuşur. image = (bayt, mime_type). Dönen metin ham yanıttır (etiketler dahil)."""
         self._guard()
         async with self.memory.lock(channel_id):
@@ -1328,12 +1354,31 @@ class AIService:
             contents.append(genai_types.Content(role="user", parts=parts))
 
             response = None
+            tool = self._google_search_tool() if search and not image else None
+            config = self.chat_config
+            model = None
+            if tool is not None:
+                config = genai_types.GenerateContentConfig(
+                    system_instruction=SYSTEM_INSTRUCTION + (
+                        "\nSoru güncel bilgi, haber, fiyat, hava, kişi ya da gerçek bir olay gerektiriyorsa "
+                        "internet aramasını kullan. Bilmediğini uydurma."
+                    ),
+                    max_output_tokens=AI_MAX_OUTPUT_TOKENS,
+                    tools=[tool],
+                )
+                model = SEARCH_MODEL
             async with self._chat_sem:
                 for attempt in (1, 2):
                     try:
-                        response = await self._call(contents, self.chat_config, AI_TIMEOUT_SECONDS)
+                        response = await self._call(contents, config, AI_TIMEOUT_SECONDS, model=model)
                         break
                     except AIError as e:
+                        if tool is not None and e.kind not in ("safety", "auth", "quota", "offline"):
+                            logger.warning(f"Aramalı yanıt başarısız, aramasız denenecek: {e}")
+                            tool = None
+                            config = self.chat_config
+                            model = None
+                            continue
                         if e.kind == "server" and attempt == 1:
                             await asyncio.sleep(1.5)
                             continue
@@ -1344,6 +1389,8 @@ class AIService:
                 if any(k in reason.upper() for k in ("SAFETY", "BLOCK", "PROHIBITED", "SPII")):
                     raise AIError("🛡️ Bu isteğe güvenlik politikaları nedeniyle yanıt veremiyorum.", "safety")
                 raise AIError("🤔 Bir yanıt üretemedim; sorunu biraz farklı sorar mısın?", "empty")
+            if tool is not None:
+                text += self._sources_block(response)
 
             clean, _ = extract_actions(text)  # Geçmişe kanal/rol etiketleri girmesin (taklit edilmesin).
             stored_user = f"{header}\n{'[görsel gönderildi] ' if image else ''}{user_text}"
@@ -1361,6 +1408,33 @@ class AIService:
         if not text:
             raise AIError("🤔 Bir yanıt üretemedim.", "empty")
         return text
+
+    async def search_web(self, query: str) -> str:
+        """Google arama aracını açıp güncel sonucu Türkçe özetler."""
+        self._guard()
+        query = truncate((query or "").strip(), 500)
+        if len(query) < 2:
+            raise AIError("Ne arayayım? Birkaç kelime yaz.", "empty")
+        tool = self._google_search_tool()
+        if tool is None:
+            raise AIError("⚠️ Bu Gemini kütüphanesinde internet araması yok. `pip install -U google-genai` dene.", "model")
+        config = genai_types.GenerateContentConfig(
+            system_instruction=(
+                "İnternette ara ve bulduğunla cevap ver. Uydurma. Bulamazsan kısaca bulamadım de. "
+                "Türkçe, kısa, 1500 karakterin altında yaz. Kaynak linklerini ayrıca listeleme; "
+                "sistem onları kendisi ekler."
+            ),
+            tools=[tool],
+            max_output_tokens=1024,
+        )
+        async with self._chat_sem:
+            response = await self._call(query, config, AI_TIMEOUT_SECONDS, model=SEARCH_MODEL)
+        text, reason = extract_text(response)
+        if not text:
+            if any(k in reason.upper() for k in ("SAFETY", "BLOCK", "PROHIBITED")):
+                raise AIError("🛡️ Bu aramaya güvenlik politikaları nedeniyle yanıt veremiyorum.", "safety")
+            raise AIError("🤔 Aramadan bir sonuç çıkaramadım.", "empty")
+        return text.rstrip() + self._sources_block(response)
 
     # ---------- moderasyon sınıflandırıcısı ----------
     @staticmethod
@@ -1791,7 +1865,7 @@ class UltimateImperialBot(commands.Bot):
                             else "Bu görseli tarayın, ne görüyorsunuz?")
 
                 await respond_with_ai(message.reply, message.channel.send, message.channel, message.guild,
-                                      author, text, image, image_note or "")
+                                      author, text, image, image_note or "", search=image is None)
         except Exception:
             logger.exception("AI yanıt hatası")
             try:
@@ -2152,9 +2226,49 @@ def save_evolution_state(data: dict):
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _extract_evolution_code(text: str) -> str:
+    blocks = re.findall(r"```(?:python)?\s*([\s\S]*?)```", text or "", flags=re.IGNORECASE)
+    if blocks:
+        return max(blocks, key=len).strip()
+    lines = (text or "").splitlines()
+    start = 0
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith(("import ", "from ", "async def ", "def ")):
+            start = i
+            break
+    return "\n".join(lines[start:]).strip()
+
+
+def _assert_evolution_safe(tree) -> None:
+    """Yorumdaki kelimelere değil, gerçek çağrı ve importlara bakar."""
+    import ast
+    banned_modules = {
+        "os", "sys", "subprocess", "socket", "shutil", "pathlib", "ctypes", "pickle",
+        "requests", "urllib", "http", "importlib", "builtins", "webbrowser",
+    }
+    banned_names = {"eval", "exec", "compile", "open", "__import__", "getattr", "setattr", "globals", "locals", "vars", "input", "breakpoint"}
+    banned_attrs = {"system", "popen", "remove", "unlink", "rmdir", "getenv", "environ", "putenv"}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                root = alias.name.split(".")[0]
+                if root in banned_modules:
+                    raise AIError(f"Yasaklı import: {root}", "safety")
+        elif isinstance(node, ast.ImportFrom):
+            root = (node.module or "").split(".")[0]
+            if root in banned_modules:
+                raise AIError(f"Yasaklı import: {root}", "safety")
+        elif isinstance(node, ast.Name) and node.id in banned_names:
+            raise AIError(f"Yasaklı çağrı: {node.id}", "safety")
+        elif isinstance(node, ast.Attribute) and node.attr in banned_attrs:
+            raise AIError(f"Yasaklı çağrı: {node.attr}", "safety")
+
+
 def _evolution_command_names(code: str) -> list:
     import ast
     tree = ast.parse(code)
+    _assert_evolution_safe(tree)
     funcs = []
     safe_modules = {"discord", "random", "re", "math"}
     safe_from = {"datetime", "discord", "discord.ext", "discord.ext.commands"}
@@ -2162,18 +2276,21 @@ def _evolution_command_names(code: str) -> list:
         if isinstance(node, ast.AsyncFunctionDef):
             funcs.append(node.name)
             continue
+        if isinstance(node, (ast.FunctionDef, ast.Assign, ast.AnnAssign)):
+            continue
         if isinstance(node, ast.Import):
             bad = [a.name for a in node.names if a.name.split(".")[0] not in safe_modules]
             if bad:
-                raise AIError("Taslakta yalnızca discord, random, re ve math import edilebilir.", "safety")
+                raise AIError("İzinli importlar: discord, random, re, math, datetime.", "safety")
             continue
         if isinstance(node, ast.ImportFrom):
-            if (node.module or "").split(".")[0] not in {m.split(".")[0] for m in safe_from} and node.module not in safe_from:
+            root = (node.module or "").split(".")[0]
+            if node.module not in safe_from and root not in {"datetime", "discord"}:
                 raise AIError("Taslakta bu importa izin yok.", "safety")
             continue
         if isinstance(node, ast.Expr) and isinstance(getattr(node, "value", None), ast.Constant):
             continue
-        raise AIError("Taslakta yalnızca import ve async komut fonksiyonları olabilir.", "safety")
+        raise AIError("Taslakta yalnızca import, sabit ve komut fonksiyonu olabilir.", "safety")
     if not funcs or len(funcs) > EVOLUTION_BATCH:
         raise AIError(f"Taslakta 1 ile {EVOLUTION_BATCH} arasında komut olmalı.", "empty")
     for name in funcs:
@@ -2277,8 +2394,8 @@ def load_accepted_commands(bot) -> list:
             continue
         try:
             code = path.read_text(encoding="utf-8")
-            if _EVOLUTION_FORBIDDEN.search(code):
-                continue
+            import ast
+            _assert_evolution_safe(ast.parse(code))
             loaded.extend(register_evolved_file(bot, path, names))
         except Exception as exc:
             logger.warning(f"Evrim dosyası yüklenemedi ({filename}): {exc}")
@@ -2296,7 +2413,7 @@ async def draft_evolution(ai, bot) -> Optional[tuple]:
         "eksik olan araçları yaz (bilgi, eğlence, küçük hesap, hatırlatma benzeri, üye araçları).\n"
         "Hiç önemli bir eksik kalmadıysa yalnızca YETERLI yaz.\n"
         "Kurallar:\n"
-        "- Yalnızca Python kodu. Dekoratör yok.\n"
+        "- Yalnızca Python kodu, tek bir ```python bloğu. Öncesinde veya içinde kural listesi yazma.\n"
         "- İzinli import: discord, random, re, math, datetime.\n"
         "- Her komut ayrı bir `async def ad(ctx):` olsun. Ad küçük harf. Zorunlu ekstra argüman olmasın.\n"
         "- ctx.send ile kısa Türkçe cevap versin.\n"
@@ -2304,21 +2421,36 @@ async def draft_evolution(ai, bot) -> Optional[tuple]:
         "- Var olan komutların adını tekrarlama.\n"
         "- 150 satırı geçme."
     )
-    raw = await ai.generate_text(
-        prompt,
-        system="Sen Discord botundaki eksik komutları bulan ve yalnızca güvenli kod yazan bir yardımcısın.",
-        max_tokens=1800,
-        timeout=50,
-    )
-    text = (raw or "").strip()
-    if text.upper().startswith("YETERLI") and "async def" not in text:
-        return None
-    code = re.sub(r"^```(?:python)?\s*|```$", "", text, flags=re.IGNORECASE | re.MULTILINE).strip()
-    if _EVOLUTION_FORBIDDEN.search(code):
-        raise AIError("Evrim taslağı yasaklı çağrı içeriyor, kaydedilmedi.", "safety")
-    if len(code) > 12000:
-        raise AIError("Evrim taslağı çok uzun.", "empty")
-    wanted = [n for n in _evolution_command_names(code) if n not in set(existing)]
+    text = ""
+    code = ""
+    last_error = None
+    ask = prompt
+    for _attempt in (1, 2):
+        raw = await ai.generate_text(
+            ask,
+            system="Yalnızca güvenli Discord.py kodu yaz. Açıklama, kural listesi ve yasak kelime yazma.",
+            max_tokens=1800,
+            timeout=50,
+        )
+        text = (raw or "").strip()
+        if text.upper().startswith("YETERLI") and "async def" not in text:
+            return None
+        code = _extract_evolution_code(text)
+        try:
+            if len(code) > 12000:
+                raise AIError("Evrim taslağı çok uzun.", "empty")
+            names = _evolution_command_names(code)
+            break
+        except (SyntaxError, AIError) as exc:
+            last_error = exc
+            logger.warning(f"Evrim taslağı reddedildi (deneme {_attempt}): {exc}")
+            ask = prompt + "\nÖnceki cevap geçersizdi. SADECE ```python kod bloğu ver. Yorumda bile os, eval, token yazma."
+            code = ""
+    else:
+        if isinstance(last_error, AIError):
+            raise last_error
+        raise AIError("Evrim taslağı geçerli Python değil.", "empty")
+    wanted = [n for n in names if n not in set(existing)]
     if not wanted:
         return None
     stamp = utcnow().strftime("%Y%m%d_%H%M%S")
@@ -2561,12 +2693,13 @@ async def fetch_first_image(message: discord.Message) -> tuple:
     return None, None
 
 
-async def generate_ai_reply(author, channel_id: int, text: str, image: Optional[tuple] = None) -> tuple:
+async def generate_ai_reply(author, channel_id: int, text: str, image: Optional[tuple] = None,
+                            search: bool = False) -> tuple:
     """-> (yanıt_metni, [(eylem, ad), ...]). Kanal/rol eylemleri YALNIZCA Hükümdar için döner."""
     sovereign = is_sovereign_member(author)
     header = build_speaker_header(author, sovereign)
     try:
-        raw = await bot.ai.chat(channel_id, header, text, image)
+        raw = await bot.ai.chat(channel_id, header, text, image, search=search)
     except AIError as e:
         if e.kind in ("auth", "model"):
             await bot.notify_owner(f"⚠️ **Yapay zeka hatası ({e.kind})**: {e.user_message}",
@@ -2624,9 +2757,9 @@ async def execute_actions(guild: discord.Guild, author, actions: list) -> str:
 
 
 async def respond_with_ai(first_send, rest_send, channel, guild, author, text: str,
-                          image: Optional[tuple] = None, note: str = ""):
+                          image: Optional[tuple] = None, note: str = "", search: bool = False):
     """Hem @etiket sohbetinde hem de /sor komutunda kullanılan ortak akış."""
-    reply_text, actions = await generate_ai_reply(author, channel.id, text, image)
+    reply_text, actions = await generate_ai_reply(author, channel.id, text, image, search=search)
     if note:
         reply_text = f"{reply_text}\n\n*({note})*"
     pending = []
@@ -2775,9 +2908,10 @@ def help_pages() -> dict:
             (f"`{p}seslen` / `{p}ayril`", "Ses kanalına katılır / ayrılır."),
         ]),
         "ai": ("🤖", "Yapay Zeka", "Sohbet, görsel analizi, özet", [
-            ("`@BotAdı <mesaj>`", "Yapay zeka sohbeti. Botun mesajına yanıt vererek de devam edebilirsin."),
+            ("`@BotAdı <mesaj>`", "Yapay zeka sohbeti. Güncel sorularda internette arar. Yanıtına cevap vererek de devam edebilirsin."),
             ("`@BotAdı + [Fotoğraf]`", "Görseli anında tarayıp raporlar (Vision)."),
             (f"`{p}sor <soru>`", "Etiketlemeden yapay zekaya soru sorar."),
+            (f"`{p}ara <sorgu>`", "İnternette arar, güncel sonucu özetler."),
             (f"`{p}ozetle [adet]`", "Kanaldaki son mesajları özetler."),
             (f"`{p}sifirla`", "Bu kanaldaki yapay zeka hafızasını siler."),
             ("👑 Hükümdar yetkisi", "Hükümdarlar yapay zekaya kanal/rol açtırabilir."),
@@ -3112,6 +3246,23 @@ async def sor_komutu(ctx, *, soru: str):
     await ctx.defer()
     text = truncate(soru.strip(), 2000)
     await respond_with_ai(ctx.send, ctx.send, ctx.channel, ctx.guild, ctx.author, text)
+
+
+@bot.hybrid_command(name="ara", aliases=["search", "google"], description="İnternette arar ve güncel sonucu özetler.")
+@app_commands.describe(sorgu="Aranacak şey")
+@commands.cooldown(1, 8, commands.BucketType.user)
+async def ara_komutu(ctx, *, sorgu: str):
+    if bot.ai is None or not bot.ai.enabled:
+        await ctx.send("⚠️ Yapay zeka çekirdeği çevrimdışı.")
+        return
+    await ctx.defer()
+    try:
+        answer = await bot.ai.search_web(sorgu)
+    except AIError as exc:
+        await ctx.send(exc.user_message)
+        return
+    for chunk in split_message(answer):
+        await ctx.send(chunk)
 
 
 @bot.hybrid_command(name="ozetle", aliases=["summary", "tldr"], description="Kanaldaki son mesajları yapay zekayla özetler.")
@@ -4254,3 +4405,4 @@ if __name__ == "__main__":
     except Exception:
         logger.critical("Çalışma zamanı kritik hatası", exc_info=True)
         sys.exit(1)
+
