@@ -11,8 +11,8 @@
 #                  DATA_DIR=/data         -> Kalıcı diskin yolu (Render paid Disk / Railway Volume varsa).
 #   PORT         : Render/Railway otomatik tanımlar; bot bu portta küçük bir /health sayfası açar (Render Web Service şartı).
 #   Önerilen     : BOT_OWNER_ID, MOD_LOG_CHANNEL_ID, WELCOME_CHANNEL_ID
-#   İsteğe bağlı : GEMINI_MODEL, BOT_TIMEZONE, COMMAND_PREFIX, BLOCK_ALL_LINKS, ALLOWED_LINK_DOMAINS,
-#                  WELCOME_ROLE_NAME, AI_ACTION_CONFIRM, MOD_AI_ENABLED, MOD_AI_MAX_PER_MINUTE,
+#   İsteğe bağlı : GEMINI_MODEL, NVIDIA_API_KEY, NVIDIA_MODEL, SEARCH_MODEL, BOT_TIMEZONE, COMMAND_PREFIX,
+#                  BLOCK_ALL_LINKS, ALLOWED_LINK_DOMAINS, WELCOME_ROLE_NAME, AI_ACTION_CONFIRM, MOD_AI_ENABLED, MOD_AI_MAX_PER_MINUTE,
 #                  BET_MAX, AUTO_SYNC, HOLOGRAM_ANNOUNCE, DAILY_QUESTION_TITLE ...
 #
 # Küfür filtresine kendi kelimelerini eklemek istersen DATA_DIR içine `blocked_words.txt` oluştur
@@ -154,6 +154,9 @@ if GEMINI_API_KEY in _PLACEHOLDERS:
 
 GEMINI_MODEL = env_str("GEMINI_MODEL", "gemini-3.5-flash-lite")
 SEARCH_MODEL = env_str("SEARCH_MODEL", "") or GEMINI_MODEL
+NVIDIA_API_KEY = env_str("NVIDIA_API_KEY")
+NVIDIA_MODEL = env_str("NVIDIA_MODEL", "nvidia/nemotron-3.5-super-vl-120b-a12b")
+NVIDIA_MAX_TOKENS = max(256, env_int("NVIDIA_MAX_TOKENS", 16384))
 COMMAND_PREFIX = env_str("COMMAND_PREFIX", "!")
 AUTO_SYNC = env_bool("AUTO_SYNC", True)
 BOT_OWNER_ID = env_int("BOT_OWNER_ID", 0)  # Kritik hata olursa bu kullanıcıya DM ile haber verilir.
@@ -1218,6 +1221,8 @@ class AIService:
         self.mod_paused_until = 0.0
         self._mod_failures = 0
         self._setup()
+        if NVIDIA_API_KEY:
+            logger.info(f"NVIDIA sohbet hazır (model: {NVIDIA_MODEL}).")
 
     # ---------- kurulum ----------
     def _setup(self):
@@ -1341,8 +1346,21 @@ class AIService:
     async def chat(self, channel_id: int, header: str, user_text: str, image: Optional[tuple] = None,
                    search: bool = False) -> str:
         """Kanalın geçmişiyle konuşur. image = (bayt, mime_type). Dönen metin ham yanıttır (etiketler dahil)."""
-        self._guard()
+        if not (self.enabled or NVIDIA_API_KEY):
+            raise AIError("⚠️ Yapay zeka çekirdeği çevrimdışı.", "offline")
         async with self.memory.lock(channel_id):
+            if NVIDIA_API_KEY:
+                try:
+                    text = await self._nvidia_chat(channel_id, header, user_text, image)
+                    clean, _ = extract_actions(text)
+                    stored_user = f"{header}\n{'[görsel gönderildi] ' if image else ''}{user_text}"
+                    self.memory.add_exchange(channel_id, truncate(stored_user, 1500), truncate(clean or text, 1800))
+                    return text
+                except AIError as exc:
+                    if not self.enabled or exc.kind in ("auth", "safety"):
+                        raise
+                    logger.warning(f"NVIDIA yanıt veremedi, Gemini denenecek: {exc}")
+            self._guard()
             contents = [
                 genai_types.Content(role=role, parts=[genai_types.Part.from_text(text=text)])
                 for role, text in self.memory.history(channel_id)
@@ -1396,6 +1414,75 @@ class AIService:
             stored_user = f"{header}\n{'[görsel gönderildi] ' if image else ''}{user_text}"
             self.memory.add_exchange(channel_id, truncate(stored_user, 1500), truncate(clean or text, 1800))
             return text
+
+    def _nvidia_messages(self, channel_id: int, header: str, user_text: str, image: Optional[tuple]):
+        messages = [{"role": "system", "content": SYSTEM_INSTRUCTION}]
+        for role, text in self.memory.history(channel_id):
+            messages.append({"role": "assistant" if role == "model" else "user", "content": text})
+        prompt = f"{header}\n{user_text}"
+        if image:
+            import base64
+            mime = image[1] or "image/jpeg"
+            url = "data:" + mime + ";base64," + base64.b64encode(image[0]).decode("ascii")
+            content = [
+                {"type": "text", "text": prompt},
+                {"type": "image_url", "image_url": {"url": url}},
+            ]
+        else:
+            content = prompt
+        messages.append({"role": "user", "content": content})
+        return messages
+
+    @staticmethod
+    def _nvidia_request(messages: list, timeout: float) -> str:
+        import urllib.error
+        import urllib.request
+
+        payload = json.dumps({
+            "model": NVIDIA_MODEL,
+            "messages": messages,
+            "temperature": 1,
+            "top_p": 0.95,
+            "max_tokens": NVIDIA_MAX_TOKENS,
+            "seed": 42,
+            "stream": False,
+            "chat_template_kwargs": {"enable_thinking": True},
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            "https://integrate.api.nvidia.com/v1/chat/completions",
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {NVIDIA_API_KEY}",
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", "replace")[:300]
+            if exc.code == 429:
+                kind = "quota"
+            elif exc.code in (401, 403):
+                kind = "auth"
+            else:
+                kind = "server"
+            raise AIError(f"NVIDIA hatası ({exc.code}): {body}", kind) from exc
+        except urllib.error.URLError as exc:
+            kind = "timeout" if isinstance(getattr(exc, "reason", None), TimeoutError) else "server"
+            raise AIError("⌛ NVIDIA zamanında yanıt veremedi.", kind) from exc
+        choice = (data.get("choices") or [{}])[0]
+        message = choice.get("message") or {}
+        content = str(message.get("content") or "").strip()
+        if not content:
+            raise AIError("🤔 NVIDIA bir yanıt üretemedi.", "empty")
+        return content
+
+    async def _nvidia_chat(self, channel_id: int, header: str, user_text: str, image: Optional[tuple]) -> str:
+        messages = self._nvidia_messages(channel_id, header, user_text, image)
+        return await asyncio.to_thread(self._nvidia_request, messages, max(AI_TIMEOUT_SECONDS, 90))
 
     async def generate_text(self, prompt: str, *, system: Optional[str] = None,
                             max_tokens: int = 512, timeout: float = 25) -> str:
@@ -4405,4 +4492,3 @@ if __name__ == "__main__":
     except Exception:
         logger.critical("Çalışma zamanı kritik hatası", exc_info=True)
         sys.exit(1)
-
