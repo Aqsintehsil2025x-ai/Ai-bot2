@@ -157,6 +157,11 @@ SEARCH_MODEL = env_str("SEARCH_MODEL", "") or GEMINI_MODEL
 NVIDIA_API_KEY = env_str("NVIDIA_API_KEY")
 NVIDIA_MODEL = env_str("NVIDIA_MODEL", "nvidia/nemotron-3.5-super-vl-120b-a12b")
 NVIDIA_MAX_TOKENS = max(256, env_int("NVIDIA_MAX_TOKENS", 16384))
+try:
+    NVIDIA_TEMPERATURE = float(env_str("NVIDIA_TEMPERATURE", "0.4"))
+except ValueError:
+    NVIDIA_TEMPERATURE = 0.4
+NVIDIA_TEMPERATURE = min(1.5, max(0.0, NVIDIA_TEMPERATURE))
 COMMAND_PREFIX = env_str("COMMAND_PREFIX", "!")
 AUTO_SYNC = env_bool("AUTO_SYNC", True)
 BOT_OWNER_ID = env_int("BOT_OWNER_ID", 0)  # Kritik hata olursa bu kullanıcıya DM ile haber verilir.
@@ -329,6 +334,16 @@ SYSTEM_INSTRUCTION = (
     "(**kalın**, madde işaretleri, ``` kod blokları) kullanabilirsin.\n"
     "- Aynı kanalda birden fazla kişi konuşabilir; başlıktaki isme bakarak kimin ne dediğini ayırt et.\n"
     "- Görselleri (Vision) en ince detayına kadar analiz edersin. Bilmediğin şeyi uydurma."
+)
+
+NVIDIA_REASONING = (
+    "AKIL YÜRÜTME (yalnızca NVIDIA):\n"
+    "- Cevaptan önce şunları ayır: sorulan şey, elindeki bilgi, eksik olan.\n"
+    "- Görsel varsa önce yazıyı, rengi, oku, sayıyı ve nesneyi tek tek say; ondan sonra sonuç çıkar.\n"
+    "- Sayı, tarih, sıralama ve adım adım işlerde ara sonucu kontrol et. Çelişki varsa düzelt, uydurma.\n"
+    "- Emin değilsen 'bilmiyorum' de ve neyin eksik olduğunu söyle.\n"
+    "- Düşünmeyi düşünme kanalında bırak. Kullanıcıya giden metin sonuç olsun: kısa, net, 1800 karakterin altında.\n"
+    "- Düşünce adımlarını, <think> etiketini ve 'adım adım düşüneyim' girişini cevaba yazma."
 )
 
 MOD_SYSTEM_INSTRUCTION = (
@@ -1416,7 +1431,7 @@ class AIService:
             return text
 
     def _nvidia_messages(self, channel_id: int, header: str, user_text: str, image: Optional[tuple]):
-        messages = [{"role": "system", "content": SYSTEM_INSTRUCTION}]
+        messages = [{"role": "system", "content": SYSTEM_INSTRUCTION + "\n" + NVIDIA_REASONING}]
         for role, text in self.memory.history(channel_id):
             messages.append({"role": "assistant" if role == "model" else "user", "content": text})
         prompt = f"{header}\n{user_text}"
@@ -1441,10 +1456,9 @@ class AIService:
         payload = json.dumps({
             "model": NVIDIA_MODEL,
             "messages": messages,
-            "temperature": 1,
-            "top_p": 0.95,
+            "temperature": NVIDIA_TEMPERATURE,
+            "top_p": 0.9,
             "max_tokens": NVIDIA_MAX_TOKENS,
-            "seed": 42,
             "stream": False,
             "chat_template_kwargs": {"enable_thinking": True},
         }).encode("utf-8")
@@ -1475,10 +1489,23 @@ class AIService:
             raise AIError("⌛ NVIDIA zamanında yanıt veremedi.", kind) from exc
         choice = (data.get("choices") or [{}])[0]
         message = choice.get("message") or {}
-        content = str(message.get("content") or "").strip()
+        content = AIService._nvidia_visible(message)
         if not content:
             raise AIError("🤔 NVIDIA bir yanıt üretemedi.", "empty")
         return content
+
+    @staticmethod
+    def _nvidia_visible(message: dict) -> str:
+        """Düşünme metnini kanala basmaz. Asıl cevap yoksa düşünmenin son paragrafını kullanır."""
+        content = re.sub(r"<think>[\s\S]*?</think>", "", str(message.get("content") or ""), flags=re.IGNORECASE)
+        content = re.sub(r"</?think>", "", content, flags=re.IGNORECASE).strip()
+        if content:
+            return content
+        reasoning = re.sub(r"</?think>", "", str(message.get("reasoning_content") or ""), flags=re.IGNORECASE).strip()
+        parts = [part.strip() for part in re.split(r"\n\s*\n", reasoning) if part.strip()]
+        if not parts:
+            return ""
+        return truncate(parts[-1], 1800)
 
     async def _nvidia_chat(self, channel_id: int, header: str, user_text: str, image: Optional[tuple]) -> str:
         messages = self._nvidia_messages(channel_id, header, user_text, image)
