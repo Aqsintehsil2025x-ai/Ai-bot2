@@ -156,6 +156,7 @@ GEMINI_MODEL = env_str("GEMINI_MODEL", "gemini-3.5-flash-lite")
 SEARCH_MODEL = env_str("SEARCH_MODEL", "") or GEMINI_MODEL
 NVIDIA_API_KEY = env_str("NVIDIA_API_KEY")
 NVIDIA_MODEL = env_str("NVIDIA_MODEL", "nvidia/nemotron-3.5-super-vl-120b-a12b")
+NVIDIA_CODE_MODEL = env_str("NVIDIA_CODE_MODEL", "moonshotai/kimi-k2.6")
 NVIDIA_MAX_TOKENS = max(256, env_int("NVIDIA_MAX_TOKENS", 16384))
 try:
     NVIDIA_TEMPERATURE = float(env_str("NVIDIA_TEMPERATURE", "0.4"))
@@ -1237,7 +1238,7 @@ class AIService:
         self._mod_failures = 0
         self._setup()
         if NVIDIA_API_KEY:
-            logger.info(f"NVIDIA sohbet hazır (model: {NVIDIA_MODEL}).")
+            logger.info(f"NVIDIA sohbet hazır ({NVIDIA_MODEL}). Kod evrimi: {NVIDIA_CODE_MODEL}.")
 
     # ---------- kurulum ----------
     def _setup(self):
@@ -1449,18 +1450,20 @@ class AIService:
         return messages
 
     @staticmethod
-    def _nvidia_request(messages: list, timeout: float) -> str:
+    def _nvidia_request(messages: list, timeout: float, model: Optional[str] = None,
+                        temperature: Optional[float] = None, max_tokens: Optional[int] = None,
+                        thinking: bool = True) -> str:
         import urllib.error
         import urllib.request
 
         payload = json.dumps({
-            "model": NVIDIA_MODEL,
+            "model": model or NVIDIA_MODEL,
             "messages": messages,
-            "temperature": NVIDIA_TEMPERATURE,
+            "temperature": NVIDIA_TEMPERATURE if temperature is None else temperature,
             "top_p": 0.9,
-            "max_tokens": NVIDIA_MAX_TOKENS,
+            "max_tokens": max_tokens or NVIDIA_MAX_TOKENS,
             "stream": False,
-            "chat_template_kwargs": {"enable_thinking": True},
+            "chat_template_kwargs": {"enable_thinking": thinking},
         }).encode("utf-8")
         req = urllib.request.Request(
             "https://integrate.api.nvidia.com/v1/chat/completions",
@@ -1510,6 +1513,29 @@ class AIService:
     async def _nvidia_chat(self, channel_id: int, header: str, user_text: str, image: Optional[tuple]) -> str:
         messages = self._nvidia_messages(channel_id, header, user_text, image)
         return await asyncio.to_thread(self._nvidia_request, messages, max(AI_TIMEOUT_SECONDS, 90))
+
+    async def code_text(self, prompt: str, *, system: str, max_tokens: int = 1800, timeout: float = 70) -> str:
+        """Evrim kodunu NVIDIA'daki kod modeliyle yazar. Anahtar yoksa Gemini'ye düşer."""
+        if not NVIDIA_API_KEY:
+            return await self.generate_text(prompt, system=system, max_tokens=max_tokens, timeout=timeout)
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": prompt},
+        ]
+        last = None
+        for model in (NVIDIA_CODE_MODEL, NVIDIA_MODEL):
+            try:
+                return await asyncio.to_thread(
+                    self._nvidia_request, messages, timeout, model, 0.2, max_tokens, False,
+                )
+            except AIError as exc:
+                last = exc
+                if exc.kind == "auth":
+                    raise
+                logger.warning(f"Kod modeli başarısız ({model}): {exc}")
+        if self.enabled:
+            return await self.generate_text(prompt, system=system, max_tokens=max_tokens, timeout=timeout)
+        raise last or AIError("🤔 Kod modeli yanıt vermedi.", "empty")
 
     async def generate_text(self, prompt: str, *, system: Optional[str] = None,
                             max_tokens: int = 512, timeout: float = 25) -> str:
@@ -2540,11 +2566,14 @@ async def draft_evolution(ai, bot) -> Optional[tuple]:
     last_error = None
     ask = prompt
     for _attempt in (1, 2):
-        raw = await ai.generate_text(
+        raw = await ai.code_text(
             ask,
-            system="Yalnızca güvenli Discord.py kodu yaz. Açıklama, kural listesi ve yasak kelime yazma.",
+            system=(
+                "Sen NVIDIA üzerindeki bir kod modelisin. Yalnızca güvenli Discord.py kodu yaz. "
+                "Açıklama, kural listesi ve yasak kelime yazma. Tek ```python bloğu ver."
+            ),
             max_tokens=1800,
-            timeout=50,
+            timeout=70,
         )
         text = (raw or "").strip()
         if text.upper().startswith("YETERLI") and "async def" not in text:
