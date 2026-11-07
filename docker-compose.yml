@@ -1,0 +1,20 @@
+# ==============================================================================
+# XYRIN BOT — DOCKER COMPOSE
+# Yerel test: docker-compose up --build
+# Render için de doğrudan Dockerfile kullanılabilir.
+# ==============================================================================
+version: "3.8"
+
+services:
+  xyrin-bot:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DATA_DIR=/app/data
+    volumes:
+      - ./data:/app/data
+    # Render Web Service kullanıyorsan port açılış gerekir:
+    # ports:
+    #   - "10000:10000"

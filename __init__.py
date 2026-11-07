@@ -1,0 +1,1 @@
+# cogs paketi — Xyrin Bot komut modülleri
