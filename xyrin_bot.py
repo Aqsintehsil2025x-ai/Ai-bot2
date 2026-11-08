@@ -156,13 +156,14 @@ GEMINI_MODEL = env_str("GEMINI_MODEL", "gemini-3.5-flash-lite")
 SEARCH_MODEL = env_str("SEARCH_MODEL", "") or GEMINI_MODEL
 NVIDIA_API_KEY = env_str("NVIDIA_API_KEY")
 NVIDIA_MODEL = env_str("NVIDIA_MODEL", "nvidia/nemotron-3.5-super-vl-120b-a12b")
-NVIDIA_CODE_MODEL = env_str("NVIDIA_CODE_MODEL", "moonshotai/kimi-k2.6")
+NVIDIA_CODE_MODEL = env_str("NVIDIA_CODE_MODEL", "nvidia/nemotron-3.5-super-vl-120b-a12b")
 NVIDIA_MAX_TOKENS = max(256, env_int("NVIDIA_MAX_TOKENS", 16384))
 try:
     NVIDIA_TEMPERATURE = float(env_str("NVIDIA_TEMPERATURE", "0.4"))
 except ValueError:
     NVIDIA_TEMPERATURE = 0.4
 NVIDIA_TEMPERATURE = min(1.5, max(0.0, NVIDIA_TEMPERATURE))
+_NVIDIA_MISSING = set()
 COMMAND_PREFIX = env_str("COMMAND_PREFIX", "!")
 AUTO_SYNC = env_bool("AUTO_SYNC", True)
 BOT_OWNER_ID = env_int("BOT_OWNER_ID", 0)  # Kritik hata olursa bu kullanıcıya DM ile haber verilir.
@@ -1034,6 +1035,34 @@ class GuildSettings:
             self.store.mark_dirty()
 
 
+def panel_settings(guild_id: int) -> dict:
+    """Sitedeki panelin bu sunucu için kaydettiği ayarlar. Yoksa tanıtım sitesindeki varsayılanlar."""
+    base = {
+        "ai": True,
+        "moderation": True,
+        "entertainment": True,
+        "prefix": COMMAND_PREFIX or "!",
+        "language": "Türkçe",
+        "welcome": "Aramıza hoş geldin, {kullanıcı}!",
+    }
+    raw = bot.settings.value(guild_id, "panel") if "bot" in globals() else None
+    if not isinstance(raw, dict):
+        return base
+    for key in ("ai", "moderation", "entertainment"):
+        if key in raw:
+            base[key] = bool(raw[key])
+    prefix = str(raw.get("prefix") or "").strip()
+    if 1 <= len(prefix) <= 5 and " " not in prefix and not prefix.startswith("/"):
+        base["prefix"] = prefix
+    language = str(raw.get("language") or "").strip()
+    if language:
+        base["language"] = language[:40]
+    welcome = str(raw.get("welcome") or "").strip()
+    if welcome:
+        base["welcome"] = welcome[:300]
+    return base
+
+
 class ReminderManager:
     """Hatırlatmalar ve Hükümdar etkinlikleri. Yeniden başlatmada kaybolmaz."""
 
@@ -1523,7 +1552,11 @@ class AIService:
             {"role": "user", "content": prompt},
         ]
         last = None
+        models = []
         for model in (NVIDIA_CODE_MODEL, NVIDIA_MODEL):
+            if model and model not in models and model not in _NVIDIA_MISSING:
+                models.append(model)
+        for model in models:
             try:
                 return await asyncio.to_thread(
                     self._nvidia_request, messages, timeout, model, 0.2, max_tokens, False,
@@ -1532,6 +1565,8 @@ class AIService:
                 last = exc
                 if exc.kind == "auth":
                     raise
+                if "404" in str(exc):
+                    _NVIDIA_MISSING.add(model)
                 logger.warning(f"Kod modeli başarısız ({model}): {exc}")
         if self.enabled:
             return await self.generate_text(prompt, system=system, max_tokens=max_tokens, timeout=timeout)
@@ -1693,7 +1728,7 @@ class UltimateImperialBot(commands.Bot):
         intents.message_content = True
         intents.members = True
         super().__init__(
-            command_prefix=COMMAND_PREFIX,
+            command_prefix=panel_prefix,
             intents=intents,
             help_command=None,
             # Yapay zeka ya da bir komut asla @everyone / rol etiketi atamasın (toplu ping saldırısı koruması).
@@ -1718,6 +1753,8 @@ class UltimateImperialBot(commands.Bot):
         self.user_ai_last = {}       # {user_id: monotonic} -> yapay zeka bekleme süresi
         self.ai_reply_ids = deque(maxlen=500)  # Yapay zekanın attığı mesajlar (yanıtlanınca sohbet devam etsin)
         self.active_holograms = {}   # Hangi sunucuda hangi ses kanalına hologram yansıtıldığı
+        self.panel_codes = {}        # kod -> (user_id, guild_id, bitiş)
+        self.panel_sessions = {}     # oturum anahtarı -> {user_id, guild_id, exp}
         self.holo_last_announce = {}
         self.notice_times = {}       # {anahtar: monotonic} -> tekrarlayan uyarıları sınırlar
         self._presence_index = 0
@@ -1950,7 +1987,8 @@ class UltimateImperialBot(commands.Bot):
                         pass
 
         if message.guild:
-            if await moderate_message(message):
+            cfg = panel_settings(message.guild.id)
+            if cfg["moderation"] and await moderate_message(message):
                 return  # Moderasyona takılan mesajda yapay zeka/komut/XP çalışmaz.
             await award_xp(message.author, message.channel)
 
@@ -1966,9 +2004,13 @@ class UltimateImperialBot(commands.Bot):
         """Temiz mesaj atıp sonradan küfüre/linke çevirerek filtreyi aşmayı engeller."""
         if after.author.bot or not after.guild or before.content == after.content:
             return
+        if not panel_settings(after.guild.id)["moderation"]:
+            return
         await moderate_message(after, edited=True)
 
     def should_chat(self, message: discord.Message) -> bool:
+        if message.guild and not panel_settings(message.guild.id)["ai"]:
+            return False
         if isinstance(message.channel, discord.DMChannel):
             return True
         # Yalnızca DOĞRUDAN bot etiketi sayılır: @everyone / @here / rol etiketi botu tetiklemez.
@@ -2030,12 +2072,12 @@ class UltimateImperialBot(commands.Bot):
         channel = self.announce_channel(guild)
         if channel is None:
             return
+        cfg = panel_settings(guild.id)
+        welcome = cfg["welcome"].replace("{kullanıcı}", member.mention).replace("{kullanici}", member.mention)
+        welcome = welcome.replace("{sunucu}", guild.name)
         embed = discord.Embed(
             title="✨ Xyrin İmparatorluğu'na Hoş Geldin!",
-            description=(
-                f"{member.mention}, imparatorluğumuzun {guild.member_count}. üyesi oldun!\n"
-                f"Kuralları okumayı ve kendini tanıtmayı unutma. `{COMMAND_PREFIX}yardim` veya `/yardim` ile bota göz atabilirsin."
-            ),
+            description=welcome,
             color=discord.Color.dark_purple(),
         )
         embed.set_thumbnail(url=member.display_avatar.url)
@@ -2410,23 +2452,11 @@ def _evolution_command_names(code: str) -> list:
     tree = ast.parse(code)
     _assert_evolution_safe(tree)
     funcs = []
-    safe_modules = {"discord", "random", "re", "math"}
-    safe_from = {"datetime", "discord", "discord.ext", "discord.ext.commands"}
     for node in tree.body:
         if isinstance(node, ast.AsyncFunctionDef):
             funcs.append(node.name)
             continue
-        if isinstance(node, (ast.FunctionDef, ast.Assign, ast.AnnAssign)):
-            continue
-        if isinstance(node, ast.Import):
-            bad = [a.name for a in node.names if a.name.split(".")[0] not in safe_modules]
-            if bad:
-                raise AIError("İzinli importlar: discord, random, re, math, datetime.", "safety")
-            continue
-        if isinstance(node, ast.ImportFrom):
-            root = (node.module or "").split(".")[0]
-            if node.module not in safe_from and root not in {"datetime", "discord"}:
-                raise AIError("Taslakta bu importa izin yok.", "safety")
+        if isinstance(node, (ast.FunctionDef, ast.Assign, ast.AnnAssign, ast.Import, ast.ImportFrom)):
             continue
         if isinstance(node, ast.Expr) and isinstance(getattr(node, "value", None), ast.Constant):
             continue
@@ -2554,7 +2584,7 @@ async def draft_evolution(ai, bot) -> Optional[tuple]:
         "Hiç önemli bir eksik kalmadıysa yalnızca YETERLI yaz.\n"
         "Kurallar:\n"
         "- Yalnızca Python kodu, tek bir ```python bloğu. Öncesinde veya içinde kural listesi yazma.\n"
-        "- İzinli import: discord, random, re, math, datetime.\n"
+        "- İzinli import: discord, random, re, math, datetime, asyncio. os ve sys yok.\n"
         "- Her komut ayrı bir `async def ad(ctx):` olsun. Ad küçük harf. Zorunlu ekstra argüman olmasın.\n"
         "- ctx.send ile kısa Türkçe cevap versin.\n"
         "- os, sys, subprocess, socket, eval, exec, open, ağ, dosya, token YOK.\n"
@@ -2773,6 +2803,9 @@ async def award_xp(member: discord.Member, channel):
     """Mesaj başına XP verir (kullanıcı başına bekleme süresiyle). Seviye atlayınca tanımlı rolü verir."""
     if member.bot:
         return
+    guild = getattr(channel, "guild", None)
+    if guild is not None and not panel_settings(guild.id)["entertainment"]:
+        return
     if on_cooldown(bot.last_xp_time, member.id, XP_MESSAGE_COOLDOWN_SECONDS):
         return
     bot.last_xp_time[member.id] = time.monotonic()
@@ -2902,6 +2935,10 @@ async def execute_actions(guild: discord.Guild, author, actions: list) -> str:
 async def respond_with_ai(first_send, rest_send, channel, guild, author, text: str,
                           image: Optional[tuple] = None, note: str = "", search: bool = False):
     """Hem @etiket sohbetinde hem de /sor komutunda kullanılan ortak akış."""
+    if guild is not None:
+        language = panel_settings(guild.id)["language"]
+        if language.lower() not in {"türkçe", "turkce", "tr", "turkish"}:
+            text = f"[Sunucu dili: {language}. Yanıtı bu dilde ver.]\n{text}"
     reply_text, actions = await generate_ai_reply(author, channel.id, text, image, search=search)
     if note:
         reply_text = f"{reply_text}\n\n*({note})*"
@@ -4453,6 +4490,132 @@ async def sync_komutu(ctx):
     await ctx.send(f"✅ {len(synced)} slash komutu eşitlendi.")
 
 
+_PANEL_AI = {"sor", "ara", "ozetle", "sifirla"}
+_PANEL_FUN = {
+    "zar", "yazitura", "bahis", "bakiye", "seviye", "gunluk", "transfer", "market",
+    "satinal", "siralama", "calis", "suc", "soy", "cekilis", "kahve", "anket",
+}
+PANEL_PUBLIC_URL = env_str("PANEL_PUBLIC_URL", "https://ai-bot2-rymy.onrender.com")
+PANEL_PAGE = """<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Xyrin Flower — Panel</title>
+<style>
+body{margin:0;background:#11182c;color:#e8e4dc;font:16px/1.5 Georgia,serif}
+main{max-width:640px;margin:0 auto;padding:32px 20px}
+h1{font-weight:500;font-size:32px}
+label{display:block;margin:14px 0 6px}
+input,select{width:100%;box-sizing:border-box;background:#0d1322;color:#fff;border:1px solid #31405f;border-radius:8px;padding:10px}
+.row{display:flex;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid #243049}
+button{background:#efe6d6;color:#1b140c;border:0;border-radius:999px;padding:10px 18px;font:inherit;cursor:pointer}
+#msg{min-height:1.4em;color:#c8b48a}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<main>
+<h1>Botunu tanı.</h1>
+<p id="lead">Sunucuda <b>!panel</b> yaz. Gelen kodu buraya gir. Ayarlar o sunucunun canlı botuna yazılır.</p>
+<form id="login">
+<label>Bağlantı kodu</label>
+<input id="code" autocomplete="off" placeholder="6 haneli kod"/>
+<p><button type="submit">Bağla</button></p>
+</form>
+<form id="settings" class="hidden">
+<p id="guild"></p>
+<div class="row"><span>Yapay zekâ sohbeti</span><input id="ai" type="checkbox"/></div>
+<div class="row"><span>Akıllı moderasyon</span><input id="moderation" type="checkbox"/></div>
+<div class="row"><span>Eğlence</span><input id="entertainment" type="checkbox"/></div>
+<label>Komut öneki</label>
+<input id="prefix" maxlength="5"/>
+<label>Dil</label>
+<input id="language" maxlength="40"/>
+<label>Karşılama mesajı</label>
+<input id="welcome" maxlength="300"/>
+<p><button type="submit">Bota kaydet</button></p>
+</form>
+<p id="msg"></p>
+</main>
+<script>
+const msg = document.querySelector("#msg");
+function fill(data){
+  document.querySelector("#login").classList.add("hidden");
+  document.querySelector("#settings").classList.remove("hidden");
+  document.querySelector("#guild").textContent = data.guild.name;
+  for (const key of ["ai","moderation","entertainment"]) document.querySelector("#"+key).checked = !!data.settings[key];
+  for (const key of ["prefix","language","welcome"]) document.querySelector("#"+key).value = data.settings[key] || "";
+}
+async function load(){
+  const res = await fetch("/api/panel/settings");
+  if (res.ok) fill(await res.json());
+}
+document.querySelector("#login").onsubmit = async (ev) => {
+  ev.preventDefault();
+  msg.textContent = "Bakılıyor…";
+  const res = await fetch("/api/panel/redeem", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({code: document.querySelector("#code").value})});
+  const data = await res.json();
+  if (!res.ok) { msg.textContent = data.error || "Kod kabul edilmedi."; return; }
+  fill(data);
+  msg.textContent = "Bağlandı.";
+};
+document.querySelector("#settings").onsubmit = async (ev) => {
+  ev.preventDefault();
+  const body = {
+    ai: document.querySelector("#ai").checked,
+    moderation: document.querySelector("#moderation").checked,
+    entertainment: document.querySelector("#entertainment").checked,
+    prefix: document.querySelector("#prefix").value,
+    language: document.querySelector("#language").value,
+    welcome: document.querySelector("#welcome").value
+  };
+  const res = await fetch("/api/panel/settings", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)});
+  const data = await res.json();
+  msg.textContent = res.ok ? "Canlı bota kaydedildi." : (data.error || "Kaydedilemedi.");
+};
+load();
+</script>
+</body>
+</html>
+"""
+
+
+@bot.check
+async def panel_module_gate(ctx):
+    if ctx.guild is None or ctx.command is None:
+        return True
+    root = ctx.command
+    while root.parent is not None:
+        root = root.parent
+    cfg = panel_settings(ctx.guild.id)
+    if root.name in _PANEL_AI and not cfg["ai"]:
+        await ctx.reply("Yapay zekâ bu sunucuda kapalı. Panelden açabilirsin.", mention_author=False)
+        return False
+    if root.name in _PANEL_FUN and not cfg["entertainment"]:
+        await ctx.reply("Eğlence bu sunucuda kapalı. Panelden açabilirsin.", mention_author=False)
+        return False
+    return True
+
+
+@bot.hybrid_command(name="panel", description="Bu sunucunun ayar panelini bağlayan kodu gönderir.")
+@commands.guild_only()
+@perm_or_sovereign(manage_guild=True)
+async def panel_komutu(ctx):
+    import secrets
+    code = secrets.token_hex(3).upper()
+    bot.panel_codes[code] = (ctx.author.id, ctx.guild.id, time.monotonic() + 600)
+    url = PANEL_PUBLIC_URL.rstrip("/") + "/panel"
+    text = f"Panel kodun: `{code}`\n{url}\n10 dakika geçerli. Sunucu: {ctx.guild.name}"
+    note = "Kodu özel mesajına gönderdim."
+    try:
+        await ctx.author.send(text)
+    except discord.HTTPException:
+        note = text
+    kwargs = {"ephemeral": True} if ctx.interaction else {}
+    await ctx.reply(note, **kwargs)
+
+
 # ==============================================================================
 # 15. ÇALIŞTIRMA BLOĞU
 # ==============================================================================
@@ -4480,9 +4643,85 @@ async def start_health_server():
             "latency_ms": latency,
         })
 
+    def session_of(request):
+        token = request.cookies.get("xyrin_panel", "")
+        item = bot.panel_sessions.get(token)
+        if not item or item["exp"] < time.monotonic():
+            bot.panel_sessions.pop(token, None)
+            return None
+        return item
+
+    def clean_panel(body: dict) -> dict:
+        prefix = str(body.get("prefix") or COMMAND_PREFIX or "!").strip()
+        if not (1 <= len(prefix) <= 5 and " " not in prefix and not prefix.startswith("/")):
+            prefix = COMMAND_PREFIX or "!"
+        welcome = str(body.get("welcome") or "").strip() or "Aramıza hoş geldin, {kullanıcı}!"
+        language = str(body.get("language") or "").strip() or "Türkçe"
+        return {
+            "ai": bool(body.get("ai")),
+            "moderation": bool(body.get("moderation")),
+            "entertainment": bool(body.get("entertainment")),
+            "prefix": prefix,
+            "language": language[:40],
+            "welcome": welcome[:300],
+        }
+
+    async def panel_page(request):
+        return web.Response(text=PANEL_PAGE, content_type="text/html")
+
+    async def panel_redeem(request):
+        import secrets
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"error": "Geçersiz istek."}, status=400)
+        code = str(body.get("code") or "").strip().upper()
+        found = bot.panel_codes.get(code)
+        if not found or found[2] < time.monotonic():
+            bot.panel_codes.pop(code, None)
+            return web.json_response({"error": "Kod geçersiz veya süresi dolmuş. Sunucuda !panel yaz."}, status=403)
+        user_id, guild_id, _exp = found
+        bot.panel_codes.pop(code, None)
+        token = secrets.token_urlsafe(24)
+        bot.panel_sessions[token] = {"user_id": user_id, "guild_id": guild_id, "exp": time.monotonic() + 12 * 3600}
+        guild = bot.get_guild(guild_id)
+        resp = web.json_response({
+            "guild": {"id": str(guild_id), "name": guild.name if guild else str(guild_id)},
+            "settings": panel_settings(guild_id),
+        })
+        resp.set_cookie("xyrin_panel", token, max_age=12 * 3600, httponly=True, samesite="Lax", secure=True, path="/")
+        return resp
+
+    async def panel_get(request):
+        item = session_of(request)
+        if item is None:
+            return web.json_response({"error": "Önce kodu gir."}, status=401)
+        guild = bot.get_guild(item["guild_id"])
+        return web.json_response({
+            "guild": {"id": str(item["guild_id"]), "name": guild.name if guild else str(item["guild_id"])},
+            "settings": panel_settings(item["guild_id"]),
+        })
+
+    async def panel_save(request):
+        item = session_of(request)
+        if item is None:
+            return web.json_response({"error": "Oturum kapandı. Kodu yeniden gir."}, status=401)
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"error": "Geçersiz istek."}, status=400)
+        saved = clean_panel(body if isinstance(body, dict) else {})
+        bot.settings.set(item["guild_id"], "panel", saved)
+        await bot.settings.store.flush()
+        return web.json_response({"ok": True, "settings": panel_settings(item["guild_id"])})
+
     app = web.Application()
     app.router.add_get("/", health)
     app.router.add_get("/health", health)
+    app.router.add_get("/panel", panel_page)
+    app.router.add_post("/api/panel/redeem", panel_redeem)
+    app.router.add_get("/api/panel/settings", panel_get)
+    app.router.add_post("/api/panel/settings", panel_save)
     runner = web.AppRunner(app, access_log=None)
     try:
         await runner.setup()
