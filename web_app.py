@@ -27,6 +27,9 @@ _dashboard_state = {
     },
 }
 
+SERVER_INVITE = "https://discord.gg/Dkj8VFnga"
+BOT_INVITE = "https://discord.com/oauth2/authorize?client_id=1555918878268456970&permissions=8&integration_type=0&scope=bot"
+
 
 def set_bot(bot):
     global _bot
@@ -51,417 +54,379 @@ def index():
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Xyrin Flow AI — Control Panel</title>
+    <title>Xyrin Flower</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg: #070b17;
-            --bg-2: #0e1629;
-            --panel: rgba(19, 29, 49, 0.92);
-            --panel-strong: rgba(21, 33, 56, 0.98);
-            --panel-soft: rgba(22, 36, 58, 0.8);
-            --line: rgba(113, 143, 188, 0.18);
-            --line-strong: rgba(129, 151, 201, 0.28);
-            --text: #edf4ff;
-            --muted: #a9b7d0;
-            --muted-2: #7f8ca8;
-            --blue: #7fa1ff;
-            --blue-2: #8ee7ff;
-            --purple: #7d85f8;
-            --orange: #ffb45d;
-            --green: #5ee0ad;
-            --red: #ff6c7d;
-            --shadow: 0 20px 50px rgba(5, 10, 22, 0.6);
+            --bg-dark: #020b17;
+            --bg-mid: #071527;
+            --bg-blue: #0a1d31;
+            --panel: rgba(18, 28, 42, 0.8);
+            --line: rgba(155, 176, 224, 0.25);
+            --text: #edf3ff;
+            --muted: #a7b8d6;
+            --soft: #c7d8f8;
+            --blue-1: #8fa9ff;
+            --blue-2: #b6ccff;
+            --blue-3: #dfe9ff;
+            --shadow: 0 0 40px rgba(128, 153, 255, 0.2);
         }
+
         * { box-sizing: border-box; }
         html, body {
             margin: 0;
-            height: 100%;
-            background:
-                radial-gradient(circle at top left, rgba(127, 161, 255, 0.12), transparent 26%),
-                radial-gradient(circle at top right, rgba(130, 123, 255, 0.12), transparent 18%),
-                linear-gradient(180deg, #040915, #0a1221 32%, #070d18 100%);
+            min-height: 100%;
+            background: var(--bg-dark);
             color: var(--text);
             font-family: 'Inter', sans-serif;
         }
-        body { min-height: 100vh; display: flex; flex-direction: column; }
-        .shell { display: flex; width: 100%; min-height: 100vh; }
-        .sidebar {
-            width: 78px; background: rgba(10, 15, 28, 0.9); border-right: 1px solid var(--line);
-            display: flex; flex-direction: column; align-items: center; padding: 18px 0 16px; gap: 12px;
+        body {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background:
+                radial-gradient(circle at 50% 28%, rgba(68, 88, 142, 0.18), transparent 20%),
+                radial-gradient(circle at 15% 20%, rgba(68, 88, 142, 0.12), transparent 18%),
+                radial-gradient(circle at 85% 20%, rgba(68, 88, 142, 0.12), transparent 18%),
+                linear-gradient(180deg, #010812 0%, #020d1d 32%, #010b15 100%);
         }
-        .brand {
-            width: 32px; height: 32px; border-radius: 10px; background: linear-gradient(135deg, var(--blue), var(--purple));
-            display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 12px;
-            box-shadow: 0 14px 26px rgba(127, 161, 255, 0.38); margin-bottom: 12px;
+
+        .page {
+            width: 100%;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
         }
-        .nav-icon {
-            width: 42px; height: 42px; border-radius: 12px; background: rgba(255,255,255,0.02);
-            border: 1px solid transparent; display: flex; align-items: center; justify-content: center;
-            color: var(--muted); font-size: 18px; cursor: pointer; transition: 0.2s ease;
-        }
-        .nav-icon.active {
-            background: linear-gradient(180deg, rgba(127,161,255,0.14), rgba(127,161,255,0.04));
-            border-color: rgba(127,161,255,0.4); color: white;
-        }
-        .nav-icon:hover { border-color: rgba(127,161,255,0.25); color: white; }
-        .nav-spacer { flex: 1; }
-        .main { flex: 1; display: flex; flex-direction: column; }
+
         .topbar {
-            height: 64px; display: flex; align-items: center; justify-content: space-between; padding: 0 22px 0 18px;
-            border-bottom: 1px solid var(--line); background: rgba(7, 11, 23, 0.32); backdrop-filter: blur(18px);
+            width: 100%;
+            padding: 20px 30px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 5;
         }
-        .topbar-left { display: flex; align-items: center; gap: 10px; color: var(--muted); min-width: 0; }
-        .topbar-title { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .topbar-right { display: flex; align-items: center; gap: 14px; }
-        .chip {
-            display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 10px;
-            border: 1px solid var(--line); background: rgba(255,255,255,0.02); color: var(--muted); font-size: 12px;
+
+        .brand-mini {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 12px;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--soft);
+            opacity: 0.9;
         }
-        .chip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 10px rgba(94,224,173,0.8); }
-        .notif {
-            width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--line);
-            display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.02); color: var(--muted);
+
+        .brand-mini .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--blue-1), var(--blue-3));
+            box-shadow: 0 0 16px rgba(143,169,255,0.9);
         }
-        .content { padding: 24px 26px 28px; }
-        .page-banner {
-            display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 10px 0 16px;
+
+        .nav-links {
+            display: flex;
+            gap: 18px;
+            align-items: center;
+            flex-wrap: wrap;
         }
-        .breadcrumb { color: var(--muted-2); font-size: 12px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-        .breadcrumb span:last-child { color: var(--text); font-weight: 600; }
-        .status-pill {
-            display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; background: rgba(94,224,173,0.08);
-            border: 1px solid rgba(94,224,173,0.2); border-radius: 10px; color: #c8f9df; font-size: 12px; font-weight: 600;
+
+        .nav-links a {
+            color: var(--muted);
+            text-decoration: none;
+            font-size: 12px;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            transition: 0.2s ease;
         }
-        .status-pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 12px rgba(94,224,173,0.8); }
+
+        .nav-links a:hover { color: var(--text); }
+
         .hero {
-            background: linear-gradient(180deg, rgba(17, 24, 39, 0.88), rgba(15, 23, 39, 0.78));
-            border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); overflow: hidden;
+            position: relative;
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 36px 22px 60px;
+            overflow: hidden;
         }
+
+        .hero::before,
+        .hero::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+        }
+
+        .hero::before {
+            background:
+                radial-gradient(circle at 50% 22%, rgba(100, 127, 255, 0.12), transparent 19%),
+                radial-gradient(circle at 20% 72%, rgba(53, 79, 136, 0.14), transparent 18%),
+                radial-gradient(circle at 80% 72%, rgba(53, 79, 136, 0.14), transparent 18%);
+        }
+
         .hero-inner {
-            display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; padding: 34px 28px 26px;
+            position: relative;
+            z-index: 1;
+            width: min(1500px, 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 500px;
         }
-        .hero-title { font-size: 20px; font-weight: 800; margin: 0 0 8px; letter-spacing: 0.04em; text-transform: uppercase; }
-        .hero-sub { color: var(--muted); font-size: 13px; margin: 0; max-width: 620px; line-height: 1.7; }
-        .hero-toggle {
-            display: inline-flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.02); border: 1px solid var(--line);
-            border-radius: 10px; padding: 8px 12px; color: var(--muted); font-size: 12px;
+
+        .banner-wrap {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 20px 14px;
         }
-        .toggle {
-            width: 42px; height: 22px; border-radius: 999px; background: rgba(255,255,255,0.08);
-            border: 1px solid rgba(255,255,255,0.15); position: relative; display: inline-block;
+
+        .banner-line {
+            width: min(26vw, 360px);
+            height: 2px;
+            background: linear-gradient(90deg, transparent, rgba(194, 205, 248, 0.5), transparent);
+            opacity: 0.75;
         }
-        .toggle::after {
-            content: ""; position: absolute; width: 14px; height: 14px; border-radius: 50%; background: white;
-            top: 3px; left: 4px; transition: 0.2s ease; box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+
+        .brand-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: clamp(10px, 2vw, 28px);
+            margin: 12px 0 8px;
         }
-        .toggle.on { background: linear-gradient(90deg, rgba(125,133,248,0.9), rgba(142,231,255,0.9)); border-color: rgba(125,133,248,0.8); }
-        .toggle.on::after { left: 23px; }
-        .info-bar {
-            display: flex; align-items: center; justify-content: space-between; background: rgba(14, 21, 34, 0.84);
-            border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); color: var(--muted);
-            padding: 14px 20px; font-size: 12px;
+
+        .brand-mark {
+            position: relative;
+            width: clamp(90px, 9vw, 180px);
+            height: clamp(90px, 9vw, 180px);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            filter: drop-shadow(0 0 20px rgba(134,157,255,0.6));
         }
-        .info-left { display: flex; align-items: center; gap: 10px; }
-        .info-left .icon {
-            width: 28px; height: 28px; border-radius: 8px; background: rgba(127,161,255,0.14);
-            display: flex; align-items: center; justify-content: center; color: var(--blue-2); font-size: 14px;
+
+        .brand-mark::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(158,174,255,0.18), rgba(166,190,255,0.04));
+            border-radius: 50%;
+            transform: scale(1.05);
         }
-        .grid { display: grid; grid-template-columns: 1.65fr 0.9fr; gap: 22px; margin-top: 22px; }
-        .card { background: rgba(14, 22, 37, 0.9); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); }
-        .card-header {
-            display: flex; align-items: center; justify-content: space-between; padding: 18px 18px 12px; color: var(--muted);
-            font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase;
+
+        .flower {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: block;
         }
-        .card-header .left { display: flex; align-items: center; gap: 10px; }
-        .badge { width: 8px; height: 8px; border-radius: 50%; background: var(--orange); box-shadow: 0 0 12px rgba(255,180,93,0.8); }
-        .mod-panel { padding: 0 18px 18px; }
-        .module-list { display: flex; flex-direction: column; gap: 12px; }
-        .module-row {
-            display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 54px;
-            padding: 8px 10px; background: rgba(255,255,255,0.015); border: 1px solid rgba(255,255,255,0.02); border-radius: 12px;
+
+        .flower .petal {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 26%;
+            height: 44%;
+            background: linear-gradient(180deg, rgba(176,198,255,0.98), rgba(118,142,255,0.82));
+            border-radius: 55% 55% 60% 60%;
+            transform-origin: center bottom;
+            box-shadow: 0 0 18px rgba(122, 146, 255, 0.35);
         }
-        .module-name { display: flex; align-items: center; gap: 12px; color: var(--text); font-weight: 600; }
-        .module-icon {
-            width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
-            background: rgba(127,161,255,0.08); color: var(--blue-2); font-size: 14px; border: 1px solid rgba(127,161,255,0.18);
+
+        .flower .petal:nth-child(1) { transform: translate(-50%, -70%) rotate(0deg); }
+        .flower .petal:nth-child(2) { transform: translate(-50%, -70%) rotate(45deg); }
+        .flower .petal:nth-child(3) { transform: translate(-50%, -70%) rotate(90deg); }
+        .flower .petal:nth-child(4) { transform: translate(-50%, -70%) rotate(135deg); }
+        .flower .petal:nth-child(5) { transform: translate(-50%, -70%) rotate(180deg); }
+        .flower .petal:nth-child(6) { transform: translate(-50%, -70%) rotate(225deg); }
+        .flower .petal:nth-child(7) { transform: translate(-50%, -70%) rotate(270deg); }
+        .flower .petal:nth-child(8) { transform: translate(-50%, -70%) rotate(315deg); }
+
+        .flower .core {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 18%;
+            height: 18%;
+            transform: translate(-50%, -50%);
+            background: linear-gradient(135deg, #eaf0ff, #8aa3ff);
+            border-radius: 50%;
+            box-shadow: 0 0 18px rgba(146,168,255,0.8);
         }
-        .module-meta { color: var(--muted-2); font-size: 11px; line-height: 1.5; }
-        .switch {
-            position: relative; width: 44px; height: 24px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.15);
-            background: rgba(255,255,255,0.06); transition: 0.2s ease; cursor: pointer;
+
+        .brand-title {
+            position: relative;
+            font-family: 'Cormorant Garamond', serif;
+            font-size: clamp(4.5rem, 11vw, 17rem);
+            line-height: 0.8;
+            letter-spacing: -0.04em;
+            color: rgba(233, 238, 255, 0.96);
+            text-shadow: 0 0 26px rgba(174, 188, 255, 0.18), 0 0 18px rgba(146, 168, 255, 0.12);
+            font-weight: 700;
         }
-        .switch::after {
-            content: ""; position: absolute; width: 16px; height: 16px; left: 4px; top: 3px; border-radius: 50%; background: #f4f7ff;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.26); transition: 0.2s ease;
+
+        .brand-sub {
+            margin-top: 10px;
+            font-family: 'Cormorant Garamond', serif;
+            font-size: clamp(1.6rem, 2.8vw, 3rem);
+            font-style: italic;
+            letter-spacing: 0.12em;
+            color: rgba(183, 199, 255, 0.82);
+            text-transform: none;
+            text-shadow: 0 0 18px rgba(140, 160, 255, 0.18);
         }
-        .switch.on { background: linear-gradient(90deg, rgba(125,133,248,0.85), rgba(142,231,255,0.85)); border-color: rgba(125,133,248,0.7); }
-        .switch.on::after { left: 23px; }
-        .side-stack { display: flex; flex-direction: column; gap: 22px; }
-        .mini-panel { padding: 18px 18px 16px; }
-        .mini-panel .title { margin: 0 0 16px; color: var(--muted); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; }
-        .server-box { display: flex; flex-direction: column; gap: 12px; }
-        .server-box .stat {
-            display: flex; align-items: center; justify-content: space-between; border-radius: 12px; padding: 12px 10px;
-            background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.03); color: var(--muted); font-size: 12px;
+
+        .cta-row {
+            margin-top: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
         }
-        .server-box .stat strong { color: var(--text); font-size: 15px; font-weight: 700; }
-        .server-box .state { color: var(--green); font-weight: 700; }
-        .config-form { display: grid; gap: 14px; }
-        .field { display: grid; gap: 7px; }
-        .field label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; }
-        .field input, .field select, .field textarea {
-            width: 100%; border: 1px solid var(--line); background: rgba(255,255,255,0.02); color: var(--text);
-            border-radius: 10px; padding: 12px 12px; outline: none; font: inherit;
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 200px;
+            padding: 16px 26px;
+            border-radius: 999px;
+            text-decoration: none;
+            font-weight: 700;
+            transition: 0.2s ease;
+            letter-spacing: 0.04em;
         }
-        .field textarea { min-height: 72px; resize: vertical; }
-        .primary {
-            width: 100%; border: none; border-radius: 10px; background: linear-gradient(90deg, var(--orange), #ff8d52);
-            color: #1c1209; font-weight: 800; padding: 12px 14px; cursor: pointer; box-shadow: 0 12px 28px rgba(255, 154, 85, 0.33);
+
+        .btn.primary {
+            background: linear-gradient(135deg, #8fa9ff, #bfd4ff);
+            color: #08131d;
+            box-shadow: 0 16px 26px rgba(134, 156, 255, 0.35);
         }
-        .bottom-row { display: grid; grid-template-columns: 1.2fr 1fr; gap: 22px; margin-top: 22px; }
-        .action-box { padding: 18px; display: flex; flex-direction: column; gap: 16px; }
-        .action-box .row {
-            display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid var(--line);
-            border-radius: 12px; background: rgba(255,255,255,0.02); padding: 12px 14px; color: var(--muted); font-size: 13px;
+
+        .btn.primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 20px 32px rgba(134, 156, 255, 0.45);
         }
-        .pill-btn {
-            border: none; background: linear-gradient(90deg, rgba(127,161,255,0.12), rgba(125,133,248,0.18));
-            border: 1px solid rgba(127,161,255,0.2); color: var(--text); border-radius: 10px; padding: 8px 12px; font-weight: 700; cursor: pointer;
+
+        .btn.secondary {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(179, 196, 255, 0.3);
+            color: var(--text);
+            backdrop-filter: blur(2px);
         }
-        .footer-bar {
-            margin-top: auto; border-top: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between;
-            padding: 12px 18px 14px; color: var(--muted-2); font-size: 12px; background: rgba(7, 11, 23, 0.24);
+
+        .btn.secondary:hover {
+            background: rgba(255,255,255,0.04);
+            transform: translateY(-2px);
         }
-        @media (max-width: 980px) {
-            .grid, .bottom-row { grid-template-columns: 1fr; }
-            .shell { flex-direction: column; }
-            .sidebar {
-                width: 100%; height: auto; flex-direction: row; padding: 12px 14px; justify-content: space-between;
+
+        .leaf {
+            position: absolute;
+            width: 18px;
+            height: 52px;
+            background: linear-gradient(180deg, rgba(124,145,236,0.38), rgba(18,30,52,0.08));
+            border-radius: 60% 40% 60% 40%;
+            transform-origin: center bottom;
+            opacity: 0.7;
+            filter: blur(0.2px);
+            box-shadow: inset 0 0 14px rgba(255,255,255,0.08);
+        }
+
+        .leaf.l1 { left: 12%; top: 52%; transform: rotate(-24deg); }
+        .leaf.l2 { right: 10%; top: 50%; transform: rotate(22deg); }
+        .leaf.l3 { left: 18%; bottom: 6%; transform: rotate(24deg); }
+        .leaf.l4 { right: 18%; bottom: 8%; transform: rotate(-18deg); }
+        .leaf.l5 { left: 52%; top: 18%; transform: rotate(26deg); }
+
+        @media (max-width: 860px) {
+            .topbar {
+                padding: 18px 16px 0;
+                align-items: flex-start;
+                gap: 10px;
+                flex-direction: column;
             }
-            .nav-spacer { display: none; }
-            .page-banner, .hero-inner, .topbar { flex-wrap: wrap; }
+            .nav-links {
+                gap: 10px 14px;
+            }
+            .brand-row {
+                flex-direction: column;
+            }
+            .banner-line {
+                width: 18vw;
+            }
+            .btn {
+                width: 100%;
+                min-width: 0;
+            }
+            .cta-row {
+                width: 100%;
+                flex-direction: column;
+            }
         }
     </style>
 </head>
 <body>
-<div class="shell">
-    <aside class="sidebar">
-        <div class="brand">X</div>
-        <div class="nav-icon active">◈</div>
-        <div class="nav-icon">⊞</div>
-        <div class="nav-icon">✦</div>
-        <div class="nav-icon">☆</div>
-        <div class="nav-spacer"></div>
-        <div class="nav-icon">⚙</div>
-        <div class="nav-icon">⎋</div>
-    </aside>
-
-    <main class="main">
+    <div class="page">
         <header class="topbar">
-            <div class="topbar-left">
-                <div class="chip"><span class="dot"></span> Online</div>
-                <div class="topbar-title">discord-bot-site--aqsintehsil2025.replit.app/panel</div>
-            </div>
-            <div class="topbar-right">
-                <div class="chip">👥 {{ guild_count }} Sunucu</div>
-                <div class="chip">👤 {{ member_count }} Üye</div>
-                <div class="chip">⚡ {{ latency }}ms</div>
-                <div class="notif">🔔</div>
-            </div>
+            <div class="brand-mini"><span class="dot"></span> Xyrin</div>
+            <nav class="nav-links">
+                <a href="{{ server_invite }}" target="_blank">Sunucu</a>
+                <a href="{{ bot_invite }}" target="_blank">Bot</a>
+                <a href="#panel">Panel</a>
+            </nav>
         </header>
 
-        <div class="content">
-            <div class="page-banner">
-                <div class="breadcrumb"><span>Yönetim</span> / <span>Panel</span> / <span>Kontrol Merkezi</span></div>
-                <div class="status-pill"><span class="dot"></span>{{ status.upper() }}</div>
-            </div>
-
-            <section class="hero">
-                <div class="hero-inner">
-                    <div>
-                        <h1 class="hero-title">BOTUNU TANI.</h1>
-                        <p class="hero-sub">Tercihini düzenle. Bu ayarlar her biri Discord topluluğun için görünür ve kolayca değiştirilir.</p>
-                    </div>
-                    <div class="hero-toggle">
-                        <span>Önizleme modu</span>
-                        <span class="toggle on" aria-label="Önizleme modu açık"></span>
-                    </div>
-                </div>
-
-                <div class="info-bar">
-                    <div class="info-left">
-                        <div class="icon">i</div>
-                        <span>Yalnızca bu ayarları değiştirmek için izin verildi, görev dağılımını etkinleştir.</span>
-                    </div>
-                    <button class="pill-btn" type="button">Yenile</button>
-                </div>
-            </section>
-
-            <div class="grid">
-                <section class="card">
-                    <div class="card-header">
-                        <div class="left"><span class="badge"></span> Modüller</div>
-                        <span>Aktif</span>
-                    </div>
-                    <div class="mod-panel">
-                        <div class="module-list">
-                            <div class="module-row">
-                                <div class="module-name">
-                                    <div class="module-icon">AI</div>
-                                    <div>
-                                        <div>Yapay zeka sohbet</div>
-                                        <div class="module-meta">Gemini ve web tabanlı cevap üretimi</div>
-                                    </div>
-                                </div>
-                                <div class="switch on" data-module="ai"></div>
-                            </div>
-
-                            <div class="module-row">
-                                <div class="module-name">
-                                    <div class="module-icon">💰</div>
-                                    <div>
-                                        <div>Ekonomi modu</div>
-                                        <div class="module-meta">Bakiye, günlük, market ve bahis</div>
-                                    </div>
-                                </div>
-                                <div class="switch on" data-module="economy"></div>
-                            </div>
-
-                            <div class="module-row">
-                                <div class="module-name">
-                                    <div class="module-icon">🛡</div>
-                                    <div>
-                                        <div>Moderasyon modu</div>
-                                        <div class="module-meta">Ban, mute, kick, küfür ve otomatik filtre</div>
-                                    </div>
-                                </div>
-                                <div class="switch on" data-module="moderation"></div>
-                            </div>
-
-                            <div class="module-row">
-                                <div class="module-name">
-                                    <div class="module-icon">⚙</div>
-                                    <div>
-                                        <div>Yardımcı araçlar</div>
-                                        <div class="module-meta">Rol, anket, hatırlatıcı ve yardım</div>
-                                    </div>
-                                </div>
-                                <div class="switch on" data-module="utility"></div>
+        <main class="hero">
+            <div class="hero-inner">
+                <div class="banner-wrap">
+                    <div class="brand-row">
+                        <div class="banner-line"></div>
+                        <div class="brand-mark" aria-hidden="true">
+                            <div class="flower">
+                                <span class="petal"></span>
+                                <span class="petal"></span>
+                                <span class="petal"></span>
+                                <span class="petal"></span>
+                                <span class="petal"></span>
+                                <span class="petal"></span>
+                                <span class="petal"></span>
+                                <span class="petal"></span>
+                                <span class="core"></span>
                             </div>
                         </div>
+                        <div class="banner-line"></div>
                     </div>
-                </section>
 
-                <aside class="side-stack">
-                    <section class="card mini-panel">
-                        <h2 class="title">Sunucu Başlığı</h2>
-                        <div class="server-box">
-                            <div class="stat"><span>Toplam sunucu</span><strong>{{ guild_count }}</strong></div>
-                            <div class="stat"><span>Üye sayısı</span><strong>{{ member_count }}</strong></div>
-                            <div class="stat"><span>Ping</span><strong>{{ latency }}ms</strong></div>
-                            <div class="stat"><span>Durum</span><span class="state">{{ status }}</span></div>
-                        </div>
-                    </section>
+                    <div class="brand-title">Xyrin</div>
+                    <div class="brand-sub">Flower</div>
 
-                    <section class="card mini-panel">
-                        <h2 class="title">Ayarlar</h2>
-                        <form id="panel-form" class="config-form">
-                            <div class="field">
-                                <label>Komut ön eki</label>
-                                <input id="command-name" value="{{ dashboard.command }}" />
-                            </div>
-                            <div class="field">
-                                <label>Dil</label>
-                                <select id="language">
-                                    <option selected>Türkçe</option>
-                                    <option>English</option>
-                                    <option>Deutsch</option>
-                                </select>
-                            </div>
-                            <div class="field">
-                                <label>Hoş geldin mesajı</label>
-                                <textarea id="welcome-message">{{ dashboard.welcome_message }}</textarea>
-                            </div>
-                            <button type="submit" class="primary">Ayarları Kaydet</button>
-                        </form>
-                    </section>
-                </aside>
+                    <div class="cta-row">
+                        <a class="btn primary" href="{{ server_invite }}" target="_blank">Sunucuya Katıl</a>
+                        <a class="btn secondary" href="{{ bot_invite }}" target="_blank">Botu Davet Et</a>
+                    </div>
+                </div>
             </div>
 
-            <div class="bottom-row">
-                <section class="card">
-                    <div class="card-header">
-                        <div class="left"><span class="badge"></span> Moderasyon</div>
-                        <span>Hızlı işlem</span>
-                    </div>
-                    <div class="action-box">
-                        <div class="row"><span>Sunucuya katılanları otomatik karşıla</span><button class="pill-btn" type="button">Etkin</button></div>
-                        <div class="row"><span>Spam / küfür filtresi</span><button class="pill-btn" type="button">Açık</button></div>
-                        <div class="row"><span>Otomatik ban eşiği</span><button class="pill-btn" type="button">25</button></div>
-                    </div>
-                </section>
-
-                <section class="card">
-                    <div class="card-header">
-                        <div class="left"><span class="badge"></span> Sinyal</div>
-                        <span>Canlı</span>
-                    </div>
-                    <div class="action-box">
-                        <div class="row"><span>Bot durum</span><strong style="color: var(--green);">Aktif</strong></div>
-                        <div class="row"><span>Web servis</span><strong style="color: var(--blue-2);">Render / PORT</strong></div>
-                        <div class="row"><span>Son güncelleme</span><strong>Bugün</strong></div>
-                    </div>
-                </section>
-            </div>
-        </div>
-
-        <footer class="footer-bar">
-            <div>© 2026 Xyrin Flow AI</div>
-            <div>Discord Bot Control Panel</div>
-        </footer>
-    </main>
-</div>
-
-<script>
-    const form = document.getElementById('panel-form');
-    const switches = document.querySelectorAll('.switch');
-    for (const el of switches) {
-        el.addEventListener('click', () => el.classList.toggle('on'));
-    }
-
-    form.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        const payload = {
-            command: document.getElementById('command-name').value,
-            language: document.getElementById('language').value,
-            welcome_message: document.getElementById('welcome-message').value,
-            modules: Array.from(document.querySelectorAll('.switch')).reduce((acc, el) => {
-                acc[el.dataset.module || 'general'] = el.classList.contains('on');
-                return acc;
-            }, {})
-        };
-
-        try {
-            const res = await fetch('/api/moderation', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(payload)
-            });
-            const data = await res.json();
-            if (data.success) {
-                alert('Ayarlar kaydedildi.');
-            } else {
-                alert('Hata oluştu.');
-            }
-        } catch (e) {
-            console.error(e);
-            alert('Sunucuya bağlanırken hata oluştu.');
-        }
-    });
-</script>
+            <div class="leaf l1"></div>
+            <div class="leaf l2"></div>
+            <div class="leaf l3"></div>
+            <div class="leaf l4"></div>
+            <div class="leaf l5"></div>
+        </main>
+    </div>
 </body>
 </html>
     """
@@ -472,6 +437,8 @@ def index():
         latency=latency,
         status=status,
         dashboard=_dashboard_state["dashboard"],
+        server_invite=SERVER_INVITE,
+        bot_invite=BOT_INVITE,
     )
 
 
