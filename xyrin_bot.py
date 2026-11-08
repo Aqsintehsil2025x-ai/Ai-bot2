@@ -4505,6 +4505,10 @@ _PANEL_FUN = {
     "satinal", "siralama", "calis", "suc", "soy", "cekilis", "kahve", "anket",
 }
 PANEL_PUBLIC_URL = env_str("PANEL_PUBLIC_URL", "https://ai-bot2-rymy.onrender.com")
+# Panel API'sini AYRI bir sitenin (ör. Replit'teki ön yüz) tarayıcıdan JS ile çağırabilmesi için izinli kaynaklar.
+# Boşsa (varsayılan) cross-origin istekler reddedilir; yalnızca Render'ın kendi /panel sayfası çalışır.
+# Örnek: PANEL_ALLOWED_ORIGINS=https://discord-bot-site--aqsintehsil2025.replit.app
+PANEL_ALLOWED_ORIGINS = {o.strip().rstrip("/") for o in env_str("PANEL_ALLOWED_ORIGINS", "").split(",") if o.strip()}
 PANEL_PAGE = """<!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -4698,7 +4702,9 @@ async def start_health_server():
             "guild": {"id": str(guild_id), "name": guild.name if guild else str(guild_id)},
             "settings": panel_settings(guild_id),
         })
-        resp.set_cookie("xyrin_panel", token, max_age=12 * 3600, httponly=True, samesite="Lax", secure=True, path="/")
+        # SameSite=None: PANEL_ALLOWED_ORIGINS ile ayrı bir siteden (ör. Replit) bu çerez kullanılabilsin diye.
+        # Buradaki asıl koruma SameSite değil, aşağıdaki CORS middleware'inin yalnızca izinli kaynağa izin vermesi.
+        resp.set_cookie("xyrin_panel", token, max_age=12 * 3600, httponly=True, samesite="None", secure=True, path="/")
         return resp
 
     async def panel_get(request):
@@ -4724,11 +4730,35 @@ async def start_health_server():
         await bot.settings.store.flush()
         return web.json_response({"ok": True, "settings": panel_settings(item["guild_id"])})
 
-    app = web.Application()
+    def cors_headers_for(request) -> dict:
+        """İsteğin Origin'i izinli listedeyse (PANEL_ALLOWED_ORIGINS) o kaynağa özel CORS başlıkları döndürür.
+        Joker (*) kullanılmaz: tarayıcılar credentials'lı isteklerde zaten bunu reddeder, ayrıca asıl CSRF koruması
+        bu — yalnızca izinli Origin'e izin verildiği için, farklı bir site bu çerezle istek gönderemez."""
+        origin = (request.headers.get("Origin") or "").rstrip("/")
+        if not origin or origin not in PANEL_ALLOWED_ORIGINS:
+            return {}
+        return {"Access-Control-Allow-Origin": origin, "Access-Control-Allow-Credentials": "true", "Vary": "Origin"}
+
+    @web.middleware
+    async def panel_cors_middleware(request, handler):
+        if not request.path.startswith("/api/panel/"):
+            return await handler(request)
+        if request.method == "OPTIONS":  # tarayıcının preflight isteği: asıl POST'u göndermeden önce sorar
+            headers = cors_headers_for(request)
+            headers.update({"Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                            "Access-Control-Allow-Headers": "Content-Type", "Access-Control-Max-Age": "600"})
+            return web.Response(status=204, headers=headers)
+        response = await handler(request)
+        response.headers.update(cors_headers_for(request))
+        return response
+
+    app = web.Application(middlewares=[panel_cors_middleware])
     app.router.add_get("/", health)
     app.router.add_get("/health", health)
     app.router.add_get("/panel", panel_page)
+    app.router.add_route("OPTIONS", "/api/panel/redeem", lambda r: web.Response(status=204))
     app.router.add_post("/api/panel/redeem", panel_redeem)
+    app.router.add_route("OPTIONS", "/api/panel/settings", lambda r: web.Response(status=204))
     app.router.add_get("/api/panel/settings", panel_get)
     app.router.add_post("/api/panel/settings", panel_save)
     runner = web.AppRunner(app, access_log=None)
