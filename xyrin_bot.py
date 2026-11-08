@@ -1063,6 +1063,15 @@ def panel_settings(guild_id: int) -> dict:
     return base
 
 
+def panel_prefix(bot, message):
+    """Bot sınıfına command_prefix olarak verilir. Sunucunun panelden kaydettiği özel prefix'i döndürür;
+    DM'de ya da panelde bir şey ayarlanmamışsa COMMAND_PREFIX'e düşer. panel_settings() ile aynı yerde durur
+    çünkü doğrudan ona dayanıyor; bot nesnesi kurulmadan (UltimateImperialBot sınıfından) önce tanımlı olmalı."""
+    if message.guild is None:
+        return COMMAND_PREFIX or "!"
+    return panel_settings(message.guild.id)["prefix"]
+
+
 class ReminderManager:
     """Hatırlatmalar ve Hükümdar etkinlikleri. Yeniden başlatmada kaybolmaz."""
 
