@@ -4604,6 +4604,13 @@ async def sync_komutu(ctx):
     await ctx.send(f"✅ {len(synced)} slash komutu eşitlendi.")
 
 
+_PANEL_AI = {"sor", "ara", "ozetle", "sifirla"}
+_PANEL_FUN = {
+    "zar", "yazitura", "bahis", "bakiye", "seviye", "gunluk", "transfer", "market",
+    "satinal", "siralama", "calis", "suc", "soy", "cekilis", "kahve", "anket",
+}
+
+
 @bot.check
 async def panel_module_gate(ctx):
     if ctx.guild is None or ctx.command is None:
