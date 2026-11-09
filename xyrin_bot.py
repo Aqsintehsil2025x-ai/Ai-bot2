@@ -172,7 +172,7 @@ BOT_OWNER_ID = env_int("BOT_OWNER_ID", 0)  # Kritik hata olursa bu kullanıcıya
 # Kullanıcı adları sonradan değiştirilebilir/başkası tarafından alınabilir; bu yüzden ID tanımlıysa
 # kullanıcı adları artık HİÇ dikkate alınmaz. ID tanımlı değilse eski yönteme (kullanıcı adı) geri düşülür.
 SOVEREIGN_IDS = env_ids("SOVEREIGN_IDS")
-SOVEREIGN_USERNAMES = {"endercosmic1", "melikhan111"}
+SOVEREIGN_USERNAMES = {"endercosmic1", "melikhan111","syrvv_."}
 
 # --- ÇALIŞMA ORTAMI (Render / Railway / yerel) ---
 def detect_platform() -> str:
