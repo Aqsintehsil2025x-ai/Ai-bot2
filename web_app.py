@@ -34,6 +34,28 @@ BOT_INVITE = "https://discord.com/oauth2/authorize?client_id=1555918878268456970
 def set_bot(bot):
     global _bot
     _bot = bot
+    try:
+        from panel_wire import wire_panel
+        wire_panel(app, bot)
+    except Exception as exc:
+        print(f"[web_app] panel_wire failed: {exc}", flush=True)
+
+
+@app.route("/health")
+def health():
+    ready = bool(_bot and getattr(_bot, "is_ready", lambda: False)())
+    latency = 0
+    try:
+        if ready:
+            latency = round(_bot.latency * 1000)
+    except Exception:
+        pass
+    return jsonify({
+        "status": "ok",
+        "ready": ready,
+        "guilds": len(_bot.guilds) if _bot else 0,
+        "latency_ms": latency,
+    })
 
 
 @app.route("/")
@@ -385,7 +407,7 @@ def index():
             <nav class="nav-links">
                 <a href="{{ server_invite }}" target="_blank">Sunucu</a>
                 <a href="{{ bot_invite }}" target="_blank">Bot</a>
-                <a href="#panel">Panel</a>
+                <a href="/panel">Panel</a>
             </nav>
         </header>
 
