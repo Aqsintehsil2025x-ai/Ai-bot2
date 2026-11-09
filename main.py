@@ -7,14 +7,8 @@ import threading
 # Render's single public port, so disable that second listener before importing it.
 os.environ["HEALTH_SERVER"] = "false"
 
-# Make !panel give users this service's URL on Render, when the platform exposes it.
-_render_host = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "").strip()
-if _render_host:
-    os.environ.setdefault("PANEL_PUBLIC_URL", f"https://{_render_host}")
-
 from web_app import app, set_bot
-from xyrin_bot import DISCORD_TOKEN, bot, is_sovereign_member, main as run_bot, panel_settings
-from panel_routes import register_panel_routes
+from xyrin_bot import DISCORD_TOKEN, bot, main as run_bot
 
 
 def start_web_server():
@@ -27,7 +21,6 @@ async def main():
         raise RuntimeError("DISCORD_TOKEN çevre değişkeni tanımlı değil.")
 
     set_bot(bot)
-    register_panel_routes(bot, panel_settings, is_sovereign_member)
     web_thread = threading.Thread(target=start_web_server, daemon=True, name="xyrin-web")
     web_thread.start()
     return await run_bot()
