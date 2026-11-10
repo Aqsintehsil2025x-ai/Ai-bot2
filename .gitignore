@@ -7,3 +7,6 @@ __pycache__/
 *.pyc
 economy_data.json
 economy_data.json.bak
+
+# React dashboard dependencies
+dashboard/node_modules/

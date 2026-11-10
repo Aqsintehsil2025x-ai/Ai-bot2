@@ -1,0 +1,44 @@
+name: Build single-server React dashboard
+
+on:
+  push:
+    branches:
+      - main
+      - integration/single-server-deploy
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dashboard-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-dashboard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check Python entrypoint syntax
+        run: python -m py_compile main.py web_app.py panel_wire.py
+      - name: Install dashboard dependencies
+        working-directory: dashboard
+        run: npm install --no-audit --no-fund
+      - name: Build React frontend
+        working-directory: dashboard
+        run: npm run build
+      - name: Commit built frontend for Replit import
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add dashboard/package-lock.json dashboard/dist
+          if ! git diff --cached --quiet; then
+            git commit -m "Build dashboard frontend for single-server deployment"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
