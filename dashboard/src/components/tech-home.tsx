@@ -12,8 +12,10 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { Link } from 'wouter';
+import flowerBanner from './flower-banner.svg';
 import './tech-home.css';
 
+const BANNER_IMAGE = flowerBanner;
 const BOT_ID = '1555918878268456970';
 const SERVER_INVITE = 'https://discord.gg/5ST4gdjjc';
 const BOT_INVITE =
@@ -30,7 +32,7 @@ export function TechHeader({ activePanel = false }: { activePanel?: boolean }) {
         aria-label="Xyrin Flower ana sayfa"
         data-testid="link-home-brand"
       >
-        <img src="https://raw.githubusercontent.com/Aqsintehsil2025x-ai/Discord-Bot-Site/main/artifacts/xyrin-flower-site/public/images/xyrin-flower-banner.webp" alt="Xyrin Flower AI" />
+        <img src={BANNER_IMAGE} alt="Xyrin Flower AI" />
         <span className="tech-brand-name">
           XYRIN <b>FLOWER</b>
         </span>
@@ -130,7 +132,7 @@ export function TechHome() {
             <div className="hero-image-frame">
               <div className="image-corner corner-tl" />
               <div className="image-corner corner-br" />
-              <img src="https://raw.githubusercontent.com/Aqsintehsil2025x-ai/Discord-Bot-Site/main/artifacts/xyrin-flower-site/public/images/xyrin-flower-banner.webp" alt="Xyrin Flower AI" />
+              <img src={BANNER_IMAGE} alt="Xyrin Flower AI" />
               <div className="image-scanline" />
             </div>
             <div className="art-orbit-label"><span className="orbit-cross">+</span> TEKNOLOJİ, NAZİK BİR DOKUNUŞLA</div>
@@ -190,7 +192,7 @@ export function TechHome() {
         <div className="approach-graphic" aria-hidden="true">
           <div className="graphic-orbit graphic-orbit-1" />
           <div className="graphic-orbit graphic-orbit-2" />
-          <div className="graphic-center"><img src="https://raw.githubusercontent.com/Aqsintehsil2025x-ai/Discord-Bot-Site/main/artifacts/xyrin-flower-site/public/images/xyrin-flower-banner.webp" alt="" /></div>
+          <div className="graphic-center"><img src={BANNER_IMAGE} alt="" /></div>
           <span className="graphic-tag tag-a">01 / DİNLE</span>
           <span className="graphic-tag tag-b">02 / KORU</span>
           <span className="graphic-tag tag-c">03 / EŞLİK ET</span>
@@ -256,7 +258,7 @@ export function TechHome() {
 
       <footer className="tech-footer">
         <a className="footer-logo" href="#baslangic">
-          <img src="https://raw.githubusercontent.com/Aqsintehsil2025x-ai/Discord-Bot-Site/main/artifacts/xyrin-flower-site/public/images/xyrin-flower-banner.webp" alt="Xyrin Flower AI" />
+          <img src={BANNER_IMAGE} alt="Xyrin Flower AI" />
           <span>XYRIN <b>FLOWER</b></span>
         </a>
         <p>Toplulukların yanında, usulca.</p>

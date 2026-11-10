@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - integration/single-server-deploy
+      - fix/local-dashboard-brand-asset
 
 permissions:
   contents: write

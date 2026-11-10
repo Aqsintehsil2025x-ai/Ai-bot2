@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" role="img" aria-labelledby="title desc">
+  <title id="title">Xyrin Flower AI</title>
+  <desc id="desc">A luminous pink flower floating over a midnight blue botanical background.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#11182c"/>
+      <stop offset=".55" stop-color="#202944"/>
+      <stop offset="1" stop-color="#10182b"/>
+    </linearGradient>
+    <radialGradient id="glow">
+      <stop offset="0" stop-color="#e6a4bb" stop-opacity=".5"/>
+      <stop offset="1" stop-color="#aab5ff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="petal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f5c7d0"/>
+      <stop offset=".55" stop-color="#d985a0"/>
+      <stop offset="1" stop-color="#9d6e99"/>
+    </linearGradient>
+    <linearGradient id="leaf" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#aab5ff"/>
+      <stop offset="1" stop-color="#567b75"/>
+    </linearGradient>
+    <filter id="soft"><feGaussianBlur stdDeviation="34"/></filter>
+  </defs>
+  <rect width="1200" height="760" fill="url(#bg)"/>
+  <circle cx="590" cy="340" r="330" fill="url(#glow)" filter="url(#soft)"/>
+  <g fill="none" stroke="#aab5ff" stroke-opacity=".22">
+    <circle cx="600" cy="340" r="250"/>
+    <circle cx="600" cy="340" r="290" stroke-dasharray="3 14"/>
+    <circle cx="600" cy="340" r="350" stroke-dasharray="1 18"/>
+  </g>
+  <g transform="translate(600 320)">
+    <g fill="url(#petal)" stroke="#f6d5dc" stroke-opacity=".55" stroke-width="3">
+      <ellipse cy="-112" rx="64" ry="145"/>
+      <ellipse cy="-112" rx="64" ry="145" transform="rotate(45)"/>
+      <ellipse cy="-112" rx="64" ry="145" transform="rotate(90)"/>
+      <ellipse cy="-112" rx="64" ry="145" transform="rotate(135)"/>
+      <ellipse cy="-112" rx="64" ry="145" transform="rotate(180)"/>
+      <ellipse cy="-112" rx="64" ry="145" transform="rotate(225)"/>
+      <ellipse cy="-112" rx="64" ry="145" transform="rotate(270)"/>
+      <ellipse cy="-112" rx="64" ry="145" transform="rotate(315)"/>
+    </g>
+    <circle r="58" fill="#e9bd91"/>
+    <circle r="39" fill="#f8e4b8"/>
+    <g fill="#b97963">
+      <circle cx="-17" cy="-8" r="5"/><circle cx="13" cy="-17" r="5"/>
+      <circle cx="19" cy="14" r="5"/><circle cx="-12" cy="21" r="5"/>
+      <circle cx="0" cy="0" r="5"/>
+    </g>
+  </g>
+  <path d="M600 455 C590 555 530 610 470 654" fill="none" stroke="#8cae94" stroke-width="10" stroke-linecap="round"/>
+  <path d="M550 560 C450 515 390 540 350 610 C430 635 500 620 550 560Z" fill="url(#leaf)" opacity=".85"/>
+  <path d="M606 525 C690 475 770 495 810 565 C735 595 665 580 606 525Z" fill="url(#leaf)" opacity=".8"/>
+  <g fill="#f0d7df" font-family="Georgia,serif" text-anchor="middle">
+    <text x="600" y="690" font-size="36" letter-spacing="13">XYRIN FLOWER</text>
+    <text x="600" y="727" font-size="15" letter-spacing="7" opacity=".7">AI COMMUNITY SYSTEM</text>
+  </g>
+  <g fill="#f4c5d2">
+    <circle cx="250" cy="190" r="4"/><circle cx="935" cy="170" r="4"/>
+    <circle cx="910" cy="520" r="3"/><circle cx="300" cy="520" r="3"/>
+  </g>
+</svg>
