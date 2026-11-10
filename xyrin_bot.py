@@ -2960,7 +2960,7 @@ async def respond_with_ai(first_send, rest_send, channel, guild, author, text: s
             "Örneğin bazen geldiğine sevindiğini söyle veya sohbetini özlediğini "
             "şakacı biçimde belirt. Gerçek bir romantik ilişki varmış gibi iddia "
             "etme, 'sevgilim' gibi ilişki etiketleri kullanma, ısrarcı ya da "
-            "sahiplenici olma. Bu tonu yalnızca bu kullanıcıya yanıt verirken uygula.]\\n"
+            "sahiplenici olma. Bu tonu yalnızca bu kullanıcıya yanıt verirken uygula.]\n"
             + text
         )
     if guild is not None:
