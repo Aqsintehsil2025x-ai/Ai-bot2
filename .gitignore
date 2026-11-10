@@ -1,3 +1,9 @@
 git add .
 git commit -m "Güvenli yapılandırma ve env eklendi"
 git push -u origin main
+
+venv/
+__pycache__/
+*.pyc
+economy_data.json
+economy_data.json.bak
