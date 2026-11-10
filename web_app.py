@@ -25,6 +25,11 @@ def dashboard_assets(filename):
     return send_from_directory(os.path.join(DASHBOARD_DIST, "assets"), filename)
 
 
+@app.get("/images/<path:filename>")
+def dashboard_images(filename):
+    return send_from_directory(os.path.join(DASHBOARD_DIST, "images"), filename)
+
+
 @app.get("/favicon.svg")
 def dashboard_favicon():
     return send_from_directory(DASHBOARD_DIST, "favicon.svg")
