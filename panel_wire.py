@@ -74,7 +74,11 @@ def wire_panel(app, bot):
 
     import discord
     from discord.ext import commands
-    from xyrin_bot import panel_settings, is_sovereign_member, perm_or_sovereign
+    from xyrin_bot import panel_settings
+
+    def has_panel_role(member):
+        """Panel erişimi yalnızca adı Panel olan Discord rolüyle verilir."""
+        return any(role.name.casefold() == "panel" for role in getattr(member, "roles", ()))
 
     def session_for_request():
         token = request.cookies.get("xyrin_panel", "")
@@ -87,8 +91,7 @@ def wire_panel(app, bot):
         if not guild or not member:
             bot.panel_sessions.pop(token, None)
             return None
-        perms = member.guild_permissions
-        if not (is_sovereign_member(member) or perms.administrator or perms.manage_guild):
+        if not has_panel_role(member):
             bot.panel_sessions.pop(token, None)
             return None
         return session, guild
@@ -135,10 +138,9 @@ def wire_panel(app, bot):
         if not guild or not member:
             bot.panel_codes.pop(code, None)
             return jsonify({"error": "Guild/user not found."}), 403
-        perms = member.guild_permissions
-        if not (is_sovereign_member(member) or perms.administrator or perms.manage_guild):
+        if not has_panel_role(member):
             bot.panel_codes.pop(code, None)
-            return jsonify({"error": "Yetkin yok."}), 403
+            return jsonify({"error": "Panel erişimi için Discord sunucusunda @Panel rolüne sahip olmalısın."}), 403
         bot.panel_codes.pop(code, None)
         token = secrets.token_urlsafe(32)
         bot.panel_sessions[token] = {
@@ -200,7 +202,7 @@ def wire_panel(app, bot):
 
     @bot.hybrid_command(name="panel", description="Bu sunucunun ayar panelini baglayan kodu gonderir.")
     @commands.guild_only()
-    @perm_or_sovereign(manage_guild=True)
+    @commands.has_role("Panel")
     async def panel_komutu(ctx):
         code = secrets.token_hex(3).upper()
         bot.panel_codes[code] = (ctx.author.id, ctx.guild.id, time.monotonic() + 600)
