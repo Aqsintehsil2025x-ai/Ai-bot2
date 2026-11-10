@@ -210,11 +210,12 @@ def wire_panel(app, bot):
         base = os.getenv("PANEL_PUBLIC_URL", "").strip().rstrip("/")
         if not base.startswith(("https://", "http://")):
             kwargs = {"ephemeral": True} if ctx.interaction else {}
+            bot.panel_codes.pop(code, None)
             await ctx.reply("Panel adresi yapılandırılmamış. PANEL_PUBLIC_URL ortam değişkenini ayarla.", **kwargs)
             return
         text = (
-            f"**Panel kodun:** `{code}`\\n"
-            f"**Adres:** {base}/panel\\n"
+            f"**Panel kodun:** `{code}`\n"
+            f"**Adres:** {base}/panel\n"
             f"Kod 10 dakika gecerli. Sunucu: **{ctx.guild.name}**"
         )
         note = "Kodu ozel mesajina gonderdim."
