@@ -2,10 +2,34 @@
 # XYRIN BOT — WEB SUNUCUSU (Flask)
 # Botun sitesi: https://sunucu-adi.onrender.com
 # ==============================================================================
-from flask import Flask, render_template_string, jsonify, request
+from flask import Flask, render_template_string, jsonify, request, send_from_directory
 import os
 
 app = Flask(__name__)
+DASHBOARD_DIST = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dashboard", "dist")
+
+
+def _serve_dashboard_index():
+    if not os.path.isfile(os.path.join(DASHBOARD_DIST, "index.html")):
+        return "Dashboard build bulunamadı. dashboard/ klasöründe npm install ve npm run build çalıştır.", 503
+    return send_from_directory(DASHBOARD_DIST, "index.html")
+
+
+@app.get("/panel")
+def dashboard_panel():
+    return _serve_dashboard_index()
+
+
+@app.get("/assets/<path:filename>")
+def dashboard_assets(filename):
+    return send_from_directory(os.path.join(DASHBOARD_DIST, "assets"), filename)
+
+
+@app.get("/favicon.svg")
+def dashboard_favicon():
+    return send_from_directory(DASHBOARD_DIST, "favicon.svg")
+
+
 
 # --- Bot referansı (main.py'den atanacak) ---
 _bot = None
@@ -69,6 +93,10 @@ def index():
     _dashboard_state["members"] = member_count
     _dashboard_state["latency"] = latency
     _dashboard_state["status"] = status
+
+    # Serve the React website from this same Flask process.
+    if os.path.isfile(os.path.join(DASHBOARD_DIST, "index.html")):
+        return send_from_directory(DASHBOARD_DIST, "index.html")
 
     html = """
 <!DOCTYPE html>
