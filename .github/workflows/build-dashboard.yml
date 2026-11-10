@@ -9,6 +9,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: dashboard-build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-dashboard:
     runs-on: ubuntu-latest
@@ -21,6 +25,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+      - name: Check Python entrypoint syntax
+        run: python -m py_compile main.py web_app.py panel_wire.py
       - name: Install dashboard dependencies
         working-directory: dashboard
         run: npm install --no-audit --no-fund
