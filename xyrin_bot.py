@@ -2953,6 +2953,16 @@ async def execute_actions(guild: discord.Guild, author, actions: list) -> str:
 async def respond_with_ai(first_send, rest_send, channel, guild, author, text: str,
                           image: Optional[tuple] = None, note: str = "", search: bool = False):
     """Hem @etiket sohbetinde hem de /sor komutunda kullanılan ortak akış."""
+    if author.id == 1270342472895168596:
+        text = (
+            "[Özel sohbet tonu: Bu kullanıcıyla Türkçe konuş. Hafif-orta düzeyde "
+            "flörtöz, tatlı ve esprili ol; kısa iltifatlar ve zarif takılmalar yap. "
+            "Örneğin bazen geldiğine sevindiğini söyle veya sohbetini özlediğini "
+            "şakacı biçimde belirt. Gerçek bir romantik ilişki varmış gibi iddia "
+            "etme, 'sevgilim' gibi ilişki etiketleri kullanma, ısrarcı ya da "
+            "sahiplenici olma. Bu tonu yalnızca bu kullanıcıya yanıt verirken uygula.]\n"
+            + text
+        )
     if guild is not None:
         language = panel_settings(guild.id)["language"]
         if language.lower() not in {"türkçe", "turkce", "tr", "turkish"}:
