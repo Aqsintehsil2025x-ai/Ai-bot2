@@ -113,8 +113,8 @@ def wire_panel(app, bot):
             expected = expected.replace(request.scheme + "://", forwarded_proto + "://", 1)
         return origin.rstrip("/") == expected
 
-    @app.get("/panel")
-    def panel_page():
+    @app.get("/legacy-panel")
+    def legacy_panel_page():
         return render_template_string(PANEL_HTML)
 
     @app.post("/api/panel/redeem")
@@ -207,11 +207,16 @@ def wire_panel(app, bot):
         now = time.monotonic()
         for k in [k for k, v in list(bot.panel_codes.items()) if v[2] < now]:
             bot.panel_codes.pop(k, None)
-        base = (
-            os.getenv("PANEL_PUBLIC_URL")
-            or os.getenv("RENDER_EXTERNAL_URL")
-            or "https://ai-bot2-rymy.onrender.com"
-        ).strip().rstrip("/")
+        base = os.getenv("PANEL_PUBLIC_URL", "").strip().rstrip("/")
+        if not base:
+            domain = (os.getenv("REPLIT_DOMAINS") or os.getenv("REPLIT_DEV_DOMAIN") or "").split(",")[0].strip()
+            if domain:
+                base = domain if domain.startswith(("https://", "http://")) else f"https://{domain}"
+        if not base.startswith(("https://", "http://")):
+            bot.panel_codes.pop(code, None)
+            kwargs = {"ephemeral": True} if ctx.interaction else {}
+            await ctx.reply("Panel adresi yapılandırılmamış. PANEL_PUBLIC_URL ortam değişkenini ayarla.", **kwargs)
+            return
         text = (
             f"**Panel kodun:** `{code}`\n"
             f"**Adres:** {base}/panel\n"
