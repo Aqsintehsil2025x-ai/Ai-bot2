@@ -207,14 +207,14 @@ def wire_panel(app, bot):
         now = time.monotonic()
         for k in [k for k, v in list(bot.panel_codes.items()) if v[2] < now]:
             bot.panel_codes.pop(k, None)
-        base = (
-            os.getenv("PANEL_PUBLIC_URL")
-            or os.getenv("RENDER_EXTERNAL_URL")
-            or "https://ai-bot2-rymy.onrender.com"
-        ).strip().rstrip("/")
+        base = os.getenv("PANEL_PUBLIC_URL", "").strip().rstrip("/")
+        if not base.startswith(("https://", "http://")):
+            kwargs = {"ephemeral": True} if ctx.interaction else {}
+            await ctx.reply("Panel adresi yapılandırılmamış. PANEL_PUBLIC_URL ortam değişkenini ayarla.", **kwargs)
+            return
         text = (
-            f"**Panel kodun:** `{code}`\n"
-            f"**Adres:** {base}/panel\n"
+            f"**Panel kodun:** `{code}`\\n"
+            f"**Adres:** {base}/panel\\n"
             f"Kod 10 dakika gecerli. Sunucu: **{ctx.guild.name}**"
         )
         note = "Kodu ozel mesajina gonderdim."
