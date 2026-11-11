@@ -8,7 +8,7 @@ XFA is a separate, resource-conscious agent module inside Ai-bot2. It runs in th
 - The agent can choose between reading public web pages and inspecting project files.
 - Public web browsing is limited to four distinct pages per run and uses an optional remote Playwright/CDP browser. No local Chromium binary is installed.
 - Project inspection is confined to the configured workspace root, skips hidden/dependency/internal paths, and limits individual reads to 64 KiB.
-- The dashboard can propose creation of a new project file. Creation requires a separate explicit approval, expires after ten minutes, refuses to overwrite existing files, and is limited to selected text/code formats and 32 KiB.
+- The dashboard can propose creating a new project file or updating an existing text/code file. Both require separate explicit approval, expire after ten minutes, and are limited to selected formats and 32 KiB. Updates are rejected if the original file changed after the proposal; new-file creation never overwrites.
 - A small in-memory audit log records workspace listing, reads, proposals, and approved file creation.
 
 ## Deliberate safety limits
@@ -39,7 +39,8 @@ All API endpoints require `Authorization: Bearer <XFA_ACCESS_TOKEN>`.
 - `GET /xfa/api/workspace/list?path=.`
 - `POST /xfa/api/workspace/read` with `{"path":"README.md"}`
 - `POST /xfa/api/workspace/propose-create` with `{"path":"notes/new.md","content":"..."}`
-- `POST /xfa/api/workspace/approve-create` with `{"approval_id":"..." }`
+- `POST /xfa/api/workspace/propose-update` with `{"path":"README.md","content":"new full content"}`
+- `POST /xfa/api/workspace/approve-create` with `{"approval_id":"..." }` (also approves pending updates)
 - `GET /xfa/api/audit`
 
 ## Resource notes
