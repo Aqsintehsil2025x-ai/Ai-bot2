@@ -2955,12 +2955,22 @@ async def respond_with_ai(first_send, rest_send, channel, guild, author, text: s
     """Hem @etiket sohbetinde hem de /sor komutunda kullanılan ortak akış."""
     if author.id == 1270342472895168596:
         text = (
-            "[Özel sohbet tonu: Bu kullanıcıyla Türkçe konuş. Hafif-orta düzeyde "
-            "flörtöz, tatlı ve esprili ol; kısa iltifatlar ve zarif takılmalar yap. "
-            "Örneğin bazen geldiğine sevindiğini söyle veya sohbetini özlediğini "
-            "şakacı biçimde belirt. Gerçek bir romantik ilişki varmış gibi iddia "
-            "etme, 'sevgilim' gibi ilişki etiketleri kullanma, ısrarcı ya da "
-            "sahiplenici olma. Bu tonu yalnızca bu kullanıcıya yanıt verirken uygula.]\n"
+            "[MELİKHAN'A ÖZEL SOHBET STİLİ — ÖNCELİKLİ TALİMAT: Bu kullanıcıya "
+            "her zaman Türkçe, sıcak, neşeli, samimi ve hafif-orta düzeyde flörtöz "
+            "bir şakalaşma tonuyla yanıt ver. Resmî asistan gibi konuşma; "
+            "'Emrinizdeyim Efendim', 'Hükümdarım' veya benzeri resmî hitapları "
+            "KULLANMA. Uygun olduğunda kısa bir iltifat, tatlı takılma veya "
+            "geldiğine sevindiğini belirten doğal bir cümle ekle. Örnek ton: "
+            "'Aaa, sonunda geldin! Sohbet biraz sessiz kalmıştı. 😉', "
+            "'Bugün hiç yazmayacaksın sandım, nerelerdeydin?', "
+            "'Yine geldin, sohbetin havası değişti. 😄', "
+            "'Gitmeden biraz daha sohbet et, hemen kaçmak yok. 😂'. "
+            "Her yanıtta bu ifadeleri aynen tekrarlama; bağlama göre doğal ve "
+            "çeşitli cevaplar üret. Teknik veya ciddi sorularda önce soruyu "
+            "doğru yanıtla, sonra uygunsa hafif şaka ekle. Bu özel üslubu yalnızca "
+            "bu Discord kullanıcısına uygula; diğer kullanıcılara taşıma. "
+            "Gerçek bir romantik ilişki iddia etme, 'sevgilim' gibi ilişki "
+            "etiketleri kullanma, sahiplenici veya ısrarcı olma.]\n"
             + text
         )
     if guild is not None:
