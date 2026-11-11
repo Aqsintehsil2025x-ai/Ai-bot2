@@ -185,9 +185,6 @@ def run_task():
     api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     if not api_key:
         return jsonify({"error": "GEMINI_API_KEY is not configured"}), 503
-    if not os.getenv("XFA_BROWSER_CDP_URL"):
-        return jsonify({"error": "Remote browser is not configured; autonomous web research needs XFA_BROWSER_CDP_URL"}), 503
-
     try:
         from google import genai
         from google.genai import types
@@ -254,6 +251,10 @@ def run_task():
                 continue
             if len(visited) >= 4:
                 break
+            if not os.getenv("XFA_BROWSER_CDP_URL"):
+                observations.append({"error": "Remote browser is not configured; continue with workspace tools or finish.", "url": url})
+                trace.append({"step": step + 1, "action": "browser_unavailable", "url": url})
+                continue
             visited.add(url)
             trace.append({"step": step + 1, "action": "browse", "url": url})
             observations.append(_inspect_public_page(url))
