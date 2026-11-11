@@ -2,6 +2,12 @@
 
 XFA is being introduced as a separate, resource-conscious agent module inside Ai-bot2. It does not replace the Discord bot, Flask server, or dashboard.
 
+## Current capability
+
+- `POST /xfa/api/tasks/run` runs a bounded agent loop: Gemini chooses between reading a public page and finishing the answer. It can inspect up to four distinct pages in one task, with a maximum of five reasoning steps.
+- The dashboard includes an autonomous research button. The agent returns its answer, pages-read count, and step trace.
+- This is autonomous read-only research, not unrestricted computer control. It cannot log in, submit forms, send messages, edit files, run shell commands, spend money, or deploy.
+
 ## Phase 1
 
 - Authenticated API under `/xfa/api` using the `XFA_ACCESS_TOKEN` environment secret.
@@ -23,6 +29,7 @@ All endpoints require `Authorization: Bearer <XFA_ACCESS_TOKEN>`.
 
 - `GET /xfa` — XFA dashboard (enter the access token in the page; it is kept in memory only).
 - `GET /xfa/api/health`
+- `POST /xfa/api/tasks/run` with JSON `{"task":"..."}` — bounded autonomous read-only research (requires remote browser).
 - `POST /xfa/api/tasks/plan` with JSON `{"task":"..."}`
 - `POST /xfa/api/browser/open` with JSON `{"url":"https://example.com"}`
 
