@@ -105,7 +105,7 @@ def plan_task():
         )
         return jsonify({"ok": True, "task": task, "plan": response.text or "No plan returned.", "status": "planned"})
     except Exception as exc:
-        return jsonify({"error": "Planner request failed", "detail": str(exc)[:300]}), 502
+        return jsonify({"error": "Planner request failed. Check the server logs for details."}), 502
 
 
 @xfa.post("/browser/open")
@@ -121,6 +121,7 @@ def browser_open():
         return jsonify({"error": "Remote browser is not configured. Set XFA_BROWSER_CDP_URL to a trusted remote Playwright/CDP endpoint."}), 503
     browser = None
     context = None
+    page = None
     try:
         from playwright.sync_api import sync_playwright
         with sync_playwright() as playwright:
@@ -132,14 +133,18 @@ def browser_open():
             page.goto(url, wait_until="domcontentloaded", timeout=20000)
             _validate_public_url(page.url)
             result = {"ok": True, "url": page.url, "title": page.title(), "text": page.locator("body").inner_text(timeout=5000)[:5000]}
-            page.close()
-            context.close()
-            browser.close()
             return jsonify(result)
     except ImportError:
         return jsonify({"error": "Playwright package is missing; install the optional browser dependency."}), 503
     except Exception:
         return jsonify({"error": "Browser operation failed. Check the remote browser connection and server logs."}), 502
+    finally:
+        for resource in (page, context, browser):
+            if resource is not None:
+                try:
+                    resource.close()
+                except Exception:
+                    pass
 
 
 
@@ -237,7 +242,7 @@ def run_task():
         return jsonify({"ok": True, "status": "completed", "answer": answer, "steps": trace, "pages_read": len(visited)})
     except ImportError:
         return jsonify({"error": "Playwright package is missing; install requirements-xfa-optional.txt"}), 503
-    except Exception as exc:
+    except Exception:
         return jsonify({"error": "Agent run failed. Check the server logs for details."}), 502
 
 def register_xfa(app):
