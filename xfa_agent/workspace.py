@@ -6,6 +6,7 @@ new-file-only and require a short-lived, explicit approval from the dashboard.
 from __future__ import annotations
 
 import os
+import hashlib
 import secrets
 import threading
 import time
@@ -92,19 +93,63 @@ def propose_new_file(relative: str, content: str) -> str:
     return approval_id
 
 
+def propose_update_file(relative: str, content: str) -> str:
+    path = _safe_path(relative)
+    text = str(content)
+    if path.suffix.lower() not in WRITE_SUFFIXES:
+        raise ValueError("This file type is not enabled for approved updates")
+    if not path.is_file() or path.is_symlink():
+        raise ValueError("Only existing regular files can be updated")
+    current = path.read_bytes()
+    if len(current) > READ_LIMIT:
+        raise ValueError("Existing file is larger than the 64 KiB update limit")
+    if len(text.encode("utf-8")) > WRITE_LIMIT:
+        raise ValueError("Updated content exceeds 32 KiB")
+    approval_id = secrets.token_urlsafe(18)
+    with _lock:
+        _pending[approval_id] = {
+            "path": path,
+            "content": text,
+            "expires": time.monotonic() + 600,
+            "operation": "update",
+            "original_sha256": hashlib.sha256(current).hexdigest(),
+        }
+    _record("propose_update", relative, "awaiting_approval")
+    return approval_id
+
+
 def approve_new_file(approval_id: str) -> dict:
     with _lock:
         item = _pending.pop(str(approval_id), None)
     if not item or item["expires"] < time.monotonic():
         raise ValueError("Approval is missing or expired; create the proposal again")
     path: Path = item["path"]
+    if path != ROOT and ROOT not in path.resolve().parents:
+        raise ValueError("Path is outside the XFA workspace")
+    if item.get("operation") == "update":
+        if not path.is_file() or path.is_symlink():
+            raise ValueError("Target is no longer a regular file")
+        current = path.read_bytes()
+        if hashlib.sha256(current).hexdigest() != item["original_sha256"]:
+            raise ValueError("File changed after the proposal; refusing a stale update")
+        temporary = path.with_name(path.name + ".xfa-tmp-" + secrets.token_hex(4))
+        try:
+            with temporary.open("x", encoding="utf-8") as stream:
+                stream.write(item["content"])
+            os.replace(temporary, path)
+        finally:
+            if temporary.exists():
+                temporary.unlink()
+        _record("update_file", path.relative_to(ROOT).as_posix(), "approved")
+        return {"path": path.relative_to(ROOT).as_posix(), "operation": "updated",
+                "bytes": len(item["content"].encode("utf-8"))}
     if path.exists():
         raise ValueError("The target now exists; refusing to overwrite it")
     path.parent.mkdir(parents=True, exist_ok=True)
-    # Re-check after parent creation to ensure the final target remains inside the workspace.
     if path != ROOT and ROOT not in path.resolve().parents:
         raise ValueError("Path is outside the XFA workspace")
     with path.open("x", encoding="utf-8") as stream:
         stream.write(item["content"])
     _record("create_file", path.relative_to(ROOT).as_posix(), "approved")
-    return {"path": path.relative_to(ROOT).as_posix(), "bytes": len(item["content"].encode("utf-8"))}
+    return {"path": path.relative_to(ROOT).as_posix(), "operation": "created",
+            "bytes": len(item["content"].encode("utf-8"))}
