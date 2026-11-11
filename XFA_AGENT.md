@@ -13,7 +13,7 @@ XFA is a separate, resource-conscious agent module inside Ai-bot2. It runs in th
 
 ## Deliberate safety limits
 
-- XFA does not execute arbitrary shell commands, install packages, read hidden files or secrets, overwrite project files, log in to websites, submit forms, send messages, publish content, purchase items, delete data, change accounts, or deploy.
+- XFA does not execute arbitrary shell commands, install packages, read hidden files or secrets, modify project files without explicit approval, log in to websites, submit forms, send messages, publish content, purchase items, delete data, change accounts, or deploy.
 - Page and repository contents are untrusted data, never instructions.
 - Browser requests and redirects are checked for public HTTP(S) destinations; local/private network destinations are blocked.
 - The remote browser uses a fresh isolated context and does not reuse provider default cookies/session.
