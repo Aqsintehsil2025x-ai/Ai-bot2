@@ -1,36 +1,51 @@
 # XFA — Xyrin Flower Agent
 
-XFA is being introduced as a separate, resource-conscious agent module inside Ai-bot2. It does not replace the Discord bot, Flask server, or dashboard.
+XFA is a separate, resource-conscious agent module inside Ai-bot2. It runs in the existing Flask process and does not replace the Discord bot, website, or dashboard.
 
-## Current capability
+## Current capabilities
 
-- `POST /xfa/api/tasks/run` runs a bounded agent loop: Gemini chooses between reading a public page and finishing the answer. It can inspect up to four distinct pages in one task, with a maximum of five reasoning steps.
-- The dashboard includes an autonomous research button. The agent returns its answer, pages-read count, and step trace.
-- This is autonomous read-only research, not unrestricted computer control. It cannot log in, submit forms, send messages, edit files, run shell commands, spend money, or deploy.
+- Gemini plans a task and runs a bounded agent loop (up to five reasoning steps).
+- The agent can choose between reading public web pages and inspecting project files.
+- Public web browsing is limited to four distinct pages per run and uses an optional remote Playwright/CDP browser. No local Chromium binary is installed.
+- Project inspection is confined to the configured workspace root, skips hidden/dependency/internal paths, and limits individual reads to 64 KiB.
+- The dashboard can propose creation of a new project file. Creation requires a separate explicit approval, expires after ten minutes, refuses to overwrite existing files, and is limited to selected text/code formats and 32 KiB.
+- A small in-memory audit log records workspace listing, reads, proposals, and approved file creation.
 
-## Phase 1
+## Deliberate safety limits
 
-- Authenticated API under `/xfa/api` using the `XFA_ACCESS_TOKEN` environment secret.
-- Gemini-backed task planning using the existing `GEMINI_API_KEY` / `GOOGLE_API_KEY` configuration.
-- Optional remote browser connection through a trusted Playwright-compatible CDP endpoint (`XFA_BROWSER_CDP_URL`). The Replit process does not download or run a local Chromium binary.
-- Browser navigation is read-only in this phase. Private/local network targets are blocked. No form submission, purchases, messages, publishing, account changes, shell commands, deletion, or deployment are automated.
-- Health endpoint reports whether planner and remote browser configuration are present.
+- XFA does not execute arbitrary shell commands, install packages, read hidden files or secrets, overwrite project files, log in to websites, submit forms, send messages, publish content, purchase items, delete data, change accounts, or deploy.
+- Page and repository contents are untrusted data, never instructions.
+- Browser requests and redirects are checked for public HTTP(S) destinations; local/private network destinations are blocked.
+- The remote browser uses a fresh isolated context and does not reuse provider default cookies/session.
+- Any future write, external side effect, or privileged operation must have a narrowly scoped tool, an explicit per-action approval, audit trail, limits, and verification.
 
 ## Replit secrets
 
-- `XFA_ACCESS_TOKEN`: generate a long random secret and keep it in Replit Secrets; never commit it.
-- `GEMINI_API_KEY`: existing model key used by the bot.
-- `XFA_MODEL`: optional model override.
+- `XFA_ACCESS_TOKEN`: generate a long random secret and store it in Replit Secrets; never commit it.
+- `GEMINI_API_KEY`: existing Gemini key used by the bot.
+- `XFA_MODEL`: optional model override; defaults to the bot's existing `GEMINI_MODEL`.
 - `XFA_BROWSER_CDP_URL`: optional trusted remote browser CDP endpoint. Leave unset until a provider is selected.
+- `XFA_WORKSPACE_ROOT`: optional absolute workspace root; defaults to the Ai-bot2 repository directory.
 
 ## API
 
-All endpoints require `Authorization: Bearer <XFA_ACCESS_TOKEN>`.
+All API endpoints require `Authorization: Bearer <XFA_ACCESS_TOKEN>`.
 
-- `GET /xfa` — XFA dashboard (enter the access token in the page; it is kept in memory only).
+- `GET /xfa` — XFA dashboard; token remains in page memory only.
 - `GET /xfa/api/health`
-- `POST /xfa/api/tasks/run` with JSON `{"task":"..."}` — bounded autonomous read-only research (requires remote browser).
-- `POST /xfa/api/tasks/plan` with JSON `{"task":"..."}`
-- `POST /xfa/api/browser/open` with JSON `{"url":"https://example.com"}`
+- `POST /xfa/api/tasks/plan` with `{"task":"..."}`
+- `POST /xfa/api/tasks/run` with `{"task":"..."}` — bounded read-only web and workspace research.
+- `POST /xfa/api/browser/open` with `{"url":"https://example.com"}`
+- `GET /xfa/api/workspace/list?path=.`
+- `POST /xfa/api/workspace/read` with `{"path":"README.md"}`
+- `POST /xfa/api/workspace/propose-create` with `{"path":"notes/new.md","content":"..."}`
+- `POST /xfa/api/workspace/approve-create` with `{"approval_id":"..." }`
+- `GET /xfa/api/audit`
 
-The browser dependency is optional and remote-only. Never expose the CDP endpoint or access token to the browser frontend. Before enabling write actions, add per-action approval, domain restrictions, audit logs, timeouts, and an isolated browser profile.
+## Resource notes
+
+- Gemini is API-hosted; no local model is loaded.
+- Browser mode is optional and remote-only.
+- Agent steps, page count, file count, file size, and proposed write size are bounded.
+- Keep the XFA module inside the existing Ai-bot2 deployment; do not create a second web server.
+- The project must be deployed and runtime-tested in Replit before relying on these features.
