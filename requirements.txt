@@ -4,3 +4,4 @@ tzdata
 PyNaCl>=1.5
 davey
 flask
+cryptography>=42.0
