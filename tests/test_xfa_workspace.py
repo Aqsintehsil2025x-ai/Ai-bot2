@@ -29,6 +29,10 @@ class WorkspaceSafetyTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             workspace.read_file("../outside.txt")
 
+    def test_rejects_absolute_paths(self):
+        with self.assertRaises(ValueError):
+            workspace.read_file(str(self.root / "README.md"))
+
     def test_rejects_hidden_and_secret_paths(self):
         for path in (".env", ".git/config", "folder/.hidden", "cookies.txt"):
             with self.subTest(path=path), self.assertRaises(ValueError):
