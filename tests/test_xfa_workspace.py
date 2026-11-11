@@ -79,10 +79,6 @@ class WorkspaceSafetyTests(unittest.TestCase):
             workspace.propose_new_file("run.sh", "echo unsafe")
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class SafeTerminalTests(unittest.TestCase):
     def test_only_exact_allowlisted_commands_are_accepted(self):
         from xfa_agent.safe_terminal import run_command
@@ -92,3 +88,7 @@ class SafeTerminalTests(unittest.TestCase):
             with self.subTest(command=command), self.assertRaises(ValueError):
                 run_command(command)
 
+
+
+if __name__ == "__main__":
+    unittest.main()
