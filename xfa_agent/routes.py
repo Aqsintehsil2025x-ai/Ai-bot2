@@ -1,7 +1,8 @@
 """Authenticated, resource-light XFA API.
 
-Phase 1 provides task planning and an optional remote-browser connection.
-It deliberately does not execute shell commands or submit external forms.
+XFA combines bounded public-web research and confined workspace inspection.
+Project writes are separate approval-gated operations; shell and external
+side-effect tools are intentionally unavailable.
 """
 from __future__ import annotations
 
@@ -213,7 +214,7 @@ def run_task():
                 model=model,
                 contents=prompt,
                 config=types.GenerateContentConfig(
-                    system_instruction="You are XFA, a bounded read-only research agent. Select only the browse or finish action. Never claim a page was visited unless its observation is supplied.",
+                    system_instruction="You are XFA, a bounded read-only research agent. Select only browse, list_files, read_file, or finish. Never claim an action completed unless its observation is supplied.",
                     response_mime_type="application/json",
                     max_output_tokens=500,
                     temperature=0.1,
