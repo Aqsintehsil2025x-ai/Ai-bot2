@@ -50,3 +50,11 @@ All API endpoints require `Authorization: Bearer <XFA_ACCESS_TOKEN>`.
 - Agent steps, page count, file count, file size, and proposed write size are bounded.
 - Keep the XFA module inside the existing Ai-bot2 deployment; do not create a second web server.
 - The project must be deployed and runtime-tested in Replit before relying on these features.
+
+
+## Chat and safe terminal (Phase 2)
+
+- `POST /xfa/api/chat` accepts up to 12 short user/assistant messages and returns a Gemini reply. The browser keeps the short transcript in page memory only; it is cleared on refresh.
+- `GET /xfa/api/terminal/commands` lists the exact allowed diagnostics.
+- `POST /xfa/api/terminal/run` accepts only one exact command from the server-side allowlist: `pwd`, `ls`, `python --version`, `git status --short`, `git log -5 --oneline`, or `git diff --stat`.
+- Terminal execution uses fixed argument arrays with `shell=False`, a five-second timeout, a fixed workspace directory, and output truncation. No free-form shell, arguments, pipes, scripts, installs, deletion, process control, `/stop`, or `/kill` commands are supported.
