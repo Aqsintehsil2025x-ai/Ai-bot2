@@ -24,6 +24,36 @@ def _authorized() -> bool:
     return bool(expected) and hmac.compare_digest(expected, supplied)
 
 
+def _validate_public_url(url: str):
+    """Reject non-public destinations, including redirects and browser subrequests."""
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
+        raise ValueError("Only public http:// and https:// URLs are allowed")
+    try:
+        addresses = {
+            item[4][0] for item in socket.getaddrinfo(
+                parsed.hostname,
+                parsed.port or (443 if parsed.scheme == "https" else 80),
+                type=socket.SOCK_STREAM,
+            )
+        }
+    except (OSError, ValueError) as exc:
+        raise ValueError("Could not resolve a public hostname") from exc
+    if not addresses or any(not ipaddress.ip_address(address).is_global for address in addresses):
+        raise ValueError("Private, local, and non-public network addresses are blocked")
+    return parsed
+
+
+def _guard_public_request(route):
+    """Allow only public HTTP(S) browser requests; block private-network redirects too."""
+    try:
+        _validate_public_url(route.request.url)
+    except (ValueError, OSError):
+        route.abort()
+    else:
+        route.continue_()
+
+
 @xfa.before_request
 def require_agent_token():
     if not _authorized():
@@ -82,46 +112,40 @@ def plan_task():
 def browser_open():
     body = request.get_json(silent=True) or {}
     url = str(body.get("url", "")).strip()
-    parsed = urlparse(url)
-    if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
-        return jsonify({"error": "Only public http:// and https:// URLs are allowed"}), 400
     try:
-        addresses = {item[4][0] for item in socket.getaddrinfo(parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80), type=socket.SOCK_STREAM)}
-        if not addresses or any(not ipaddress.ip_address(address).is_global for address in addresses):
-            return jsonify({"error": "Private, local, and non-public network addresses are blocked"}), 400
-    except (OSError, ValueError):
-        return jsonify({"error": "Could not resolve a public hostname"}), 400
+        _validate_public_url(url)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     endpoint = os.getenv("XFA_BROWSER_CDP_URL", "").strip()
     if not endpoint:
         return jsonify({"error": "Remote browser is not configured. Set XFA_BROWSER_CDP_URL to a trusted remote Playwright/CDP endpoint."}), 503
+    browser = None
+    context = None
     try:
         from playwright.sync_api import sync_playwright
         with sync_playwright() as playwright:
             browser = playwright.chromium.connect_over_cdp(endpoint, timeout=12000)
-            context = browser.contexts[0] if browser.contexts else browser.new_context()
+            # Never reuse a provider's default context or its cookies/session.
+            context = browser.new_context()
             page = context.new_page()
+            page.route("**/*", _guard_public_request)
             page.goto(url, wait_until="domcontentloaded", timeout=20000)
+            _validate_public_url(page.url)
             result = {"ok": True, "url": page.url, "title": page.title(), "text": page.locator("body").inner_text(timeout=5000)[:5000]}
             page.close()
+            context.close()
+            browser.close()
             return jsonify(result)
     except ImportError:
         return jsonify({"error": "Playwright package is missing; install the optional browser dependency."}), 503
-    except Exception as exc:
-        return jsonify({"error": "Browser operation failed", "detail": str(exc)[:300]}), 502
+    except Exception:
+        return jsonify({"error": "Browser operation failed. Check the remote browser connection and server logs."}), 502
 
 
 
 def _inspect_public_page(url: str) -> dict:
-    """Read one public page through the configured remote browser."""
-    parsed = urlparse(url)
-    if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
-        raise ValueError("Only public http:// and https:// URLs are allowed")
-    addresses = {item[4][0] for item in socket.getaddrinfo(
-        parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80),
-        type=socket.SOCK_STREAM,
-    )}
-    if not addresses or any(not ipaddress.ip_address(address).is_global for address in addresses):
-        raise ValueError("Private, local, and non-public network addresses are blocked")
+    """Read one public page through an isolated remote browser context."""
+    _validate_public_url(url)
     endpoint = os.getenv("XFA_BROWSER_CDP_URL", "").strip()
     if not endpoint:
         raise RuntimeError("Remote browser is not configured")
@@ -130,8 +154,10 @@ def _inspect_public_page(url: str) -> dict:
         browser = playwright.chromium.connect_over_cdp(endpoint, timeout=12000)
         context = browser.new_context()
         page = context.new_page()
+        page.route("**/*", _guard_public_request)
         try:
             page.goto(url, wait_until="domcontentloaded", timeout=20000)
+            _validate_public_url(page.url)
             return {
                 "url": page.url,
                 "title": page.title(),
@@ -140,6 +166,8 @@ def _inspect_public_page(url: str) -> dict:
         finally:
             page.close()
             context.close()
+            browser.close()
+
 
 
 @xfa.post("/tasks/run")
@@ -210,7 +238,7 @@ def run_task():
     except ImportError:
         return jsonify({"error": "Playwright package is missing; install requirements-xfa-optional.txt"}), 503
     except Exception as exc:
-        return jsonify({"error": "Agent run failed", "detail": str(exc)[:300]}), 502
+        return jsonify({"error": "Agent run failed. Check the server logs for details."}), 502
 
 def register_xfa(app):
     if "xfa" not in app.blueprints:
