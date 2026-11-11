@@ -56,6 +56,20 @@ class WorkspaceSafetyTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             workspace.approve_new_file(approval_id)
 
+    def test_existing_file_update_requires_approval(self):
+        approval_id = workspace.propose_update_file("README.md", "updated")
+        self.assertEqual((self.root / "README.md").read_text(encoding="utf-8"), "hello")
+        result = workspace.approve_new_file(approval_id)
+        self.assertEqual(result["operation"], "updated")
+        self.assertEqual((self.root / "README.md").read_text(encoding="utf-8"), "updated")
+
+    def test_stale_update_is_rejected(self):
+        approval_id = workspace.propose_update_file("README.md", "updated")
+        (self.root / "README.md").write_text("changed elsewhere", encoding="utf-8")
+        with self.assertRaises(ValueError):
+            workspace.approve_new_file(approval_id)
+        self.assertEqual((self.root / "README.md").read_text(encoding="utf-8"), "changed elsewhere")
+
     def test_disallowed_file_type_is_rejected(self):
         with self.assertRaises(ValueError):
             workspace.propose_new_file("run.sh", "echo unsafe")
