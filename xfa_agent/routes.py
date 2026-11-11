@@ -298,6 +298,18 @@ def workspace_propose_create():
         return jsonify({"error": str(exc)}), 400
 
 
+@xfa.post("/workspace/propose-update")
+def workspace_propose_update():
+    from xfa_agent.workspace import propose_update_file
+    body = request.get_json(silent=True) or {}
+    try:
+        approval_id = propose_update_file(str(body.get("path", "")), str(body.get("content", "")))
+        return jsonify({"ok": True, "approval_id": approval_id, "expires_in_seconds": 600,
+                        "message": "File update proposal created. Explicit dashboard approval is required."}), 202
+    except (ValueError, OSError) as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
 @xfa.post("/workspace/approve-create")
 def workspace_approve_create():
     from xfa_agent.workspace import approve_new_file
