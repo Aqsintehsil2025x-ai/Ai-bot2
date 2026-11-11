@@ -2,7 +2,7 @@ name: XFA safety tests
 
 on:
   push:
-    branches: [main, feature/xfa-autonomous-agent]
+    branches: [main, feature/xfa-autonomous-agent, feature/xfa-public-platform]
   pull_request:
     branches: [main]
 
@@ -14,7 +14,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Run XFA workspace safety tests
+      - name: Install XFA test dependency
+        run: python -m pip install "cryptography>=42.0"
+      - name: Run XFA safety tests
         run: python -m unittest discover -s tests -p "test_xfa_*.py" -v
       - name: Compile XFA Python modules
         run: python -m py_compile xfa_agent/*.py
