@@ -6,8 +6,11 @@ It deliberately does not execute shell commands or submit external forms.
 from __future__ import annotations
 
 import hmac
+import ipaddress
 import os
-from flask import Blueprint, jsonify, request
+import socket
+from urllib.parse import urlparse
+from flask import Blueprint, jsonify, request, send_from_directory
 
 xfa = Blueprint("xfa", __name__, url_prefix="/xfa/api")
 
@@ -78,8 +81,15 @@ def plan_task():
 def browser_open():
     body = request.get_json(silent=True) or {}
     url = str(body.get("url", "")).strip()
-    if not (url.startswith("https://") or url.startswith("http://")):
-        return jsonify({"error": "Only http:// and https:// URLs are allowed"}), 400
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
+        return jsonify({"error": "Only public http:// and https:// URLs are allowed"}), 400
+    try:
+        addresses = {item[4][0] for item in socket.getaddrinfo(parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80), type=socket.SOCK_STREAM)}
+        if not addresses or any(not ipaddress.ip_address(address).is_global for address in addresses):
+            return jsonify({"error": "Private, local, and non-public network addresses are blocked"}), 400
+    except (OSError, ValueError):
+        return jsonify({"error": "Could not resolve a public hostname"}), 400
     endpoint = os.getenv("XFA_BROWSER_CDP_URL", "").strip()
     if not endpoint:
         return jsonify({"error": "Remote browser is not configured. Set XFA_BROWSER_CDP_URL to a trusted remote Playwright/CDP endpoint."}), 503
@@ -102,3 +112,10 @@ def browser_open():
 def register_xfa(app):
     if "xfa" not in app.blueprints:
         app.register_blueprint(xfa)
+    if "xfa_dashboard" not in app.view_functions:
+        app.add_url_rule(
+            "/xfa",
+            endpoint="xfa_dashboard",
+            view_func=lambda: send_from_directory(os.path.dirname(__file__), "dashboard.html"),
+            methods=["GET"],
+        )
