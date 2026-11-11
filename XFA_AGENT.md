@@ -7,7 +7,7 @@ XFA is being introduced as a separate, resource-conscious agent module inside Ai
 - Authenticated API under `/xfa/api` using the `XFA_ACCESS_TOKEN` environment secret.
 - Gemini-backed task planning using the existing `GEMINI_API_KEY` / `GOOGLE_API_KEY` configuration.
 - Optional remote browser connection through a trusted Playwright-compatible CDP endpoint (`XFA_BROWSER_CDP_URL`). The Replit process does not download or run a local Chromium binary.
-- Browser navigation is read-only in this phase. No form submission, purchases, messages, publishing, account changes, shell commands, deletion, or deployment are automated.
+- Browser navigation is read-only in this phase. Private/local network targets are blocked. No form submission, purchases, messages, publishing, account changes, shell commands, deletion, or deployment are automated.
 - Health endpoint reports whether planner and remote browser configuration are present.
 
 ## Replit secrets
@@ -21,6 +21,7 @@ XFA is being introduced as a separate, resource-conscious agent module inside Ai
 
 All endpoints require `Authorization: Bearer <XFA_ACCESS_TOKEN>`.
 
+- `GET /xfa` — XFA dashboard (enter the access token in the page; it is kept in memory only).
 - `GET /xfa/api/health`
 - `POST /xfa/api/tasks/plan` with JSON `{"task":"..."}`
 - `POST /xfa/api/browser/open` with JSON `{"url":"https://example.com"}`
