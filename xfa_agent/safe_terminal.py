@@ -48,9 +48,9 @@ def run_command(command: str) -> dict:
         return {"command": command, "output": sys.version.splitlines()[0] + "\n", "exit_code": 0}
 
     argv = {
-        "git status --short": ["git", "status", "--short"],
-        "git log -5 --oneline": ["git", "log", "-5", "--oneline"],
-        "git diff --stat": ["git", "diff", "--stat"],
+        "git status --short": ["git", "-c", "core.fsmonitor=false", "status", "--short"],
+        "git log -5 --oneline": ["git", "-c", "core.fsmonitor=false", "-c", "core.pager=cat", "log", "-5", "--oneline"],
+        "git diff --stat": ["git", "-c", "core.fsmonitor=false", "-c", "diff.external=", "diff", "--stat"],
     }[command]
     completed = subprocess.run(
         argv,
