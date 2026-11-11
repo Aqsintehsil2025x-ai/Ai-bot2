@@ -68,6 +68,11 @@ def set_bot(bot):
         wire_panel(app, bot)
     except Exception as exc:
         print(f"[web_app] panel_wire failed: {exc}", flush=True)
+    try:
+        from xfa_agent.routes import register_xfa
+        register_xfa(app)
+    except Exception as exc:
+        print(f"[web_app] XFA registration failed: {exc}", flush=True)
 
 
 @app.route("/health")

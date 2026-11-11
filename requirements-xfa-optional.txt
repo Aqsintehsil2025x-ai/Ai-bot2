@@ -1,0 +1,2 @@
+# Optional dependency for XFA remote-browser mode; does not install a local browser binary.
+playwright>=1.50,<2
