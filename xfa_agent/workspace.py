@@ -36,8 +36,8 @@ def audit_log() -> list[dict]:
 
 def _safe_path(relative: str) -> Path:
     raw = str(relative or "").strip()
-    if not raw or len(raw) > 300 or "\x00" in raw:
-        raise ValueError("A valid relative workspace path is required")
+    if not raw or len(raw) > 300 or "\x00" in raw or Path(raw).is_absolute() or ".." in Path(raw).parts:
+        raise ValueError("A valid relative workspace path without parent traversal is required")
     candidate = (ROOT / raw).resolve()
     if candidate != ROOT and ROOT not in candidate.parents:
         raise ValueError("Path is outside the XFA workspace")
