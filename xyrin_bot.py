@@ -11,7 +11,7 @@
 #                  DATA_DIR=/data         -> Kalıcı diskin yolu (Render paid Disk / Railway Volume varsa).
 #   PORT         : Render/Railway otomatik tanımlar; bot bu portta küçük bir /health sayfası açar (Render Web Service şartı).
 #   Önerilen     : BOT_OWNER_ID, MOD_LOG_CHANNEL_ID, WELCOME_CHANNEL_ID
-#   İsteğe bağlı : GEMINI_MODEL, NVIDIA_API_KEY, NVIDIA_MODEL, SEARCH_MODEL, BOT_TIMEZONE, COMMAND_PREFIX,
+#   İsteğe bağlı : GEMINI_MODEL, GEMMA_MODEL, NVIDIA_API_KEY, NVIDIA_MODEL, OPENAI_API_KEY, OPENAI_MODEL,
 #                  BLOCK_ALL_LINKS, ALLOWED_LINK_DOMAINS, WELCOME_ROLE_NAME, AI_ACTION_CONFIRM, MOD_AI_ENABLED, MOD_AI_MAX_PER_MINUTE,
 #                  BET_MAX, AUTO_SYNC, HOLOGRAM_ANNOUNCE, DAILY_QUESTION_TITLE ...
 #
@@ -156,6 +156,15 @@ GEMINI_MODEL = env_str("GEMINI_MODEL", "gemini-3.5-flash-lite")
 SEARCH_MODEL = env_str("SEARCH_MODEL", "") or GEMINI_MODEL
 NVIDIA_API_KEY = env_str("NVIDIA_API_KEY")
 NVIDIA_MODEL = env_str("NVIDIA_MODEL", "nvidia/nemotron-3.5-super-vl-120b-a12b")
+OPENAI_API_KEY = env_str("OPENAI_API_KEY")
+OPENAI_MODEL = env_str("OPENAI_MODEL", "gpt-6-astra")
+GEMMA_MODEL = env_str("GEMMA_MODEL", "gemma-4-26b-a4b-it")
+DEFAULT_AI_PROVIDER = env_str(
+    "DEFAULT_AI_PROVIDER",
+    "nvidia" if NVIDIA_API_KEY else ("openai" if OPENAI_API_KEY else "gemini"),
+).lower()
+if DEFAULT_AI_PROVIDER not in {"nvidia", "openai", "gemini", "gemma"}:
+    DEFAULT_AI_PROVIDER = "gemini"
 NVIDIA_CODE_MODEL = env_str("NVIDIA_CODE_MODEL", "nvidia/nemotron-3.5-super-vl-120b-a12b")
 NVIDIA_MAX_TOKENS = max(256, env_int("NVIDIA_MAX_TOKENS", 16384))
 try:
@@ -1398,22 +1407,59 @@ class AIService:
 
     # ---------- sohbet ----------
     async def chat(self, channel_id: int, header: str, user_text: str, image: Optional[tuple] = None,
-                   search: bool = False) -> str:
-        """Kanalın geçmişiyle konuşur. image = (bayt, mime_type). Dönen metin ham yanıttır (etiketler dahil)."""
-        if not (self.enabled or NVIDIA_API_KEY):
-            raise AIError("⚠️ Yapay zeka çekirdeği çevrimdışı.", "offline")
+                   search: bool = False, provider: Optional[str] = None) -> str:
+        """Kanal geçmişiyle seçilen sağlayıcıda konuşur. image = (bayt, mime_type)."""
+        provider = (provider or DEFAULT_AI_PROVIDER).lower()
+        if provider not in {"nvidia", "openai", "gemini", "gemma"}:
+            raise AIError("⚠️ Bilinmeyen AI sağlayıcısı.", "model")
+        if provider == "nvidia" and not NVIDIA_API_KEY:
+            raise AIError("⚠️ NVIDIA_API_KEY Secret tanımlanmamış.", "auth")
+        if provider == "openai" and not OPENAI_API_KEY:
+            raise AIError("⚠️ OPENAI_API_KEY Secret tanımlanmamış.", "auth")
+        if provider in {"gemini", "gemma"} and (not self.enabled or self.client is None):
+            raise AIError("⚠️ GEMINI_API_KEY Secret tanımlanmamış veya Google AI istemcisi başlatılamadı.", "auth")
+
         async with self.memory.lock(channel_id):
-            if NVIDIA_API_KEY:
-                try:
-                    text = await self._nvidia_chat(channel_id, header, user_text, image)
-                    clean, _ = extract_actions(text)
-                    stored_user = f"{header}\n{'[görsel gönderildi] ' if image else ''}{user_text}"
-                    self.memory.add_exchange(channel_id, truncate(stored_user, 1500), truncate(clean or text, 1800))
-                    return text
-                except AIError as exc:
-                    if not self.enabled or exc.kind in ("auth", "safety"):
-                        raise
-                    logger.warning(f"NVIDIA yanıt veremedi, Gemini denenecek: {exc}")
+            if provider in {"nvidia", "openai"}:
+                if provider == "nvidia":
+                    messages = self._nvidia_messages(channel_id, header, user_text, image)
+                    text = await asyncio.to_thread(
+                        self._nvidia_request, messages, max(AI_TIMEOUT_SECONDS, 90)
+                    )
+                else:
+                    messages = self._openai_messages(channel_id, header, user_text, image)
+                    text = await asyncio.to_thread(
+                        self._openai_request, messages, max(AI_TIMEOUT_SECONDS, 90)
+                    )
+                clean, _ = extract_actions(text)
+                stored_user = f"{header}\n{'[görsel gönderildi] ' if image else ''}{user_text}"
+                self.memory.add_exchange(channel_id, truncate(stored_user, 1500), truncate(clean or text, 1800))
+                return text
+
+            if provider == "gemma":
+                contents = [
+                    genai_types.Content(role=role, parts=[genai_types.Part.from_text(text=text)])
+                    for role, text in self.memory.history(channel_id)
+                ]
+                parts = []
+                if image:
+                    parts.append(genai_types.Part.from_bytes(data=image[0], mime_type=image[1]))
+                parts.append(genai_types.Part.from_text(text=f"{header}\n{user_text}"))
+                contents.append(genai_types.Content(role="user", parts=parts))
+                config = genai_types.GenerateContentConfig(
+                    system_instruction=SYSTEM_INSTRUCTION,
+                    max_output_tokens=AI_MAX_OUTPUT_TOKENS,
+                )
+                async with self._chat_sem:
+                    response = await self._call(contents, config, AI_TIMEOUT_SECONDS, model=GEMMA_MODEL)
+                text, reason = extract_text(response)
+                if not text:
+                    raise AIError("🤔 Gemma bir yanıt üretemedi.", "empty")
+                clean, _ = extract_actions(text)
+                stored_user = f"{header}\n{'[görsel gönderildi] ' if image else ''}{user_text}"
+                self.memory.add_exchange(channel_id, truncate(stored_user, 1500), truncate(clean or text, 1800))
+                return text
+
             self._guard()
             contents = [
                 genai_types.Content(role=role, parts=[genai_types.Part.from_text(text=text)])
@@ -1533,6 +1579,89 @@ class AIService:
         content = AIService._nvidia_visible(message)
         if not content:
             raise AIError("🤔 NVIDIA bir yanıt üretemedi.", "empty")
+        return content
+
+    def _openai_messages(self, channel_id: int, header: str, user_text: str, image: Optional[tuple]):
+        messages = [{"role": "system", "content": SYSTEM_INSTRUCTION}]
+        for role, text in self.memory.history(channel_id):
+            messages.append({"role": "assistant" if role == "model" else "user", "content": text})
+        prompt = f"{header}\n{user_text}"
+        if image:
+            import base64
+            mime = image[1] or "image/jpeg"
+            url = "data:" + mime + ";base64," + base64.b64encode(image[0]).decode("ascii")
+            content = [
+                {"type": "text", "text": prompt},
+                {"type": "image_url", "image_url": {"url": url}},
+            ]
+        else:
+            content = prompt
+        messages.append({"role": "user", "content": content})
+        return messages
+
+    @staticmethod
+    def _openai_request(messages: list, timeout: float) -> str:
+        """OpenAI Responses API çağrısı; anahtar yalnızca ortam değişkeninden alınır."""
+        import urllib.error
+        import urllib.request
+
+        response_input = []
+        for item in messages:
+            raw_content = item.get("content", "")
+            if isinstance(raw_content, str):
+                content = [{"type": "input_text", "text": raw_content}]
+            else:
+                content = []
+                for part in raw_content:
+                    if part.get("type") == "text":
+                        content.append({"type": "input_text", "text": part.get("text", "")})
+                    elif part.get("type") == "image_url":
+                        content.append({"type": "input_image", "image_url": part.get("image_url", {}).get("url", "")})
+            response_input.append({"role": item["role"], "content": content})
+        payload = json.dumps({
+            "model": OPENAI_MODEL,
+            "input": response_input,
+            "max_output_tokens": AI_MAX_OUTPUT_TOKENS,
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            "https://api.openai.com/v1/responses",
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {OPENAI_API_KEY}",
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", "replace")[:300]
+            if exc.code == 429:
+                kind = "quota"
+                message = "⏳ OpenAI API kullanım limiti veya bakiyesi dolmuş olabilir."
+            elif exc.code in (401, 403):
+                kind = "auth"
+                message = "⚠️ OpenAI API anahtarı geçersiz veya erişim izni yok."
+            else:
+                kind = "server"
+                message = f"OpenAI API hatası ({exc.code}): {body}"
+            raise AIError(message, kind) from exc
+        except urllib.error.URLError as exc:
+            kind = "timeout" if isinstance(getattr(exc, "reason", None), TimeoutError) else "server"
+            raise AIError("⌛ OpenAI API zamanında yanıt veremedi.", kind) from exc
+
+        content = str(data.get("output_text") or "").strip()
+        if not content:
+            chunks = []
+            for item in data.get("output") or []:
+                for part in item.get("content") or []:
+                    if part.get("type") == "output_text" and part.get("text"):
+                        chunks.append(part["text"])
+            content = "\n".join(chunks).strip()
+        if not content:
+            raise AIError("🤔 OpenAI bir yanıt üretemedi.", "empty")
         return content
 
     @staticmethod
@@ -2888,12 +3017,12 @@ async def fetch_first_image(message: discord.Message) -> tuple:
 
 
 async def generate_ai_reply(author, channel_id: int, text: str, image: Optional[tuple] = None,
-                            search: bool = False) -> tuple:
+                            search: bool = False, provider: Optional[str] = None) -> tuple:
     """-> (yanıt_metni, [(eylem, ad), ...]). Kanal/rol eylemleri YALNIZCA Hükümdar için döner."""
     sovereign = is_sovereign_member(author)
     header = build_speaker_header(author, sovereign)
     try:
-        raw = await bot.ai.chat(channel_id, header, text, image, search=search)
+        raw = await bot.ai.chat(channel_id, header, text, image, search=search, provider=provider)
     except AIError as e:
         if e.kind in ("auth", "model"):
             await bot.notify_owner(f"⚠️ **Yapay zeka hatası ({e.kind})**: {e.user_message}",
@@ -2977,7 +3106,10 @@ async def respond_with_ai(first_send, rest_send, channel, guild, author, text: s
         language = panel_settings(guild.id)["language"]
         if language.lower() not in {"türkçe", "turkce", "tr", "turkish"}:
             text = f"[Sunucu dili: {language}. Yanıtı bu dilde ver.]\n{text}"
-    reply_text, actions = await generate_ai_reply(author, channel.id, text, image, search=search)
+    provider = bot.settings.value(guild.id, "ai_provider", DEFAULT_AI_PROVIDER) if guild else DEFAULT_AI_PROVIDER
+    reply_text, actions = await generate_ai_reply(
+        author, channel.id, text, image, search=search, provider=provider
+    )
     if note:
         reply_text = f"{reply_text}\n\n*({note})*"
     pending = []
@@ -3257,6 +3389,62 @@ async def kimlik_komutu(ctx):
     await ctx.send(embed=embed, ephemeral=True)
 
 
+async def set_ai_provider(ctx, provider: str):
+    """Sunucu için varsayılan sohbet sağlayıcısını kalıcı olarak seçer."""
+    requirements = {
+        "nvidia": bool(NVIDIA_API_KEY),
+        "openai": bool(OPENAI_API_KEY),
+        "gemini": bool(GEMINI_API_KEY and bot.ai and bot.ai.client),
+        "gemma": bool(GEMINI_API_KEY and bot.ai and bot.ai.client),
+    }
+    if not requirements.get(provider, False):
+        missing = {
+            "nvidia": "NVIDIA_API_KEY",
+            "openai": "OPENAI_API_KEY",
+            "gemini": "GEMINI_API_KEY",
+            "gemma": "GEMINI_API_KEY",
+        }.get(provider, "ilgili API Secret")
+        await ctx.send(f"⚠️ {missing} Secret tanımlı değil veya sağlayıcı başlatılamadı.")
+        return
+    bot.settings.set(ctx.guild.id, "ai_provider", provider)
+    await bot.settings.store.flush()
+    labels = {
+        "nvidia": f"NVIDIA ({NVIDIA_MODEL})",
+        "openai": f"OpenAI ({OPENAI_MODEL})",
+        "gemini": f"Gemini ({GEMINI_MODEL})",
+        "gemma": f"Gemma ({GEMMA_MODEL})",
+    }
+    await ctx.send(f"✅ Bu sunucunun AI sağlayıcısı **{labels[provider]}** olarak ayarlandı.")
+
+
+@bot.hybrid_command(name="nvidia", description="Bu sunucuda NVIDIA AI modelini seçer.")
+@commands.guild_only()
+@perm_or_sovereign(manage_guild=True)
+async def nvidia_komutu(ctx):
+    await set_ai_provider(ctx, "nvidia")
+
+
+@bot.hybrid_command(name="gemini", description="Bu sunucuda Gemini AI modelini seçer.")
+@commands.guild_only()
+@perm_or_sovereign(manage_guild=True)
+async def gemini_komutu(ctx):
+    await set_ai_provider(ctx, "gemini")
+
+
+@bot.hybrid_command(name="gemma", description="Bu sunucuda barındırılan Gemma modelini seçer.")
+@commands.guild_only()
+@perm_or_sovereign(manage_guild=True)
+async def gemma_komutu(ctx):
+    await set_ai_provider(ctx, "gemma")
+
+
+@bot.hybrid_command(name="openai", description="Bu sunucuda OpenAI modelini seçer.")
+@commands.guild_only()
+@perm_or_sovereign(manage_guild=True)
+async def openai_komutu(ctx):
+    await set_ai_provider(ctx, "openai")
+
+
 @bot.hybrid_command(name="kahve", aliases=["coffee", "espresso"], description="Kahve siparişi ver ☕")
 @app_commands.describe(kahve_turu="Hangi kahve? (örn: Latte)")
 async def kahve_komutu(ctx, *, kahve_turu: str = "Espresso"):
@@ -3292,7 +3480,7 @@ async def hologram_durum_komutu(ctx):
 async def sunucu_raporu(ctx):
     guild = ctx.guild
     bot_count = sum(1 for m in guild.members if m.bot)
-    ai_ok = bot.ai is not None and bot.ai.enabled
+    ai_ok = bool(bot.ai is not None and (bot.ai.enabled or NVIDIA_API_KEY or OPENAI_API_KEY))
     embed = discord.Embed(title=f"📊 {guild.name} - Rapor", color=discord.Color.blue())
     embed.add_field(name="👥 Toplam Üye", value=f"{guild.member_count} ({bot_count} bot)", inline=True)
     embed.add_field(name="💬 Kanallar", value=f"{len(guild.text_channels)} metin / {len(guild.voice_channels)} ses", inline=True)

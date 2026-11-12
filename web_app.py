@@ -69,6 +69,12 @@ def set_bot(bot):
     except Exception as exc:
         print(f"[web_app] panel_wire failed: {exc}", flush=True)
     try:
+        from xfa_agent.auth import register_auth
+        register_auth(app)
+        app.config["XFA_DISCORD_BOT"] = bot
+    except Exception as exc:
+        print(f"[web_app] XFA authentication registration failed: {exc}", flush=True)
+    try:
         from xfa_agent.routes import register_xfa
         register_xfa(app)
     except Exception as exc:

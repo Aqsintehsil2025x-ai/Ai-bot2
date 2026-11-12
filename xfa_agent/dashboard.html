@@ -1,28 +1,563 @@
 <!doctype html>
-<html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>XFA — Xyrin Flower Agent</title>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#080510">
+<meta name="description" content="XFA — Xyrin Flower AI. Herkes için erişilebilir yapay zekâ.">
+<title>XFA — Xyrin Flower AI</title>
 <style>
-:root{color-scheme:dark;--bg:#0b1017;--card:#121b26;--line:#263544;--muted:#9aabba;--text:#edf4f6;--mint:#8dd9bb;--pink:#e5a7b9}
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 80% 0%,#243b3a 0,transparent 35%),var(--bg);color:var(--text);font:15px/1.6 system-ui,sans-serif}.wrap{max-width:960px;margin:auto;padding:32px 20px 70px}.top{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:20px}.brand{font-weight:800;letter-spacing:.16em}.brand b{color:var(--mint)}.pill{border:1px solid #385447;border-radius:99px;padding:5px 11px;color:var(--mint);font-size:12px}.hero{padding:52px 0 30px}.eyebrow{color:var(--mint);font-size:11px;letter-spacing:.2em}.hero h1{font-size:clamp(38px,7vw,66px);line-height:1.05;margin:12px 0}.hero h1 em{color:var(--pink);font-style:normal}.hero p,.muted{color:var(--muted)}.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.card{background:linear-gradient(145deg,#15212c,#101720);border:1px solid var(--line);border-radius:18px;padding:22px}.wide{grid-column:1/-1}h2{font-size:19px;margin:0 0 5px}label{display:block;color:#c5d2da;font-size:13px;margin:14px 0 6px}input,textarea{width:100%;border:1px solid #354757;background:#0b131c;color:var(--text);border-radius:10px;padding:12px;font:inherit}textarea{min-height:115px;resize:vertical}button{border:0;border-radius:10px;background:var(--mint);color:#0a1714;font-weight:750;padding:11px 16px;cursor:pointer;margin-top:12px}button.secondary{background:#263744;color:var(--text)}button:disabled{opacity:.55;cursor:wait}.row{display:flex;gap:10px;align-items:center}.row input{flex:1}.out{white-space:pre-wrap;background:#091119;border:1px solid var(--line);border-radius:10px;padding:14px;margin-top:14px;min-height:54px;color:#dce8ed;overflow-wrap:anywhere}.notice{font-size:12px;color:var(--muted);margin-top:12px}.status{font-size:12px;color:var(--mint);margin-top:10px}.foot{margin-top:22px;color:var(--muted);font-size:12px}@media(max-width:680px){.grid{grid-template-columns:1fr}.wide{grid-column:auto}.top{align-items:flex-start;gap:12px;flex-direction:column}}
-</style></head><body><main class="wrap">
-<header class="top"><div class="brand">XYRIN <b>FLOWER</b> / XFA</div><span class="pill">AGENT FOUNDATION · PHASE 1</span></header>
-<section class="hero"><div class="eyebrow">AUTONOMOUS ASSISTANT</div><h1>Merhaba, ben <em>XFA.</em></h1><p>Görevini anlat. Önce planlarım; hangi adımların değişiklik yapacağını açıkça belirtirim. Bu ilk sürüm planlama ve salt-okunur web incelemesi yapar.</p></section>
-<section class="grid">
-<article class="card wide"><h2>Güvenli bağlantı</h2><p class="muted">XFA_ACCESS_TOKEN değerini Replit Secrets'tan alıp buraya gir. Token bu sayfada yalnızca bellekte tutulur; sunucuya sadece istek başlığında gönderilir.</p><label for="token">XFA erişim anahtarı</label><div class="row"><input id="token" type="password" autocomplete="off" placeholder="Bearer token"><button id="connect" class="secondary">Bağlan</button></div><div id="status" class="status">Bağlantı bekleniyor.</div></article>
-<article class="card"><h2>Görev planla</h2><p class="muted">Gemini görevi adımlara ayırır; henüz kendi başına değişiklik yapmaz.</p><label for="task">Ne yapmamı istersin?</label><textarea id="task" maxlength="2000" placeholder="Örn. Xyrin Flower sitesini incele ve kullanılabilirlik sorunlarını raporla."></textarea><button id="plan">Plan oluştur</button><div id="planout" class="out">Plan burada görünecek.</div><button id="run">Otonom araştırmayı başlat</button><div id="runout" class="out">Agent sonucu burada görünecek.</div></article>
-<article class="card"><h2>Web sayfasını incele</h2><p class="muted">Yapılandırılmış güvenilir uzak tarayıcı üzerinden sayfayı salt-okunur açar.</p><label for="url">Web adresi</label><input id="url" type="url" placeholder="https://example.com"><button id="open">Sayfayı aç ve özetle</button><div id="browserout" class="out">Sayfa başlığı ve görünür metin burada görünecek.</div></article>
-<article class="card wide"><h2>Dosya oluşturma · Onay gerekli</h2><p class="muted">XFA yeni dosya taslağı hazırlaya bilir. Mövcud faylları əvəz etmir. Fayl yalnız aşağıdakı təsdiq düyməsinə basdıqdan sonra yaradılır; təklif 10 dəqiqə qüvvədədir.</p><label for="newpath">Layihə daxilində fayl yolu</label><input id="newpath" placeholder="notes/xfa-plan.md"><label for="newcontent">Fayl məzmunu</label><textarea id="newcontent" maxlength="32000" placeholder="Yeni faylın məzmunu…"></textarea><button id="propose">Təklif yarat</button><div id="approvalout" class="out">Təklif və təsdiq statusu burada görünəcək.</div><button id="approve" class="secondary" disabled>Təklif olunan əməliyyatı təsdiqləyirəm</button></article><article class="card wide"><h2>Mövcud faylı yenilə · Təsdiq tələb olunur</h2><p class="muted">Mövcud faylın yeni məzmunu əvvəlcə təklif edilir. Yalnız təsdiqdən sonra yazılır; təklifdən sonra fayl dəyişibsə, XFA yeniləməni rədd edir.</p><label for="updatepath">Mövcud fayl yolu</label><input id="updatepath" placeholder="README.md"><label for="updatecontent">Yeni tam məzmun</label><textarea id="updatecontent" maxlength="32000" placeholder="Faylın tam yeni məzmunu…"></textarea><button id="proposeupdate" class="secondary">Yeniləmə təklifi yarat</button></article><article class="card wide"><h2>Fəaliyyət jurnalı</h2><button id="audit" class="secondary">Jurnalı yenilə</button><div id="auditout" class="out">Son əməliyyatlar burada görünəcək.</div></article><article class="card wide"><h2>Güvenlik sınırları</h2><p class="muted">Bu sürüm terminal komutu çalıştırmaz ve dosya değişikliklerini ayrı onay olmadan uygulamaz; giriş bilgisi toplamaz, form göndermez, mesaj yayınlamaz, satın alma veya deploy yapmaz. Tarayıcı bağlantısı ayrı bir güvenilir CDP sağlayıcısı gerektirir. Kritik eylemler için ileride ayrı onay ekranı ve denetim kaydı eklenecek.</p></article>
-</section><div class="foot">XFA / XYRIN FLOWER · Bu sayfayı yalnızca kendi Replit projenizde kullanın. Erişim anahtarınızı kimseyle paylaşmayın.</div></main>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+:root{color-scheme:dark;--bg:#07040d;--panel:#10091c;--panel2:#160d26;--line:rgba(156,83,255,.28);--line2:rgba(172,100,255,.58);--text:#f5edff;--muted:#b2a1ca;--dim:#78668f;--purple:#8e35ff;--purple2:#bd69ff;--pink:#edb2ff;--green:#2ce79a;--shadow:0 18px 60px #000a;--sidebar:244px}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 42% 22%,#27104c55 0,transparent 34%),radial-gradient(ellipse at 90% 75%,#3510643d 0,transparent 31%),#07040d;color:var(--text);font:14px 'DM Sans',sans-serif}
+button,input,textarea{font:inherit}button{cursor:pointer}button:disabled{opacity:.55;cursor:wait}a{color:inherit;text-decoration:none}
+.sidebar{position:fixed;inset:8px auto 8px 8px;width:var(--sidebar);z-index:5;display:flex;flex-direction:column;padding:22px 14px 16px;border:1px solid #7936c966;border-radius:23px;background:linear-gradient(155deg,#11091eeF,#090610f5 68%);box-shadow:0 0 42px #7130b32b,inset 0 0 25px #9d45ff0b;backdrop-filter:blur(18px)}
+.brand{display:grid;justify-items:center;padding:6px 0 28px}
+.flower{position:relative;width:74px;height:74px;filter:drop-shadow(0 0 13px #a849ff9c);flex:none}
+.flower .petal{position:absolute;left:50%;top:50%;width:27%;height:47%;margin-left:-13.5%;margin-top:-43%;border-radius:60% 60% 48% 48%;transform-origin:50% 92%;background:linear-gradient(180deg,#ffeaff 0%,#d58aff 28%,#7a22ed 76%,#35106d 100%);border:1px solid #e3b1ff88;box-shadow:inset 0 0 9px #fff8,0 0 9px #8d36ff85}
+.flower .petal:nth-child(2){transform:rotate(45deg)}.flower .petal:nth-child(3){transform:rotate(90deg)}.flower .petal:nth-child(4){transform:rotate(135deg)}.flower .petal:nth-child(5){transform:rotate(180deg)}.flower .petal:nth-child(6){transform:rotate(225deg)}.flower .petal:nth-child(7){transform:rotate(270deg)}.flower .petal:nth-child(8){transform:rotate(315deg)}
+.flower:after{content:"";position:absolute;left:43%;top:43%;width:14%;height:14%;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#d7a0ff 40%,#802dff 75%);box-shadow:0 0 15px #e6b4ff}
+.brand-word{font:700 35px/1 'Space Grotesk';letter-spacing:-.06em;margin-top:6px;background:linear-gradient(180deg,#fff,#bb7cff 65%,#7528df);background-clip:text;color:transparent;filter:drop-shadow(0 0 12px #9d47ff88)}
+.brand-sub{font-size:11px;color:#9c82c0;margin-top:5px;letter-spacing:.1em}
+.nav-title{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#806c9b;padding:0 10px 11px}
+.nav{display:grid;gap:7px}
+.nav button{display:flex;align-items:center;gap:13px;width:100%;padding:12px 13px;color:#c7b6de;border:1px solid transparent;border-radius:13px;background:transparent;text-align:left;transition:.2s}
+.nav button:hover{background:#471b703b;color:white}
+.nav button.active{color:#fff;border-color:#9f4cff99;background:linear-gradient(100deg,#8d31e65c,#40117a50);box-shadow:inset 0 0 20px #a343ff26,0 0 18px #902eff22}
+.nav-icon{width:20px;text-align:center;font-size:19px;color:#c18aff}
+.side-spacer{flex:1}
+.support-card{padding:15px 13px;border:1px solid #9d54ed70;border-radius:17px;background:linear-gradient(145deg,#32124e88,#120a20);box-shadow:0 0 20px #7e31b522}
+.support-card b{font:600 14px 'Space Grotesk';display:block}
+.support-card p{font-size:12px;line-height:1.55;color:var(--muted);margin:8px 0 12px}
+.pill-button{border:1px solid #b15cff77;background:linear-gradient(135deg,#7f24e9,#4f16a8);color:#fff;border-radius:30px;padding:9px 15px;box-shadow:0 7px 18px #7724d844}
+.side-foot{border-top:1px solid #ffffff12;padding:18px 5px 0;margin-top:14px;color:#9584ae;font-size:11px;line-height:1.8}
+.app{margin-left:calc(var(--sidebar) + 16px);padding:14px 16px 26px 10px;max-width:1900px}
+.topbar{height:54px;display:grid;grid-template-columns:minmax(240px,1fr) auto;align-items:center;gap:18px;margin-bottom:10px}
+.search{height:46px;max-width:680px;width:100%;display:flex;align-items:center;gap:12px;border:1px solid #7e3bba77;border-radius:28px;padding:0 16px;background:#0b0713c9;box-shadow:inset 0 0 18px #7e35b512}
+.search span{font-size:19px;color:#b77aff}.search input{background:transparent;border:0;outline:0;color:var(--text);width:100%;min-width:0}.search input::placeholder{color:#847397}
+.shortcut{white-space:nowrap;border:1px solid #ffffff14;border-radius:9px;background:#21142e;color:#c9b8dc;padding:5px 8px;font-size:11px}
+.top-actions{display:flex;align-items:center;gap:15px}
+.online{display:flex;align-items:center;gap:8px;border:0;background:transparent;color:#eee5f9;padding:8px 4px}
+.online-dot{width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 13px #2ce79a}
+.top-sep{height:25px;width:1px;background:#7c668e55}
+.top-icon{width:38px;height:38px;border:0;border-radius:50%;background:transparent;color:#d8b6ff;font-size:21px}
+.top-icon:hover{background:#53248055}
+.profile{display:flex;align-items:center;gap:9px;color:#eee5f9}
+.avatar{width:36px;height:36px;border:1px solid #c184ff;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at 35% 25%,#e5beff,#7b37c5 53%,#1e0b36);font-weight:700;box-shadow:0 0 14px #9f4aff55}
+.columns{display:grid;grid-template-columns:minmax(0,1fr) 324px;gap:22px;align-items:start}
+.center{min-width:0}
+.hero{min-height:365px;display:grid;grid-template-columns:1.05fr .95fr;align-items:center;position:relative;isolation:isolate;overflow:hidden;border-radius:20px;margin-bottom:5px}
+.hero:before{content:"";position:absolute;inset:0;z-index:-2;background:radial-gradient(ellipse at 29% 55%,#6015bc73,transparent 39%),radial-gradient(ellipse at 62% 45%,#45127848,transparent 40%);opacity:.95}
+.hero:after{content:"";position:absolute;inset:8% -8%;z-index:-1;pointer-events:none;background:repeating-radial-gradient(ellipse at 34% 67%,transparent 0 55px,#9d4aff21 57px 59px,transparent 62px 80px);transform:rotate(-12deg);mask-image:linear-gradient(90deg,#000,transparent 85%)}
+.hero-art{height:340px;position:relative;display:grid;place-items:center;overflow:visible}
+.hero-orbit{position:absolute;width:95%;height:43%;border:2px solid #943bfa55;border-radius:50%;transform:rotate(15deg);box-shadow:0 0 15px #a34cff55,inset 0 0 18px #8b2fff22}
+.hero-orbit.two{width:85%;height:31%;transform:rotate(-16deg);border-color:#b66aff55}
+.hero-orbit.three{width:72%;height:20%;transform:rotate(24deg);border-color:#7526cf77}
+.hero-bloom{position:relative;width:260px;height:260px;filter:drop-shadow(0 0 24px #8f38ff99);animation:float 7s ease-in-out infinite}
+.hero-bloom .petal{width:34%;height:55%;margin-left:-17%;margin-top:-48%;background:linear-gradient(160deg,#fff0ff 0%,#dc9aff 18%,#9c45ff 50%,#4b16bb 78%,#17072d);box-shadow:inset 0 0 17px #fff9, inset 0 -10px 16px #24004e88,0 0 17px #b052ff88;border:1px solid #f0caffaa}
+.hero-bloom .petal:nth-child(2){transform:rotate(45deg)}.hero-bloom .petal:nth-child(3){transform:rotate(90deg)}.hero-bloom .petal:nth-child(4){transform:rotate(135deg)}.hero-bloom .petal:nth-child(5){transform:rotate(180deg)}.hero-bloom .petal:nth-child(6){transform:rotate(225deg)}.hero-bloom .petal:nth-child(7){transform:rotate(270deg)}.hero-bloom .petal:nth-child(8){transform:rotate(315deg)}
+.hero-bloom:after{left:44%;top:44%;width:12%;height:12%;background:radial-gradient(circle,#fff,#ffbdfd 32%,#a34dff 72%);box-shadow:0 0 24px #ffc5ff}
+.spark{position:absolute;width:7px;height:7px;border-radius:50%;background:#f5ceff;box-shadow:0 0 15px 5px #b14bff;animation:twinkle 2.5s infinite alternate}
+.spark.s1{top:18%;left:22%}.spark.s2{top:25%;right:15%;animation-delay:.6s}.spark.s3{bottom:22%;left:18%;animation-delay:1.2s}.spark.s4{bottom:27%;right:20%;animation-delay:1.8s}
+.hero-copy{text-align:center;padding:10px 12px 10px 0}
+.hero-copy h1{font:700 clamp(54px,7vw,92px)/.95 'Space Grotesk';letter-spacing:-.075em;margin:0;background:linear-gradient(180deg,#fff,#d4a1ff 47%,#7426db);background-clip:text;color:transparent;filter:drop-shadow(0 0 18px #a54cff88)}
+.hero-copy .sub{font:500 clamp(20px,2vw,29px) 'Space Grotesk';color:#c9a8ee;margin:7px 0 24px}
+.hero-copy .motto{font-size:clamp(16px,1.5vw,21px);font-style:italic;color:#f1e5ff;margin:0 0 28px}
+.hero-copy .motto em{font-weight:700;color:#d17dff;text-shadow:0 0 14px #bb45ff}
+.traits{display:flex;justify-content:center;flex-wrap:wrap;gap:8px}
+.trait{border:1px solid #8a3edb63;background:#10091cbd;border-radius:25px;padding:10px 13px;color:#d7c3f0;font-size:11px;white-space:nowrap}
+.trait b{font-size:15px;color:#d16dff;margin-right:5px}
+.panel{border:1px solid #9446dc8a;border-radius:21px;background:linear-gradient(145deg,#160d25eF,#0b0714f2);box-shadow:0 0 30px #7026b51a,inset 0 0 25px #9b43ff0a;min-width:0}
+.chat-card{padding:20px 22px 17px;margin-bottom:20px;min-height:220px}
+.chat-welcome{display:flex;align-items:center;gap:13px;margin-bottom:14px}
+.chat-mark{width:57px;height:57px;border-radius:50%;border:1px solid #ae70ff99;display:grid;place-items:center;background:radial-gradient(circle,#4e2078,#160b29);box-shadow:0 0 17px #8f3fff44}
+.chat-mark .flower{width:39px;height:39px}
+.chat-welcome strong{font:600 19px 'Space Grotesk'}
+.chat-welcome p{margin:5px 0 0;color:#b5a3ce;font-size:14px}
+.quick{display:flex;flex-wrap:wrap;gap:9px;margin:12px 0 17px}
+.quick button{border:1px solid #7133ae69;background:#10091c;border-radius:24px;color:#d9c7ef;padding:10px 14px;font-size:13px;transition:.2s}
+.quick button:hover{border-color:#bd78ff;background:#2b1246;transform:translateY(-1px)}
+#conversation{display:grid;gap:10px;max-height:330px;overflow:auto;margin:5px 0 13px;padding-right:4px}
+.bubble{max-width:94%;padding:11px 14px;border-radius:14px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere}
+.bubble.user{margin-left:auto;background:#5021808c;border:1px solid #a65cff66}
+.bubble.ai{background:#0c0815;border:1px solid #6f348b65;color:#eadcf8}
+.bubble-label{display:block;font-size:10px;letter-spacing:.12em;color:#c98cff;margin-bottom:3px;font-weight:700}
+.composer{display:flex;align-items:center;gap:8px}
+.round-tool{width:43px;height:43px;flex:none;border:1px solid #7540aa77;border-radius:50%;background:#120b20;color:#d3a0ff;font-size:19px}
+.message-wrap{height:52px;display:flex;align-items:center;gap:10px;flex:1;min-width:0;border:1px solid #783ab577;border-radius:28px;padding:0 17px;background:#100a1d;box-shadow:inset 0 0 16px #8035bd18}
+.message-wrap span{font-size:19px;color:#c985ff}
+.message-wrap textarea{width:100%;height:38px;max-height:38px;resize:none;border:0;outline:0;background:transparent;color:white;padding:9px 0}
+.message-wrap textarea::placeholder{color:#7e6b95}
+.send{width:52px;height:52px;flex:none;border:0;border-radius:50%;color:white;font-size:23px;background:linear-gradient(145deg,#c56cff,#6c19eb);box-shadow:0 0 24px #8a28ff77}
+.send:hover{filter:brightness(1.16);transform:translateY(-1px)}
+.disclaimer{font-size:10px;color:#76658a;margin:9px 4px 0}
+.right{display:grid;gap:18px}
+.stat-card{padding:20px 19px 12px;min-height:335px;position:relative;overflow:hidden}
+.card-title{display:flex;align-items:center;justify-content:space-between;font:600 16px 'Space Grotesk';margin-bottom:25px}
+.card-title .symbol{font-size:20px;color:#b35cff;margin-right:8px}
+.mini-close{color:#715889;font-size:16px}
+.stat{display:flex;align-items:center;gap:16px;margin:22px 0;position:relative;z-index:1}
+.stat-icon{width:30px;text-align:center;font-size:25px;color:#a650ff;text-shadow:0 0 10px #973cff}
+.stat strong{font:600 19px 'Space Grotesk';display:block}
+.stat small{display:block;color:#9380ac;font-size:11px;margin-top:2px}
+.chart{position:absolute;bottom:0;left:0;width:100%;height:125px;opacity:.95}
+.ecosystem{padding:18px 18px 12px}
+.eco-row{display:flex;align-items:center;gap:13px;padding:12px 0;border-bottom:1px solid #ffffff0c;color:#d8c8ea}
+.eco-row:last-child{border:0}
+.eco-icon{width:32px;text-align:center;font-size:24px;color:#a947ff}
+.eco-name{flex:1;font-size:13px}
+.eco-state{font-size:11px;color:#b8a5cc;white-space:nowrap}
+.eco-state:before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:#543878;margin-right:7px}
+.eco-state.online:before{background:var(--green);box-shadow:0 0 9px var(--green)}
+.beta{font:600 10px 'DM Sans';border-radius:18px;background:#7e25e9;padding:5px 9px;color:white}
+.lower{grid-column:1/-1;display:grid;grid-template-columns:1.18fr 1.12fr 1.18fr;gap:18px;margin-top:4px}
+.promo{min-height:174px;padding:20px 18px;position:relative;overflow:hidden;display:flex;align-items:center}
+.promo-copy{position:relative;z-index:1;max-width:65%}
+.promo h3{font:600 17px 'Space Grotesk';margin:0 0 8px}
+.promo p{color:#c2b0d8;line-height:1.55;font-size:13px;margin:0 0 13px}
+.promo .pill-button{font-size:12px;padding:8px 13px}
+.skyline{position:absolute;right:0;bottom:0;width:62%;height:100%;opacity:.84}
+.why{display:block}
+.why-list{display:grid;gap:7px;color:#c7b3de;font-size:13px}
+.why-item:before{content:"✓";display:inline-grid;place-items:center;color:#2de9a1;font-weight:700;font-size:14px;margin-right:8px}
+.why-flower{position:absolute;right:-19px;bottom:-14px;width:160px;height:160px;opacity:.85;transform:rotate(-12deg)}
+.discord-art{position:absolute;right:8px;bottom:-4px;width:155px;height:145px;filter:drop-shadow(0 0 17px #892effaa)}
+.section{display:none}.section.active{display:block}
+.section-panel{padding:22px;margin:0 0 18px}
+.section-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}
+.section-heading h2{font:600 21px 'Space Grotesk';margin:0}
+.tag{font-size:10px;letter-spacing:.08em;border:1px solid #9a50dc66;background:#8c36ca20;color:#d8b9fa;padding:6px 10px;border-radius:20px}
+.muted{color:var(--muted);line-height:1.6}
+.field{display:grid;gap:7px;margin:14px 0}
+.field label{font-size:12px;color:#c7b4dd}
+.field input,.field textarea{width:100%;border:1px solid #73409f88;background:#0b0712;color:white;border-radius:11px;padding:12px;outline:0}
+.field input:focus,.field textarea:focus{border-color:#c17aff;box-shadow:0 0 0 3px #a43eff20}
+.field textarea{min-height:115px;resize:vertical}
+.action{border:1px solid #a957ed88;border-radius:10px;padding:10px 14px;background:linear-gradient(130deg,#532078,#2a1044);color:#f2e7ff;margin:4px 5px 4px 0}
+.action:hover{background:linear-gradient(130deg,#7434a6,#421767)}
+.output{white-space:pre-wrap;overflow-wrap:anywhere;padding:14px;border:1px solid #70409166;border-radius:12px;background:#090610;min-height:55px;line-height:1.65;color:#e1d2f0;margin:14px 0}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.file-list{display:grid;gap:7px;max-height:330px;overflow:auto}
+.file-item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px;border:1px solid #68418a66;border-radius:10px;color:#d7c5e9;font-size:12px}
+.file-item button{border:0;background:transparent;color:#ca92ff}
+.footer{text-align:center;color:#76658a;font-size:11px;margin:24px 0 4px}
+.modal{position:fixed;inset:0;background:#030108df;display:none;place-items:center;padding:20px;z-index:20;backdrop-filter:blur(7px)}
+.modal.open{display:grid}
+.modal-card{width:min(470px,100%);border:1px solid #a75bea99;border-radius:19px;padding:23px;background:#130b20;box-shadow:0 20px 90px #000}
+.modal-card h2{font:600 21px 'Space Grotesk';margin:0 0 9px}
+.modal-card p{color:var(--muted);font-size:13px;line-height:1.6}
+.modal-card input{width:100%;border:1px solid #75449a;background:#090610;color:white;padding:12px;border-radius:10px}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+.toast{position:fixed;bottom:20px;right:22px;z-index:30;border:1px solid #8e4ac4;background:#160c25;padding:12px 16px;border-radius:12px;color:#f0e3ff;box-shadow:var(--shadow);display:none}
+.toast.show{display:block}
+.auth-screen{position:fixed;inset:0;z-index:100;display:grid;place-items:center;padding:22px;background:radial-gradient(ellipse at 50% 25%,#38136599,transparent 44%),#07040df7;backdrop-filter:blur(18px)}
+.auth-screen.hidden{display:none}.auth-card{width:min(460px,100%);padding:34px 28px;border:1px solid #a24de099;border-radius:24px;background:linear-gradient(150deg,#1a0d2beF,#0c0714f7);box-shadow:0 22px 90px #000b,0 0 42px #8738d52b;text-align:center}
+.auth-flower{margin:0 auto 13px;width:56px;height:56px}.auth-card h1{font:700 42px 'Space Grotesk';margin:0;background:linear-gradient(180deg,#fff,#bd7cff);background-clip:text;color:transparent}
+.auth-card p{color:var(--muted);line-height:1.6;font-size:13px}.auth-providers{display:grid;gap:11px;margin:22px 0 16px}
+.auth-provider{display:flex;align-items:center;justify-content:center;gap:10px;border:1px solid #9951cf88;border-radius:12px;padding:14px 16px;background:#160d24;color:#fff;font-weight:700;transition:.2s}
+.auth-provider:hover{border-color:#d19aff;background:#28113e;transform:translateY(-1px)}.auth-provider.disabled{opacity:.35;cursor:not-allowed;pointer-events:none;filter:saturate(.3)}.auth-provider.discord{background:linear-gradient(120deg,#5632a8,#392078)}
+.auth-note{font-size:11px!important;color:#9985b0!important}.auth-error{min-height:20px;color:#ffb7d1;font-size:12px}
+.account-actions{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 16px}
+.account-actions .action{margin:0}.provider-list{display:flex;flex-wrap:wrap;gap:7px;margin:8px 0}
+.provider-chip{padding:6px 10px;border:1px solid #8850b966;border-radius:20px;background:#21132e;color:#dac5f2;font-size:11px}
+.local-note{padding:10px 12px;border:1px solid #6a48a15c;border-radius:10px;background:#130c20;color:#c9b6e0;font-size:12px;line-height:1.5}
+.local-import{display:inline-flex;align-items:center;gap:7px;border:1px solid #8f4bc188;border-radius:10px;padding:10px 13px;background:#160d24;color:#eadbfa;cursor:pointer}
+.setting-check{display:flex;align-items:center;gap:9px;margin:12px 0;color:#d9c9ea}.setting-check input{accent-color:#a64cff;width:16px;height:16px}
+
+@keyframes float{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-9px) rotate(2deg)}}
+@keyframes twinkle{from{opacity:.3;transform:scale(.7)}to{opacity:1;transform:scale(1.2)}}
+@media(max-width:1200px){:root{--sidebar:220px}.columns{grid-template-columns:minmax(0,1fr) 280px;gap:14px}.lower{gap:12px}.hero-bloom{transform:scale(.86)}.promo{padding:16px}.promo h3{font-size:15px}}
+@media(max-width:950px){.columns{grid-template-columns:1fr}.right{grid-template-columns:1fr 1fr}.stat-card{min-height:310px}.lower{grid-template-columns:1fr 1fr}.lower .promo:last-child{grid-column:1/-1}.hero{min-height:330px}}
+@media(max-width:680px){:root{--sidebar:0px}.sidebar{position:relative;inset:auto;width:auto;margin:7px;height:auto;padding:12px;border-radius:17px}.brand{display:flex;justify-content:flex-start;align-items:center;gap:10px;padding:0 4px 10px}.brand .flower{width:37px;height:37px}.brand-word{font-size:22px;margin:0}.brand-sub{margin:0}.nav-title,.support-card,.side-foot{display:none}.nav{display:flex;overflow-x:auto;gap:5px}.nav button{min-width:max-content;width:auto;padding:9px 11px;font-size:12px}.nav-icon{font-size:15px}.app{margin:0;padding:7px 10px 22px}.topbar{grid-template-columns:1fr auto;gap:8px;margin-bottom:7px}.search{height:42px;padding:0 11px}.shortcut{display:none}.top-actions{gap:6px}.online{font-size:11px}.top-sep{height:20px}.top-icon{width:31px;height:31px}.profile span:last-child{display:none}.profile .avatar{width:31px;height:31px}.hero{grid-template-columns:1fr;min-height:0;padding:15px 0 20px}.hero-art{height:205px}.hero-bloom{transform:scale(.68)}.hero-copy{padding:0 8px}.hero-copy h1{font-size:58px}.hero-copy .sub{font-size:20px;margin-bottom:13px}.hero-copy .motto{font-size:15px;margin-bottom:16px}.trait{font-size:10px;padding:8px 10px}.chat-card{padding:15px 13px}.chat-welcome strong{font-size:16px}.chat-welcome p{font-size:12px}.quick{gap:6px}.quick button{font-size:11px;padding:8px 10px}.composer{gap:6px}.round-tool{width:36px;height:36px}.message-wrap{height:45px;padding:0 12px}.send{width:44px;height:44px}.right{grid-template-columns:1fr 1fr;gap:10px}.stat-card{padding:14px 12px;min-height:275px}.card-title{font-size:13px;margin-bottom:18px}.stat{gap:8px;margin:18px 0}.stat strong{font-size:16px}.stat small{font-size:10px}.stat-icon{font-size:20px;width:24px}.ecosystem{padding:14px 12px}.eco-row{gap:7px;padding:10px 0}.eco-icon{font-size:19px;width:23px}.eco-name{font-size:11px}.eco-state{font-size:9px}.lower{grid-template-columns:1fr;margin-top:12px}.lower .promo:last-child{grid-column:auto}.promo{min-height:160px}.split{grid-template-columns:1fr}.section-panel{padding:16px}.section-heading h2{font-size:18px}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="auth-screen" id="authScreen">
+  <div class="auth-card">
+    <div class="flower auth-flower" aria-hidden="true"><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i></div>
+    <h1>XFA</h1>
+    <p>Xyrin Flower AI hesabına Google veya Discord ile güvenli giriş yap.</p>
+    <div class="auth-providers">
+      <a class="auth-provider" id="googleLoginButton" href="/auth/login/google"><span>G</span> Google ile devam et</a>
+      <a class="auth-provider discord" id="discordLoginButton" href="/auth/login/discord"><span>◉</span> Discord ile devam et</a>
+    </div>
+    <div class="auth-error" id="authError"></div>
+    <p class="auth-note">Dosyaların bu cihazdaki tarayıcı depolamasında kalır. XFA bunları sunucuya yüklemez. Oturum için yalnızca güvenli bir çerez kullanılır.</p>
+  </div>
+</div>
+<aside class="sidebar">
+  <div class="brand">
+    <div class="flower" aria-hidden="true"><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i></div>
+    <div class="brand-word">XFA<div class="brand-sub">XYRIN FLOWER AI</div></div>
+  </div>
+  <div class="nav-title">ÇALIŞMA ALANI</div>
+  <nav class="nav">
+    <button class="active" data-view="chat"><span class="nav-icon">▣</span>Sohbet</button>
+    <button data-view="agent"><span class="nav-icon">♙</span>Yapay Zekâ Ajanı</button>
+    <button data-view="workspace"><span class="nav-icon">▦</span>Çalışma Alanı</button>
+    <button data-view="browser"><span class="nav-icon">⌕</span>Web İnceleme</button>
+    <button data-view="settings"><span class="nav-icon">⚙</span>Ayarlar</button>
+    <button data-view="more"><span class="nav-icon">•••</span>Daha Fazla</button>
+  </nav>
+  <div class="side-spacer"></div>
+  <div class="support-card">
+    <b>👑 XFA Premium</b>
+    <p>Gelecekte de herkes için ücretsiz kalma hedefiyle geliştiriliyor.</p>
+    <a class="pill-button" href="https://discord.gg/Dkj8VFnga" target="_blank" rel="noopener">Destek Ol ♡</a>
+  </div>
+  <div class="side-foot">© 2026 XFA.<br>Herkes için geliştirildi. ♡</div>
+</aside>
+
+<div class="app">
+  <header class="topbar">
+    <label class="search"><span>⌕</span><input id="globalSearch" type="search" placeholder="XFA'da her şeyi ara..." autocomplete="off"><kbd class="shortcut">Ctrl + K</kbd></label>
+    <div class="top-actions">
+      <button class="online" id="onlineStatus"><i class="online-dot" id="connectionDot"></i><span id="connection">Bağlantı bekleniyor</span>⌄</button>
+      <i class="top-sep"></i>
+      <a class="top-icon" href="https://discord.gg/Dkj8VFnga" target="_blank" rel="noopener" aria-label="Discord">◉</a>
+      <i class="top-sep"></i>
+      <button class="profile" id="profileButton" title="Ayarlar"><span class="avatar">A</span><span>Hesap</span>⌄</button>
+    </div>
+  </header>
+
+  <div class="columns">
+    <main class="center">
+      <section class="hero" id="homeHero">
+        <div class="hero-art" aria-hidden="true">
+          <div class="hero-orbit"></div><div class="hero-orbit two"></div><div class="hero-orbit three"></div>
+          <div class="hero-bloom flower"><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i></div>
+          <i class="spark s1"></i><i class="spark s2"></i><i class="spark s3"></i><i class="spark s4"></i>
+        </div>
+        <div class="hero-copy">
+          <h1>XFA</h1>
+          <div class="sub">Xyrin Flower AI</div>
+          <p class="motto">Sonsuz imkânlar. Tamamen <em>ücretsiz.</em></p>
+          <div class="traits"><span class="trait"><b>∞</b> Ücretsiz erişim</span><span class="trait"><b>⬡</b> Güvenli çalışma</span><span class="trait"><b>ϟ</b> Hızlı yanıt</span></div>
+        </div>
+      </section>
+
+      <section class="section active" id="view-chat">
+        <article class="panel chat-card">
+          <div class="chat-welcome">
+            <div class="chat-mark"><div class="flower"><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i></div></div>
+            <div><strong>Merhaba! 👋</strong><p>XFA burada. Sana nasıl yardımcı olabilirim?</p></div>
+          </div>
+          <div class="quick">
+            <button data-prompt="Benim için etkileyici bir metin yaz.">✦ Metin Yaz</button>
+            <button data-prompt="İstediğim özellik için temiz ve açıklamalı kod yaz.">&lt;/&gt; Kod Yaz</button>
+            <button data-prompt="Yeni ve uygulanabilir proje fikirleri öner.">♧ Fikir Al</button>
+            <button data-prompt="Bu konuyu araştır ve önemli noktaları özetle.">⌕ Araştırma Yap</button>
+            <button data-prompt="Bu görev için adım adım bir Yapay Zekâ Ajanı planı hazırla.">ϟ Yapay Zekâ Ajanı</button>
+          </div>
+          <div id="conversation" aria-live="polite"><div class="bubble ai"><span class="bubble-label">XFA</span>Merhaba! Ben XFA. Bir fikir, soru veya görev yaz; birlikte başlayalım.</div></div>
+          <form class="composer" id="chatForm">
+            <button type="button" class="round-tool" id="attachButton" title="Metin dosyası ekle">♧</button>
+            <button type="button" class="round-tool" id="webButton" title="Web incelemeyi aç">◎</button>
+            <div class="message-wrap"><span>✧</span><textarea id="message" rows="1" maxlength="4000" placeholder="Mesajını yaz..." required></textarea></div>
+            <button class="send" id="send" aria-label="Gönder">➤</button>
+            <input type="file" id="attachFile" accept=".txt,.md,.json,.csv" hidden>
+          </form>
+          <div class="disclaimer">XFA yanıtları yapay zekâ tarafından oluşturulur. Önemli dosya değişiklikleri için onayın gerekir.</div>
+        </article>
+      </section>
+
+      <section class="section" id="view-agent">
+        <article class="panel section-panel">
+          <div class="section-heading"><h2>♙ Yapay Zekâ Ajanı</h2><span class="tag">KONTROLLÜ ÇALIŞMA</span></div>
+          <p class="muted">Görevini tanımla. XFA önce bir plan oluşturabilir, ardından yalnızca herkese açık web sayfalarını salt okunur biçimde araştırabilir. Cihazındaki yerel dosyalar bu ajana gönderilmez.</p>
+          <div class="field"><label for="agentTask">Görev tanımı</label><textarea id="agentTask" maxlength="2000" placeholder="Örn. XFA projesini incele ve kullanıcı deneyimini geliştirmek için öneriler hazırla."></textarea></div>
+          <button class="action" id="makePlan">Plan Oluştur</button><button class="action" id="runResearch">Araştırmayı Başlat</button>
+          <div class="output" id="agentOutput">Plan ve araştırma sonucu burada görünecek.</div>
+          <p class="muted">Agent terminal komutu çalıştırmaz, hesaplara giriş yapmaz ve dış dünyada işlem yapmaz. Yerel dosyaların otomatik olarak sunucuya aktarılmaz.</p>
+        </article>
+      </section>
+
+      <section class="section" id="view-workspace">
+        <article class="panel section-panel">
+          <div class="section-heading"><h2>▦ Çalışma Alanı</h2><div><button class="action" id="refreshFiles">Yenile</button><label class="local-import" for="localFileInput">Dosya İçe Aktar</label><input id="localFileInput" type="file" accept=".txt,.md,.json,.csv,.yaml,.yml,.html,.css,.js,.py,.toml" hidden></div></div>
+          <p class="muted">Bu cihazdaki yerel çalışma alanını yönet. Dosyalar IndexedDB içinde tutulur ve XFA sunucusuna yüklenmez.</p>
+          <div class="local-note">Yerel depolama: yalnızca bu tarayıcı ve cihaz. Tarayıcı verilerini temizlersen dosyalar da silinebilir; dışa aktararak yedekleyebilirsin.</div>
+          <div class="split">
+            <div><div class="section-heading"><h2 style="font-size:15px">Yerel Dosyalar</h2></div><div id="fileList" class="file-list"><div class="muted">Dosyaları görmek için yenile.</div></div></div>
+            <div><div class="section-heading"><h2 style="font-size:15px">Dosya İçeriği</h2></div><div id="fileContent" class="output">Bir dosya seçtiğinde içeriği burada görünür.</div></div>
+          </div>
+          <div class="split" style="margin-top:22px">
+            <div><h2 style="font:600 15px 'Space Grotesk'">Yeni Dosya Taslağı</h2><div class="field"><label for="newPath">Dosya yolu</label><input id="newPath" placeholder="notlar/plan.md"></div><div class="field"><label for="newContent">İçerik</label><textarea id="newContent" maxlength="32000" placeholder="Dosya içeriği..."></textarea></div><button class="action" id="proposeCreate">Oluşturma Önerisi</button></div>
+            <div><h2 style="font:600 15px 'Space Grotesk'">Dosya Güncelleme Taslağı</h2><div class="field"><label for="updatePath">Dosya yolu</label><input id="updatePath" placeholder="README.md"></div><div class="field"><label for="updateContent">Yeni tam içerik</label><textarea id="updateContent" maxlength="32000" placeholder="Dosyanın yeni içeriği..."></textarea></div><button class="action" id="proposeUpdate">Güncelleme Önerisi</button></div>
+          </div>
+          <div class="output" id="workspaceOutput">Dosya işlemlerinin durumu burada görünür.</div><button class="action" id="approveChange" disabled>Önerilen Değişikliği Onayla</button>
+        </article>
+      </section>
+
+      <section class="section" id="view-browser">
+        <article class="panel section-panel">
+          <div class="section-heading"><h2>◎ Web İnceleme</h2><span class="tag">SALT OKUNUR</span></div>
+          <p class="muted">Herkese açık bir web sayfasının başlığını ve görünen metnini incele. XFA giriş yapmaz veya form göndermez.</p>
+          <div class="field"><label for="webUrl">Web adresi</label><input id="webUrl" type="url" placeholder="https://example.com"></div>
+          <button class="action" id="inspectPage">Sayfayı İncele</button><div class="output" id="webOutput">Sayfa özeti burada görünecek.</div>
+        </article>
+      </section>
+
+      <section class="section" id="view-settings">
+        <article class="panel section-panel">
+          <div class="section-heading"><h2>⚙ Ayarlar</h2><span class="tag">GİZLİLİK</span></div>
+          <h2 style="font:600 16px 'Space Grotesk'">Hesabım</h2>
+          <div class="output" id="accountInfo">Hesap bilgileri yükleniyor...</div>
+          <div class="provider-list" id="providerList"></div>
+          <div class="account-actions">
+            <button class="action" id="linkGoogle">Google hesabını bağla</button>
+            <button class="action" id="linkDiscord">Discord hesabını bağla</button>
+            <button class="action" id="logoutButton">Çıkış Yap</button>
+          </div>
+          <h2 style="font:600 16px 'Space Grotesk';margin-top:22px">Discord Bildirimleri</h2>
+          <p class="muted">Yalnızca Discord hesabını bağladıktan ve açıkça izin verdikten sonra XFA sana özel mesaj gönderebilir.</p>
+          <label class="setting-check"><input type="checkbox" id="discordNotifications"> Discord özel mesaj bildirimlerine izin ver</label>
+          <button class="action" id="testDiscordNotification">Test mesajı gönder</button>
+          <button class="action" id="checkHealth">Bağlantıyı Kontrol Et</button>
+          <div class="output" id="settingsOutput">Bağlantı bilgisi burada görünür.</div>
+          <h2 style="font:600 16px 'Space Grotesk';margin-top:22px">Güvenlik ve Gizlilik</h2>
+          <p class="muted">Giriş oturumu HttpOnly güvenli çerez ile yönetilir. Dosyaların bu tarayıcıda IndexedDB ile yerel saklanır. Sohbet ve web inceleme istekleri yanıt üretmek için sunucuya gönderilir; yerel dosyalar otomatik gönderilmez.</p>
+          <button class="action" id="clearChat">Sohbeti Temizle</button>
+        </article>
+      </section>
+
+      <section class="section" id="view-more">
+        <article class="panel section-panel">
+          <div class="section-heading"><h2>✧ XFA Ekosistemi</h2><span class="tag">GELİŞİYOR</span></div>
+          <p class="muted">XFA; sohbet, yapay zekâ ajanı, web inceleme ve proje çalışma alanını tek bir deneyimde birleştirmeyi hedefler.</p>
+          <div class="eco-row"><span class="eco-icon">◉</span><span class="eco-name">Discord Bot</span><span class="eco-state online">Çevrimiçi durumunu kontrol et</span></div>
+          <div class="eco-row"><span class="eco-icon">◎</span><span class="eco-name">Web Platformu</span><span class="eco-state">Geliştiriliyor</span></div>
+          <div class="eco-row"><span class="eco-icon">▣</span><span class="eco-name">XFA Masaüstü</span><span class="eco-state">Planlanıyor</span></div>
+          <a class="action" href="https://discord.gg/Dkj8VFnga" target="_blank" rel="noopener">Discord Topluluğuna Katıl →</a>
+        </article>
+      </section>
+
+    </main>
+
+    <aside class="right">
+      <article class="panel stat-card">
+        <div class="card-title"><span><b class="symbol">▥</b> XFA İstatistikleri</span><span class="mini-close">✧</span></div>
+        <div class="stat"><span class="stat-icon">♟</span><div><strong id="memberCount">—</strong><small>Discord Üyesi</small></div></div>
+        <div class="stat"><span class="stat-icon">▤</span><div><strong id="serverCount">—</strong><small>Sunucu</small></div></div>
+        <div class="stat"><span class="stat-icon">ϟ</span><div><strong>∞</strong><small>Potansiyel</small></div></div>
+        <svg class="chart" viewBox="0 0 330 130" preserveAspectRatio="none" aria-hidden="true">
+          <defs><linearGradient id="area" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#a33dff" stop-opacity=".42"/><stop offset="1" stop-color="#8c36ff" stop-opacity="0"/></linearGradient><filter id="glow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+          <path d="M0 111 C35 100 48 108 78 89 S123 92 150 78 S190 93 220 61 S263 59 286 37 S314 31 330 17 L330 130 L0 130Z" fill="url(#area)"/>
+          <path d="M0 111 C35 100 48 108 78 89 S123 92 150 78 S190 93 220 61 S263 59 286 37 S314 31 330 17" fill="none" stroke="#a94cff" stroke-width="2" filter="url(#glow)"/>
+          <g fill="#fff" stroke="#a94cff" stroke-width="2"><circle cx="150" cy="78" r="3"/><circle cx="220" cy="61" r="3"/><circle cx="286" cy="37" r="4"/><circle cx="330" cy="17" r="3"/></g>
+        </svg>
+      </article>
+
+      <article class="panel ecosystem">
+        <div class="card-title"><span><b class="symbol">✿</b> XFA Ekosistemi</span><span class="beta">Beta</span></div>
+        <div class="eco-row"><span class="eco-icon">◉</span><span class="eco-name">Discord Bot</span><span class="eco-state" id="botState">Kontrol ediliyor</span></div>
+        <div class="eco-row"><span class="eco-icon">◎</span><span class="eco-name">Web Platformu</span><span class="eco-state">Yakında</span></div>
+        <div class="eco-row"><span class="eco-icon">▣</span><span class="eco-name">XFA Masaüstü</span><span class="eco-state">Yakında</span></div>
+      </article>
+    </aside>
+
+    <section class="lower">
+      <article class="panel promo">
+        <div class="promo-copy"><h3>🚀 Geleceğin AI'ı</h3><p>XFA ile yapay zekâ teknolojisi herkes için daha erişilebilir olacak.</p><a class="pill-button" href="https://discord.gg/Dkj8VFnga" target="_blank" rel="noopener">Daha Fazla →</a></div>
+        <svg class="skyline" viewBox="0 0 250 170" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+          <defs><linearGradient id="city" x1="0" x2="0" y1="0" y2="1"><stop stop-color="#d18aff"/><stop offset="1" stop-color="#26084f"/></linearGradient></defs>
+          <path d="M0 155 L16 145 27 153 39 128 49 149 61 138 70 153 83 120 93 152 105 141 115 154 127 90 139 153 150 137 159 154 170 112 183 153 195 132 208 154 220 143 250 159V170H0Z" fill="#201044"/>
+          <path d="M117 153 L120 76 125 76 125 57 129 20 133 57 137 76 141 153Z" fill="url(#city)" stroke="#cb91ff" stroke-opacity=".8"/>
+          <path d="M126 20 L129 2 132 20" stroke="#e8bcff" fill="none"/><path d="M120 84H138M119 98H139M118 113H140M117 130H141" stroke="#f1c8ff" stroke-opacity=".7"/>
+          <g fill="#dca8ff" opacity=".85"><rect x="92" y="127" width="3" height="5"/><rect x="102" y="135" width="3" height="5"/><rect x="151" y="124" width="3" height="5"/><rect x="161" y="131" width="3" height="5"/><rect x="181" y="137" width="3" height="5"/></g>
+          <path d="M0 160H250" stroke="#b04dff" stroke-opacity=".7"/>
+        </svg>
+      </article>
+      <article class="panel promo why">
+        <h3>Neden XFA?</h3><div class="why-list"><span class="why-item">Ücretsiz erişim hedefi</span><span class="why-item">Akıllı yapay zekâ ajanı</span><span class="why-item">Güçlü topluluk</span><span class="why-item">Geniş ekosistem</span></div>
+        <div class="why-flower flower"><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i></div>
+      </article>
+      <article class="panel promo">
+        <div class="promo-copy"><h3>Bizimle Kalın!</h3><p>XFA'nın gelişimi için topluluğumuza katıl.</p><a class="pill-button" href="https://discord.gg/Dkj8VFnga" target="_blank" rel="noopener">Discord'a Katıl →</a></div>
+        <svg class="discord-art" viewBox="0 0 170 150" aria-hidden="true">
+          <defs><linearGradient id="disc" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#efcaff"/><stop offset=".45" stop-color="#a05aff"/><stop offset="1" stop-color="#4b13b8"/></linearGradient><filter id="discGlow"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+          <path d="M44 32 Q85 12 126 32 Q143 54 145 104 Q117 132 84 132 Q50 132 24 105 Q27 58 44 32Z" fill="url(#disc)" stroke="#e3b9ff" stroke-width="2" filter="url(#discGlow)"/>
+          <path d="M52 47 Q85 31 118 47 Q128 65 130 94 Q105 113 85 113 Q60 113 39 94 Q42 65 52 47Z" fill="#37106e" opacity=".8"/>
+          <ellipse cx="65" cy="78" rx="10" ry="13" fill="#fff"/><ellipse cx="105" cy="78" rx="10" ry="13" fill="#fff"/><circle cx="66" cy="79" r="5" fill="#2b0d57"/><circle cx="104" cy="79" r="5" fill="#2b0d57"/>
+          <path d="M69 99 Q85 110 101 99" stroke="#f0d7ff" stroke-width="4" fill="none" stroke-linecap="round"/>
+          <path d="M41 44L27 29M129 44L144 27" stroke="#d39dff" stroke-width="4" stroke-linecap="round"/>
+        </svg>
+      </article>
+    </section>
+  </div>
+  <footer class="footer">XFA · Xyrin Flower AI · Herkes için yapay zekâ.</footer>
+</div>
+
+
+<div class="toast" id="toast" role="status"></div>
+
 <script>
-let accessToken='';
+let csrfToken='',currentUser=null,pendingApproval=null,history=[],localDbPromise=null;
 const $=id=>document.getElementById(id);
-async function api(path,body){if(!accessToken)throw new Error('Önce erişim anahtarını girip bağlan.');const r=await fetch('/xfa/api'+path,{method:body?'POST':'GET',headers:{'Authorization':'Bearer '+accessToken,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||('HTTP '+r.status));return d}
-$('connect').onclick=async()=>{accessToken=$('token').value.trim();$('status').textContent='Kontrol ediliyor…';try{const d=await api('/health');$('status').textContent='Bağlandı · Planner: '+(d.planner_ready?'hazır':'API anahtarı eksik')+' · Uzak tarayıcı: '+(d.remote_browser_ready?'hazır':'yapılandırılmadı');}catch(e){accessToken='';$('status').textContent=e.message}};
-$('run').onclick=async()=>{const b=$('run');b.disabled=true;$('runout').textContent='XFA araştırıyor…';try{const d=await api('/tasks/run',{task:$('task').value});$('runout').textContent=d.answer+'\n\nAdımlar: '+JSON.stringify(d.steps,null,2)+'\nOkunan sayfa: '+d.pages_read;}catch(e){$('runout').textContent=e.message}finally{b.disabled=false}};
-$('plan').onclick=async()=>{const b=$('plan');b.disabled=true;$('planout').textContent='Plan hazırlanıyor…';try{const d=await api('/tasks/plan',{task:$('task').value});$('planout').textContent=d.plan;}catch(e){$('planout').textContent=e.message}finally{b.disabled=false}};
-$('open').onclick=async()=>{const b=$('open');b.disabled=true;$('browserout').textContent='Sayfa açılıyor…';try{const d=await api('/browser/open',{url:$('url').value});$('browserout').textContent=d.title+'\n'+d.url+'\n\n'+d.text;}catch(e){$('browserout').textContent=e.message}finally{b.disabled=false}};
-let pendingApproval='';
-$('propose').onclick=async()=>{const b=$('propose');b.disabled=true;$('approvalout').textContent='Təklif hazırlanır…';try{const d=await api('/workspace/propose-create',{path:$('newpath').value,content:$('newcontent').value});pendingApproval=d.approval_id;$('approve').disabled=false;$('approvalout').textContent='Təklif hazırdır: '+d.message+'\nID: '+pendingApproval;}catch(e){$('approvalout').textContent=e.message}finally{b.disabled=false}};
-$('approve').onclick=async()=>{if(!pendingApproval)return;const b=$('approve');b.disabled=true;try{const d=await api('/workspace/approve-create',{approval_id:pendingApproval});$('approvalout').textContent='Fayl '+(d.created.operation==='updated'?'yeniləndi':'yaradıldı')+': '+d.created.path+' ('+d.created.bytes+' bytes)';pendingApproval='';}catch(e){$('approvalout').textContent=e.message}finally{b.disabled=!pendingApproval}};
-$('audit').onclick=async()=>{try{const d=await api('/audit');$('auditout').textContent=JSON.stringify(d.events,null,2)}catch(e){$('auditout').textContent=e.message}};
-$('proposeupdate').onclick=async()=>{const b=$('proposeupdate');b.disabled=true;$('approvalout').textContent='Yeniləmə təklifi hazırlanır…';try{const d=await api('/workspace/propose-update',{path:$('updatepath').value,content:$('updatecontent').value});pendingApproval=d.approval_id;$('approve').disabled=false;$('approvalout').textContent='Yeniləmə təklifi hazırdır. Faylı oxu və təsdiqlə.\nID: '+pendingApproval;}catch(e){$('approvalout').textContent=e.message}finally{b.disabled=false}};
-</script></body></html>
+const labels={chat:'Sohbet',agent:'Yapay Zekâ Ajanı',workspace:'Çalışma Alanı',browser:'Web İnceleme',settings:'Ayarlar',more:'Daha Fazla'};
+function toast(message){$('toast').textContent=message;$('toast').classList.add('show');setTimeout(()=>$('toast').classList.remove('show'),2600)}
+function navigate(view){document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));const target=document.getElementById('view-'+view);if(!target)return;target.classList.add('active');document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));$('homeHero').style.display=view==='chat'?'grid':'none';if(view==='workspace')loadFiles();if(view==='settings')$('settingsOutput').textContent='Bağlantı bilgisi burada görünür.'}
+document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>navigate(b.dataset.view)));
+document.querySelectorAll('[data-prompt]').forEach(b=>b.addEventListener('click',()=>{$('message').value=b.dataset.prompt;$('message').focus()}));
+$('profileButton').onclick=()=>navigate('settings');$('onlineStatus').onclick=()=>health().catch(e=>toast(e.message));
+$('webButton').onclick=()=>navigate('browser');$('attachButton').onclick=()=>$('attachFile').click();
+$('attachFile').onchange=async()=>{const file=$('attachFile').files[0];if(!file)return;try{const text=await file.text();$('message').value=($('message').value+'\n\n'+file.name+':\n'+text.slice(0,12000)).trim();$('message').focus();toast('Dosya içeriği mesaja eklendi.')}catch(e){toast('Dosya okunamadı.')}};
+$('globalSearch').addEventListener('input',e=>{const q=e.target.value.toLocaleLowerCase('tr');if(!q)return;const match=Object.entries(labels).find(([key,value])=>value.toLocaleLowerCase('tr').includes(q));if(match)navigate(match[0])});
+document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();$('globalSearch').focus()}});
+async function api(path,body){
+  const headers={};
+  if(body){headers['Content-Type']='application/json';headers['X-CSRF-Token']=csrfToken;}
+  const options={method:body?'POST':'GET',headers,credentials:'same-origin'};
+  if(body)options.body=JSON.stringify(body);
+  const response=await fetch('/xfa/api'+path,options);
+  const data=await response.json().catch(()=>({}));
+  if(response.status===401){$('authScreen').classList.remove('hidden');throw new Error('Oturum sona erdi. Yeniden giriş yap.');}
+  if(!response.ok)throw new Error(data.error||'İstek başarısız (HTTP '+response.status+')');
+  return data;
+}
+function showAuthError(){
+  const params=new URLSearchParams(location.search),error=params.get('auth_error'),success=params.get('auth_success');
+  const messages={server_not_configured:'Sunucu kimlik doğrulaması henüz yapılandırılmadı.',google_not_configured:'Google OAuth anahtarları eksik.',discord_not_configured:'Discord OAuth anahtarları eksik.',state_invalid:'Güvenlik kontrolü başarısız oldu. Yeniden dene.',permission_denied:'Giriş izni verilmedi.',provider_error:'Giriş tamamlanamadı. Sunucu günlüklerini kontrol et.',identity_already_used:'Bu sağlayıcı hesabı başka bir XFA hesabına bağlı.',link_session_expired:'Hesap bağlantısı oturumu sona erdi.'};
+  if(error)$('authError').textContent=messages[error]||'Giriş sırasında bir sorun oluştu.';
+  if(success==='linked')toast('Hesap başarıyla bağlandı.');
+  else if(success==='1')toast('XFA hesabına giriş yaptın.');
+  if(error||success)historyReplace();
+}
+function historyReplace(){const url=new URL(location.href);url.searchParams.delete('auth_error');url.searchParams.delete('auth_success');historyReplaceState(url.toString())}
+function historyReplaceState(url){window.history.replaceState({},'',url)}
+async function initializeAuth(){
+  showAuthError();
+  try{
+    const providersResponse=await fetch('/auth/providers',{credentials:'same-origin'});
+    const providers=providersResponse.ok?await providersResponse.json():{};
+    [['google','googleLoginButton'],['discord','discordLoginButton']].forEach(([key,id])=>{
+      const button=$(id),enabled=!!providers[key]&&!!providers.session_ready;
+      button.classList.toggle('disabled',!enabled);
+      button.setAttribute('aria-disabled',String(!enabled));
+      if(!enabled)button.title='Bu giriş yöntemi henüz sunucuda yapılandırılmadı.';
+    });
+    const response=await fetch('/auth/me',{credentials:'same-origin'});
+    const data=await response.json();
+    if(!response.ok||!data.authenticated){
+      $('authScreen').classList.remove('hidden');
+      if(data.error==='server_not_configured')$('authError').textContent='Giriş sistemi için FLASK_SECRET_KEY henüz sunucuya eklenmedi.';
+      return;
+    }
+    currentUser=data.user;csrfToken=data.csrf_token||'';
+    $('authScreen').classList.add('hidden');
+    $('profileButton').querySelector('.avatar').textContent=(currentUser.name||'X').trim().charAt(0).toLocaleUpperCase('tr');
+    $('profileButton').querySelector('span:last-child').textContent=currentUser.name||'Hesap';
+    $('accountInfo').textContent=(currentUser.name||'Kullanıcı')+'\n'+(currentUser.email||'Doğrulanmış e-posta paylaşılmadı');
+    const connected=data.providers||[];
+    $('providerList').replaceChildren();
+    ['google','discord'].forEach(provider=>{const chip=document.createElement('span');chip.className='provider-chip';chip.textContent=(provider==='google'?'Google':'Discord')+(connected.includes(provider)?' · Bağlı':' · Bağlı değil');$('providerList').append(chip);});
+    $('linkGoogle').disabled=connected.includes('google');$('linkDiscord').disabled=connected.includes('discord');
+    $('linkGoogle').style.opacity=connected.includes('google')?'.45':'1';$('linkDiscord').style.opacity=connected.includes('discord')?'.45':'1';
+    $('discordNotifications').checked=!!data.discord_notifications;
+    try{await health();}catch(e){$('settingsOutput').textContent=e.message;}
+    await loadFiles();
+  }catch(e){$('authScreen').classList.remove('hidden');$('authError').textContent='Sunucuya bağlanılamadı. Sayfayı yenileyip tekrar dene.';}
+}
+function startLink(provider){
+  const form=document.createElement('form');form.method='POST';form.action='/auth/link/'+provider;
+  const input=document.createElement('input');input.type='hidden';input.name='csrf_token';input.value=csrfToken;form.append(input);document.body.append(form);form.submit();
+}
+$('linkGoogle').onclick=()=>startLink('google');$('linkDiscord').onclick=()=>startLink('discord');
+$('logoutButton').onclick=async()=>{
+  try{const r=await fetch('/auth/logout',{method:'POST',headers:{'X-CSRF-Token':csrfToken},credentials:'same-origin'});if(!r.ok)throw new Error('Çıkış yapılamadı.');currentUser=null;csrfToken='';$('authScreen').classList.remove('hidden');$('authError').textContent='Oturum kapatıldı.';}
+  catch(e){toast(e.message);}
+};
+$('discordNotifications').onchange=async()=>{
+  const enabled=$('discordNotifications').checked;
+  try{const r=await fetch('/auth/discord-notifications',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken},credentials:'same-origin',body:JSON.stringify({enabled})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Ayar kaydedilemedi.');toast(enabled?'Discord bildirimleri açıldı.':'Discord bildirimleri kapatıldı.');}
+  catch(e){$('discordNotifications').checked=!enabled;toast(e.message);}
+};
+$('testDiscordNotification').onclick=async()=>{
+  try{const r=await fetch('/auth/discord-notifications/test',{method:'POST',headers:{'X-CSRF-Token':csrfToken},credentials:'same-origin'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Test mesajı gönderilemedi.');toast('Test mesajı Discord DM olarak gönderildi.');}
+  catch(e){toast(e.message);}
+};
+async function health(){const d=await api('/health');$('connection').textContent='Bağlı';$('botState').textContent='Çevrimiçi';$('botState').classList.add('online');$('settingsOutput').textContent='Bağlantı başarılı.\nPlanlama: '+(d.planner_ready?'Hazır':'API anahtarı eksik')+'\nUzak tarayıcı: '+(d.remote_browser_ready?'Hazır':'Kurulmadı')+'\nÇalışma modu: '+d.execution_mode;return d}
+async function publicStats(){try{const r=await fetch('/api/stats');if(!r.ok)return;const d=await r.json();$('memberCount').textContent=(d.members||0).toLocaleString('tr-TR')+'+';$('serverCount').textContent=String(d.guilds||0);if(d.ready){$('connection').textContent='Çevrimiçi';$('connectionDot').style.background='var(--green)';$('connectionDot').style.boxShadow='0 0 13px #2ce79a';$('botState').textContent='Çevrimiçi';$('botState').classList.add('online')}else{$('connection').textContent='Çevrimdışı';$('connectionDot').style.background='#a78bba';$('connectionDot').style.boxShadow='none';$('botState').textContent='Çevrimdışı';$('botState').classList.remove('online')}}catch(e){$('memberCount').textContent='—';$('serverCount').textContent='—';$('connection').textContent='Durum alınamadı';$('connectionDot').style.background='#a78bba';$('connectionDot').style.boxShadow='none'}}
+function bubble(who,text){const el=document.createElement('div');el.className='bubble '+(who==='Sen'?'user':'ai');const label=document.createElement('span');label.className='bubble-label';label.textContent=who;const body=document.createElement('div');body.textContent=text;el.append(label,body);$('conversation').append(el);$('conversation').scrollTop=$('conversation').scrollHeight}
+async function sendChat(task){history.push({role:'user',content:task});history=history.slice(-20);const data=await api('/chat',{messages:history});const reply=data.reply||'Şu anda yanıt oluşturamadım.';history.push({role:'model',content:reply});history=history.slice(-20);return reply}
+$('chatForm').onsubmit=async e=>{e.preventDefault();const task=$('message').value.trim();if(!task)return;$('message').value='';bubble('Sen',task);$('send').disabled=true;$('send').textContent='…';try{bubble('XFA',await sendChat(task))}catch(err){bubble('XFA',err.message)}finally{$('send').disabled=false;$('send').textContent='➤'}};
+$('makePlan').onclick=async()=>{const task=$('agentTask').value.trim();if(!task)return $('agentOutput').textContent='Lütfen önce bir görev yaz.';$('makePlan').disabled=true;$('agentOutput').textContent='Plan hazırlanıyor...';try{const d=await api('/tasks/plan',{task});$('agentOutput').textContent=d.plan}catch(e){$('agentOutput').textContent=e.message}finally{$('makePlan').disabled=false}};
+$('runResearch').onclick=async()=>{const task=$('agentTask').value.trim();if(!task)return $('agentOutput').textContent='Lütfen önce bir görev yaz.';$('runResearch').disabled=true;$('agentOutput').textContent='Araştırma yapılıyor...';try{const d=await api('/tasks/run',{task});$('agentOutput').textContent=d.answer+'\n\nTamamlanan adımlar: '+(d.steps||[]).length+' · İncelenen sayfa: '+(d.pages_read||0)}catch(e){$('agentOutput').textContent=e.message}finally{$('runResearch').disabled=false}};
+$('inspectPage').onclick=async()=>{const url=$('webUrl').value.trim();if(!url)return $('webOutput').textContent='Lütfen geçerli bir web adresi gir.';$('inspectPage').disabled=true;$('webOutput').textContent='Sayfa inceleniyor...';try{const d=await api('/browser/open',{url});$('webOutput').textContent=d.title+'\n'+d.url+'\n\n'+d.text}catch(e){$('webOutput').textContent=e.message}finally{$('inspectPage').disabled=false}};
+
+function openLocalDb(){
+  if(localDbPromise)return localDbPromise;
+  localDbPromise=new Promise((resolve,reject)=>{
+    if(!('indexedDB' in window)){reject(new Error('Tarayıcı yerel depolamayı desteklemiyor.'));return;}
+    const req=indexedDB.open('xfa-local-workspace',1);
+    req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains('files')){const store=db.createObjectStore('files',{keyPath:['userId','path']});store.createIndex('byUser','userId',{unique:false});}};
+    req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error||new Error('Yerel depo açılamadı.'));
+  });
+  return localDbPromise;
+}
+function normalizeLocalPath(path){
+  const value=String(path||'').trim().replace(/\\/g,'/');
+  if(!value||value.length>240||value.startsWith('/')||value.split('/').some(part=>!part||part==='.'||part==='..'||part.startsWith('.')))throw new Error('Geçerli ve gizli olmayan bir dosya yolu gir.');
+  return value;
+}
+async function putLocalFile(path,content){
+  const userId=currentUser&&currentUser.id;if(!userId)throw new Error('Önce giriş yap.');
+  const db=await openLocalDb();
+  return new Promise((resolve,reject)=>{const tx=db.transaction('files','readwrite');tx.objectStore('files').put({userId,path:normalizeLocalPath(path),content:String(content),updatedAt:Date.now()});tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error||new Error('Dosya yerel olarak kaydedilemedi.'));});
+}
+async function getLocalFile(path){
+  const db=await openLocalDb(),userId=currentUser.id;
+  return new Promise((resolve,reject)=>{const req=db.transaction('files','readonly').objectStore('files').get([userId,normalizeLocalPath(path)]);req.onsuccess=()=>resolve(req.result||null);req.onerror=()=>reject(req.error);});
+}
+async function listLocalFiles(){
+  const db=await openLocalDb(),userId=currentUser.id;
+  return new Promise((resolve,reject)=>{const store=db.transaction('files','readonly').objectStore('files');const req=store.index('byUser').getAll(IDBKeyRange.only(userId));req.onsuccess=()=>resolve((req.result||[]).sort((a,b)=>a.path.localeCompare(b.path)));req.onerror=()=>reject(req.error);});
+}
+function downloadLocalFile(path,content){
+  const blob=new Blob([content],{type:'text/plain;charset=utf-8'}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=path.split('/').pop()||'xfa-file.txt';document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+async function loadFiles(){
+  const box=$('fileList');box.textContent='Yerel dosyalar yükleniyor...';
+  try{
+    const files=await listLocalFiles();box.replaceChildren();
+    if(!files.length){box.textContent='Henüz yerel dosya yok. Dosya İçe Aktar ile ekleyebilir veya yeni bir dosya oluşturabilirsin.';return;}
+    files.forEach(file=>{
+      const row=document.createElement('div');row.className='file-item';
+      const name=document.createElement('span');name.textContent=file.path;name.title=file.path;
+      const controls=document.createElement('span');
+      const open=document.createElement('button');open.textContent='Aç';open.onclick=async()=>{try{const item=await getLocalFile(file.path);$('fileContent').textContent=item.content;$('updatePath').value=item.path;$('updateContent').value=item.content;const exp=document.createElement('button');exp.className='action';exp.textContent='İndir';exp.onclick=()=>downloadLocalFile(item.path,item.content);const area=$('fileContent');area.append(document.createTextNode('\n'));area.append(exp);}catch(e){toast(e.message)}};
+      const save=document.createElement('button');save.textContent='İndir';save.onclick=async()=>{const item=await getLocalFile(file.path);if(item)downloadLocalFile(item.path,item.content);};
+      controls.append(open,save);row.append(name,controls);box.append(row);
+    });
+  }catch(e){box.textContent=e.message;}
+}
+$('refreshFiles').onclick=loadFiles;
+$('localFileInput').onchange=async()=>{
+  const file=$('localFileInput').files[0];if(!file)return;
+  try{if(file.size>1024*1024)throw new Error('Tek dosya için en fazla 1 MB desteklenir.');const content=await file.text();await putLocalFile(file.name,content);$('fileContent').textContent='Yerel olarak kaydedildi: '+file.name;$('workspaceOutput').textContent='Dosya bu cihazın tarayıcı deposuna kaydedildi. Sunucuya yüklenmedi.';await loadFiles();toast('Dosya cihazına kaydedildi.');}
+  catch(e){toast(e.message);}finally{$('localFileInput').value='';}
+};
+async function propose(path,content,kind){
+  if(!path||!content)return $('workspaceOutput').textContent='Dosya yolu ve içerik gerekli.';
+  try{const cleanPath=normalizeLocalPath(path);if(new TextEncoder().encode(content).length>1024*1024)throw new Error('Dosya 1 MB sınırını aşıyor.');const existing=await getLocalFile(cleanPath);if(kind==='create'&&existing)throw new Error('Bu dosya zaten var. Güncelleme taslağını kullan.');if(kind==='update'&&!existing)throw new Error('Güncellenecek yerel dosya bulunamadı.');pendingApproval={path:cleanPath,content,kind};$('approveChange').disabled=false;$('workspaceOutput').textContent='Yerel değişiklik taslağı hazır.\nYol: '+cleanPath+'\nİşlem: '+(kind==='create'?'Yeni dosya oluştur':'Dosyayı güncelle')+'\nOnaylarsan bu cihazda saklanır; sunucuya gönderilmez.';}
+  catch(e){$('workspaceOutput').textContent=e.message;}
+}
+$('proposeCreate').onclick=()=>propose($('newPath').value.trim(),$('newContent').value,'create');
+$('proposeUpdate').onclick=()=>propose($('updatePath').value.trim(),$('updateContent').value,'update');
+$('approveChange').onclick=async()=>{
+  if(!pendingApproval)return;$('approveChange').disabled=true;
+  try{await putLocalFile(pendingApproval.path,pendingApproval.content);$('workspaceOutput').textContent='Yerel dosya kaydedildi: '+pendingApproval.path+' · '+(pendingApproval.kind==='create'?'oluşturuldu':'güncellendi')+'.';pendingApproval=null;$('newPath').value='';$('newContent').value='';await loadFiles();toast('Dosya bu cihazda kaydedildi.');}
+  catch(e){$('workspaceOutput').textContent=e.message;}
+  finally{$('approveChange').disabled=!pendingApproval;}
+};
+$('clearChat').onclick=()=>{history=[];$('conversation').replaceChildren();bubble('XFA','Sohbet temizlendi. Yeni bir mesajla başlayabiliriz.')};
+$('checkHealth').onclick=async()=>{try{await health()}catch(e){$('settingsOutput').textContent=e.message}};
+publicStats();
+initializeAuth();
+
+</script>
+</body>
+</html>

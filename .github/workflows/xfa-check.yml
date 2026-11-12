@@ -1,0 +1,43 @@
+name: XFA checks
+
+on:
+  push:
+    branches: [main, feature/xfa-public-platform]
+  pull_request:
+    branches: [main]
+
+jobs:
+  xfa-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Flask test dependency
+        run: python -m pip install "Flask>=3.0,<4" "cryptography>=42.0"
+      - name: Compile Python source
+        run: python -m compileall -q xfa_agent web_app.py main.py
+      - name: Run XFA authentication tests
+        run: python -m unittest discover -s tests -p "test_xfa_*.py" -v
+      - name: Check dashboard JavaScript and DOM IDs
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          html = Path("xfa_agent/dashboard.html").read_text(encoding="utf-8")
+          scripts = re.findall(r"<script>(.*?)</script>", html, flags=re.S)
+          if not scripts:
+              raise SystemExit("No inline dashboard script found")
+          js = "\n".join(scripts)
+          Path("/tmp/xfa-dashboard.js").write_text(js, encoding="utf-8")
+          ids = set(re.findall(r'\bid="([^"]+)"', html))
+          refs = set(re.findall(r"\$\('([^']+)'", js))
+          missing = sorted(refs - ids)
+          if missing:
+              raise SystemExit("Missing dashboard element IDs: " + ", ".join(missing))
+          PY
+          node --check /tmp/xfa-dashboard.js
