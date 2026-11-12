@@ -11,7 +11,7 @@ Add these values in the Replit Secrets panel. Never put them in browser code or 
 - `DISCORD_TOKEN`: the existing Discord bot token, used only by the bot process.
 
 Optional:
-- `XFA_DATA_DIR`: writable persistent directory for the minimal account database and server-side sessions. Default: `data/xfa`.
+- `XFA_DATABASE_PATH`: writable persistent SQLite database path shared with the existing XFA account and integration tables. Default: `instance/xfa.sqlite3`.
 - `XFA_COOKIE_SECURE`: defaults to `true`. Set to `false` only for local HTTP development; keep it enabled on the public site.
 
 ## OAuth callback URLs
@@ -37,7 +37,7 @@ Discord OAuth:
 ## How account and file storage works
 
 - The browser receives a Secure, HttpOnly, SameSite=Lax cookie containing only a signed random session identifier.
-- Session contents, minimal provider identity records, and notification preferences are stored server-side in SQLite.
+- Session contents, provider identity records, and notification preferences are stored server-side in the shared XFA SQLite database (`xfa_sessions`, `xfa_oauth_accounts`, and `xfa_notification_preferences`).
 - Provider access tokens are exchanged server-side and discarded. They are not kept in the database.
 - Users can sign in with Google or Discord. To use both on one XFA profile, sign in with the first provider and explicitly link the second from **Ayarlar → Hesabım**. Matching email addresses are not silently merged.
 - User workspace files are stored in browser IndexedDB, partitioned by XFA account ID. File contents are not uploaded to the XFA server by the workspace UI.
