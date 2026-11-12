@@ -31,12 +31,10 @@ PROVIDERS = {"google", "discord"}
 OAUTH_STATE_TTL = 600
 
 
-def _data_dir() -> Path:
-    return Path(os.getenv("XFA_DATA_DIR", "data/xfa")).expanduser().resolve()
-
-
 def _db_path() -> Path:
-    return Path(os.getenv("XFA_AUTH_DB", str(_data_dir() / "auth.sqlite3"))).expanduser().resolve()
+    # Shared with xfa_agent.accounts: one account database for the whole product.
+    configured = os.getenv("XFA_DATABASE_PATH", "").strip()
+    return Path(configured or (Path("instance") / "xfa.sqlite3")).expanduser().resolve()
 
 
 @contextmanager
@@ -58,34 +56,22 @@ def _connect():
 
 
 def _init_db() -> None:
+    # Reuse the existing XFA user, OAuth identity and integration schema.
+    from xfa_agent.accounts import init_db as init_accounts_db
+    init_accounts_db()
     with _connect() as db:
         db.executescript(
             """
-            CREATE TABLE IF NOT EXISTS users (
-                id TEXT PRIMARY KEY,
-                display_name TEXT NOT NULL,
-                email TEXT,
-                created_at INTEGER NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS identities (
-                provider TEXT NOT NULL,
-                subject TEXT NOT NULL,
-                user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                provider_email TEXT,
-                linked_at INTEGER NOT NULL,
-                PRIMARY KEY (provider, subject)
-            );
-            CREATE INDEX IF NOT EXISTS identities_user_id_idx ON identities(user_id);
-            CREATE TABLE IF NOT EXISTS notification_preferences (
-                user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+            CREATE TABLE IF NOT EXISTS xfa_notification_preferences (
+                user_id TEXT PRIMARY KEY REFERENCES xfa_users(id) ON DELETE CASCADE,
                 discord_enabled INTEGER NOT NULL DEFAULT 0
             );
-            CREATE TABLE IF NOT EXISTS sessions (
+            CREATE TABLE IF NOT EXISTS xfa_sessions (
                 sid TEXT PRIMARY KEY,
                 data TEXT NOT NULL,
                 expires INTEGER NOT NULL
             );
-            CREATE INDEX IF NOT EXISTS sessions_expires_idx ON sessions(expires);
+            CREATE INDEX IF NOT EXISTS xfa_sessions_expires_idx ON xfa_sessions(expires);
             """
         )
 
@@ -122,7 +108,7 @@ class _SQLiteSessionInterface(SessionInterface):
             if isinstance(sid, str) and 24 <= len(sid) <= 128:
                 with _connect() as db:
                     row = db.execute(
-                        "SELECT data, expires FROM sessions WHERE sid=?", (sid,)
+                        "SELECT data, expires FROM xfa_sessions WHERE sid=?", (sid,)
                     ).fetchone()
                 if row and int(row["expires"]) > int(time.time()):
                     try:
@@ -139,7 +125,7 @@ class _SQLiteSessionInterface(SessionInterface):
         path = self.get_cookie_path(app)
         if not sess:
             with _connect() as db:
-                db.execute("DELETE FROM sessions WHERE sid=?", (sess.sid,))
+                db.execute("DELETE FROM xfa_sessions WHERE sid=?", (sess.sid,))
             if sess.modified:
                 response.delete_cookie(
                     name, domain=domain, path=path,
@@ -154,11 +140,11 @@ class _SQLiteSessionInterface(SessionInterface):
         payload = json.dumps(dict(sess), ensure_ascii=False, separators=(",", ":"))
         with _connect() as db:
             db.execute(
-                "INSERT INTO sessions(sid, data, expires) VALUES(?,?,?) "
+                "INSERT INTO xfa_sessions(sid, data, expires) VALUES(?,?,?) "
                 "ON CONFLICT(sid) DO UPDATE SET data=excluded.data, expires=excluded.expires",
                 (sess.sid, payload, expires_at),
             )
-            db.execute("DELETE FROM sessions WHERE expires <= ?", (now,))
+            db.execute("DELETE FROM xfa_sessions WHERE expires <= ?", (now,))
         signed = self._serializer(app).dumps(sess.sid)
         response.set_cookie(
             name, signed, expires=self.get_expiration_time(app, sess),
@@ -267,7 +253,7 @@ def _set_user_session(user_id: str, profile: dict, provider: str) -> None:
     session.clear()
     if old_sid:
         with _connect() as db:
-            db.execute("DELETE FROM sessions WHERE sid=?", (old_sid,))
+            db.execute("DELETE FROM xfa_sessions WHERE sid=?", (old_sid,))
         session.sid = secrets.token_urlsafe(32)
     session.permanent = True
     session["xfa_user_id"] = user_id
@@ -366,44 +352,60 @@ def callback(provider: str):
                 return _redirect_error("link_session_expired")
             with _connect() as db:
                 existing = db.execute(
-                    "SELECT user_id FROM identities WHERE provider=? AND subject=?",
+                    "SELECT user_id FROM xfa_oauth_accounts WHERE provider=? AND provider_subject=?",
                     (provider, profile["subject"]),
                 ).fetchone()
                 if existing and existing["user_id"] != user_id:
                     return _redirect_error("identity_already_used")
                 db.execute(
-                    "INSERT OR IGNORE INTO identities(provider, subject, user_id, provider_email, linked_at) VALUES(?,?,?,?,?)",
-                    (provider, profile["subject"], user_id, profile.get("email"), int(time.time())),
+                    "INSERT OR IGNORE INTO xfa_oauth_accounts(id, user_id, provider, provider_subject, created_at) VALUES(?,?,?,?,?)",
+                    (str(uuid.uuid4()), user_id, provider, profile["subject"], int(time.time())),
                 )
-                if profile.get("email"):
-                    db.execute("UPDATE users SET email=COALESCE(email, ?) WHERE id=?", (profile["email"], user_id))
             session["xfa_csrf"] = secrets.token_urlsafe(32)
             return redirect("/xfa?auth_success=linked")
         with _connect() as db:
             identity = db.execute(
-                "SELECT user_id FROM identities WHERE provider=? AND subject=?",
+                "SELECT user_id FROM xfa_oauth_accounts WHERE provider=? AND provider_subject=?",
                 (provider, profile["subject"]),
             ).fetchone()
-            if identity:
-                user_id = identity["user_id"]
-                db.execute(
-                    "UPDATE users SET display_name=?, email=COALESCE(?, email) WHERE id=?",
-                    (profile["name"], profile.get("email"), user_id),
-                )
-                db.execute(
-                    "UPDATE identities SET provider_email=? WHERE provider=? AND subject=?",
-                    (profile.get("email"), provider, profile["subject"]),
-                )
-            else:
-                user_id = str(uuid.uuid4())
-                db.execute(
-                    "INSERT INTO users(id, display_name, email, created_at) VALUES(?,?,?,?)",
-                    (user_id, profile["name"], profile.get("email"), int(time.time())),
-                )
-                db.execute(
-                    "INSERT INTO identities(provider, subject, user_id, provider_email, linked_at) VALUES(?,?,?,?,?)",
-                    (provider, profile["subject"], user_id, profile.get("email"), int(time.time())),
-                )
+            email_taken = bool(profile.get("email") and db.execute(
+                "SELECT 1 FROM xfa_users WHERE email=? COLLATE NOCASE",
+                (profile["email"],),
+            ).fetchone())
+        if identity:
+            user_id = identity["user_id"]
+        else:
+            from xfa_agent.accounts import create_user
+            # Never merge accounts just because two providers report the same email.
+            # Keep a verified email only when it is not already owned by an XFA account.
+            account_email = profile.get("email")
+            if not account_email or email_taken:
+                opaque = hashlib.sha256((provider + ":" + profile["subject"]).encode()).hexdigest()[:24]
+                account_email = f"{provider}-{opaque}@oauth.xfa.invalid"
+            try:
+                created = create_user(account_email, secrets.token_urlsafe(48))
+            except ValueError:
+                opaque = hashlib.sha256((provider + ":" + profile["subject"]).encode()).hexdigest()[:24]
+                created = create_user(f"{provider}-{opaque}@oauth.xfa.invalid", secrets.token_urlsafe(48))
+            user_id = created["id"]
+            try:
+                with _connect() as db:
+                    concurrent = db.execute(
+                        "SELECT user_id FROM xfa_oauth_accounts WHERE provider=? AND provider_subject=?",
+                        (provider, profile["subject"]),
+                    ).fetchone()
+                    if concurrent:
+                        db.execute("DELETE FROM xfa_users WHERE id=?", (user_id,))
+                        user_id = concurrent["user_id"]
+                    else:
+                        db.execute(
+                            "INSERT INTO xfa_oauth_accounts(id, user_id, provider, provider_subject, created_at) VALUES(?,?,?,?,?)",
+                            (str(uuid.uuid4()), user_id, provider, profile["subject"], int(time.time())),
+                        )
+            except Exception:
+                with _connect() as db:
+                    db.execute("DELETE FROM xfa_users WHERE id=?", (user_id,))
+                raise
         _set_user_session(user_id, profile, provider)
         return redirect("/xfa?auth_success=1")
     except Exception:
@@ -421,22 +423,22 @@ def me():
     _init_db()
     with _connect() as db:
         user = db.execute(
-            "SELECT id, display_name, email FROM users WHERE id=?", (user_id,)
+            "SELECT id, email FROM xfa_users WHERE id=?", (user_id,)
         ).fetchone()
         if not user:
             session.clear()
             return jsonify({"authenticated": False}), 401
         providers = [
             row["provider"] for row in db.execute(
-                "SELECT provider FROM identities WHERE user_id=? ORDER BY provider", (user_id,)
+                "SELECT provider FROM xfa_oauth_accounts WHERE user_id=? ORDER BY provider", (user_id,)
             ).fetchall()
         ]
         pref = db.execute(
-            "SELECT discord_enabled FROM notification_preferences WHERE user_id=?", (user_id,)
+            "SELECT discord_enabled FROM xfa_notification_preferences WHERE user_id=?", (user_id,)
         ).fetchone()
     return jsonify({
         "authenticated": True,
-        "user": {"id": user["id"], "name": user["display_name"], "email": user["email"]},
+        "user": {"id": user["id"], "name": session.get("xfa_display_name") or "XFA kullanıcısı", "email": session.get("xfa_email")},
         "providers": providers,
         "discord_notifications": bool(pref["discord_enabled"]) if pref else False,
         "csrf_token": session.get("xfa_csrf"),
@@ -465,12 +467,12 @@ def discord_notifications():
     _init_db()
     with _connect() as db:
         linked = db.execute(
-            "SELECT 1 FROM identities WHERE provider='discord' AND user_id=?", (user_id,)
+            "SELECT 1 FROM xfa_oauth_accounts WHERE provider='discord' AND user_id=?", (user_id,)
         ).fetchone()
         if enabled and not linked:
             return jsonify({"error": "Önce Discord hesabını bağlamalısın."}), 409
         db.execute(
-            "INSERT INTO notification_preferences(user_id, discord_enabled) VALUES(?, ?) "
+            "INSERT INTO xfa_notification_preferences(user_id, discord_enabled) VALUES(?, ?) "
             "ON CONFLICT(user_id) DO UPDATE SET discord_enabled=excluded.discord_enabled",
             (user_id, 1 if enabled else 0),
         )
@@ -485,8 +487,8 @@ def send_discord_notification(app, user_id: str, message: str) -> bool:
     _init_db()
     with _connect() as db:
         row = db.execute(
-            "SELECT i.subject, p.discord_enabled FROM identities i "
-            "JOIN notification_preferences p ON p.user_id=i.user_id "
+            "SELECT i.provider_subject, p.discord_enabled FROM xfa_oauth_accounts i "
+            "JOIN xfa_notification_preferences p ON p.user_id=i.user_id "
             "WHERE i.user_id=? AND i.provider='discord'",
             (user_id,),
         ).fetchone()
@@ -496,7 +498,7 @@ def send_discord_notification(app, user_id: str, message: str) -> bool:
     if not bot or not bot.is_ready():
         raise RuntimeError("Discord botu şu anda çevrimiçi değil.")
     async def _deliver():
-        user = await bot.fetch_user(int(row["subject"]))
+        user = await bot.fetch_user(int(row["provider_subject"]))
         await user.send(clean)
     future = asyncio.run_coroutine_threadsafe(_deliver(), bot.loop)
     try:
