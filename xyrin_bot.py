@@ -1659,7 +1659,7 @@ class AIService:
                 for part in item.get("content") or []:
                     if part.get("type") == "output_text" and part.get("text"):
                         chunks.append(part["text"])
-            content = "\\n".join(chunks).strip()
+            content = "\n".join(chunks).strip()
         if not content:
             raise AIError("🤔 OpenAI bir yanıt üretemedi.", "empty")
         return content
