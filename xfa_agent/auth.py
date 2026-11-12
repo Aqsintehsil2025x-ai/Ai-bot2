@@ -106,6 +106,10 @@ class _SQLiteSessionInterface(SessionInterface):
 
     def open_session(self, app, req):
         _init_db()
+        # Fail closed if the deployment secret is missing or was rotated away.
+        # Old cookies must not make an unconfigured app crash.
+        if not app.secret_key:
+            return _XFAUserSession(new=True)
         cookie_name = app.config.get("SESSION_COOKIE_NAME", "session")
         signed_id = req.cookies.get(cookie_name)
         if signed_id:
