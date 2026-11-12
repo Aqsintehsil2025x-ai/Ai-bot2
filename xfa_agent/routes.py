@@ -72,6 +72,53 @@ def health():
     })
 
 
+@xfa.post("/chat")
+def chat():
+    """Short-lived multi-turn chat; conversation history is supplied by the current browser tab."""
+    body = request.get_json(silent=True) or {}
+    messages = body.get("messages", [])
+    if not isinstance(messages, list) or not messages or len(messages) > 20:
+        return jsonify({"error": "messages must be a list containing 1-20 items"}), 400
+
+    transcript = []
+    for item in messages:
+        if not isinstance(item, dict) or item.get("role") not in {"user", "model"}:
+            return jsonify({"error": "Each message must have a user or model role"}), 400
+        content = str(item.get("content", "")).strip()
+        if not content or len(content) > 4000:
+            return jsonify({"error": "Each message must contain 1-4000 characters"}), 400
+        transcript.append(("Kullanıcı" if item["role"] == "user" else "XFA") + ": " + content)
+
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    if not api_key:
+        return jsonify({"error": "GEMINI_API_KEY is not configured"}), 503
+
+    try:
+        from google import genai
+        from google.genai import types
+        client = genai.Client(api_key=api_key)
+        model = os.getenv("XFA_MODEL", os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite"))
+        response = client.models.generate_content(
+            model=model,
+            contents="\n\n".join(transcript),
+            config=types.GenerateContentConfig(
+                system_instruction=(
+                    "Sen XFA'sın: Türkçe konuşan, yardımsever ve dikkatli bir yapay zekâ asistanısın. "
+                    "Kullanıcının dilini takip et; varsayılan dil Türkçedir. Açık, doğal ve uygulanabilir "
+                    "yanıtlar ver. Kod istendiğinde çalıştırılabilir örnekler ve kısa açıklamalar sun. "
+                    "Gerçekleştirmediğin işlemleri yapılmış gibi gösterme. Web, hesap, dosya veya dış "
+                    "dünya üzerinde etkisi olan işlemler için kullanıcı onayı gerektiğini açıkça belirt. "
+                    "Şifre, API anahtarı veya doğrulama kodu isteme."
+                ),
+                max_output_tokens=1200,
+                temperature=0.55,
+            ),
+        )
+        return jsonify({"ok": True, "reply": response.text or "Şu anda yanıt oluşturamadım."})
+    except Exception:
+        return jsonify({"error": "Sohbet isteği başarısız oldu. Sunucu günlüklerini kontrol edin."}), 502
+
+
 @xfa.post("/tasks/plan")
 def plan_task():
     body = request.get_json(silent=True) or {}
