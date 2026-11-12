@@ -34,8 +34,8 @@ jobs:
               raise SystemExit("No inline dashboard script found")
           js = "\n".join(scripts)
           Path("/tmp/xfa-dashboard.js").write_text(js, encoding="utf-8")
-          ids = set(re.findall(r'\\bid=["\\\']([^"\\\']+)["\\\']', html))
-          refs = set(re.findall(r"\\$\\(['\\\"]([^'\\\"]+)", js))
+          ids = set(re.findall(r'\bid="([^"]+)"', html))
+          refs = set(re.findall(r"\$\('([^']+)'", js))
           missing = sorted(refs - ids)
           if missing:
               raise SystemExit("Missing dashboard element IDs: " + ", ".join(missing))
