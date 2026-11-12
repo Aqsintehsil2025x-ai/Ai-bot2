@@ -157,7 +157,7 @@ button,input,textarea{font:inherit}button{cursor:pointer}button:disabled{opacity
 .auth-flower{margin:0 auto 13px;width:56px;height:56px}.auth-card h1{font:700 42px 'Space Grotesk';margin:0;background:linear-gradient(180deg,#fff,#bd7cff);background-clip:text;color:transparent}
 .auth-card p{color:var(--muted);line-height:1.6;font-size:13px}.auth-providers{display:grid;gap:11px;margin:22px 0 16px}
 .auth-provider{display:flex;align-items:center;justify-content:center;gap:10px;border:1px solid #9951cf88;border-radius:12px;padding:14px 16px;background:#160d24;color:#fff;font-weight:700;transition:.2s}
-.auth-provider:hover{border-color:#d19aff;background:#28113e;transform:translateY(-1px)}.auth-provider.discord{background:linear-gradient(120deg,#5632a8,#392078)}
+.auth-provider:hover{border-color:#d19aff;background:#28113e;transform:translateY(-1px)}.auth-provider.disabled{opacity:.35;cursor:not-allowed;pointer-events:none;filter:saturate(.3)}.auth-provider.discord{background:linear-gradient(120deg,#5632a8,#392078)}
 .auth-note{font-size:11px!important;color:#9985b0!important}.auth-error{min-height:20px;color:#ffb7d1;font-size:12px}
 .account-actions{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 16px}
 .account-actions .action{margin:0}.provider-list{display:flex;flex-wrap:wrap;gap:7px;margin:8px 0}
@@ -181,8 +181,8 @@ button,input,textarea{font:inherit}button{cursor:pointer}button:disabled{opacity
     <h1>XFA</h1>
     <p>Xyrin Flower AI hesabına Google veya Discord ile güvenli giriş yap.</p>
     <div class="auth-providers">
-      <a class="auth-provider" href="/auth/login/google"><span>G</span> Google ile devam et</a>
-      <a class="auth-provider discord" href="/auth/login/discord"><span>◉</span> Discord ile devam et</a>
+      <a class="auth-provider" id="googleLoginButton" href="/auth/login/google"><span>G</span> Google ile devam et</a>
+      <a class="auth-provider discord" id="discordLoginButton" href="/auth/login/discord"><span>◉</span> Discord ile devam et</a>
     </div>
     <div class="auth-error" id="authError"></div>
     <p class="auth-note">Dosyaların bu cihazdaki tarayıcı depolamasında kalır. XFA bunları sunucuya yüklemez. Oturum için yalnızca güvenli bir çerez kullanılır.</p>
@@ -431,6 +431,14 @@ function historyReplaceState(url){window.history.replaceState({},'',url)}
 async function initializeAuth(){
   showAuthError();
   try{
+    const providersResponse=await fetch('/auth/providers',{credentials:'same-origin'});
+    const providers=providersResponse.ok?await providersResponse.json():{};
+    [['google','googleLoginButton'],['discord','discordLoginButton']].forEach(([key,id])=>{
+      const button=$(id),enabled=!!providers[key]&&!!providers.session_ready;
+      button.classList.toggle('disabled',!enabled);
+      button.setAttribute('aria-disabled',String(!enabled));
+      if(!enabled)button.title='Bu giriş yöntemi henüz sunucuda yapılandırılmadı.';
+    });
     const response=await fetch('/auth/me',{credentials:'same-origin'});
     const data=await response.json();
     if(!response.ok||!data.authenticated){
