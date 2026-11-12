@@ -433,7 +433,11 @@ async function initializeAuth(){
   try{
     const response=await fetch('/auth/me',{credentials:'same-origin'});
     const data=await response.json();
-    if(!response.ok||!data.authenticated){$('authScreen').classList.remove('hidden');return;}
+    if(!response.ok||!data.authenticated){
+      $('authScreen').classList.remove('hidden');
+      if(data.error==='server_not_configured')$('authError').textContent='Giriş sistemi için FLASK_SECRET_KEY henüz sunucuya eklenmedi.';
+      return;
+    }
     currentUser=data.user;csrfToken=data.csrf_token||'';
     $('authScreen').classList.add('hidden');
     $('profileButton').querySelector('.avatar').textContent=(currentUser.name||'X').trim().charAt(0).toLocaleUpperCase('tr');
