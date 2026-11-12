@@ -18,7 +18,7 @@ jobs:
         with:
           node-version: "22"
       - name: Install Flask test dependency
-        run: python -m pip install "Flask>=3.0,<4"
+        run: python -m pip install "Flask>=3.0,<4" "cryptography>=42.0"
       - name: Compile Python source
         run: python -m compileall -q xfa_agent web_app.py main.py
       - name: Run XFA authentication tests
