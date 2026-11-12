@@ -1,8 +1,8 @@
-"""Authenticated, resource-light XFA API.
+"""Authenticated XFA web API.
 
-XFA combines bounded public-web research and confined workspace inspection.
-Project writes are separate approval-gated operations; shell and external
-side-effect tools are intentionally unavailable.
+The web agent performs bounded public-web research only. User-created files
+remain in browser-local IndexedDB and are never exposed through server routes.
+No server filesystem, shell, or external side-effect operation is available.
 """
 from __future__ import annotations
 
@@ -69,7 +69,7 @@ def health():
         "agent": "XFA",
         "planner_ready": bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")),
         "remote_browser_ready": bool(os.getenv("XFA_BROWSER_CDP_URL")),
-        "execution_mode": "approval_required",
+        "execution_mode": "read_only_public_web",
     })
 
 
