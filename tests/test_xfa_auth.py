@@ -84,11 +84,6 @@ class XFAAuthSmokeTests(unittest.TestCase):
 
     def test_auth_me_reports_authenticated_profile(self):
         self._login_test_session()
-        with sqlite3.connect(Path(self.temp_dir.name) / "auth.sqlite3") as db:
-            db.execute(
-                "INSERT INTO users(id, display_name, email, created_at) VALUES(?,?,?,?)",
-                ("test-user-01", "Test User", "test@example.invalid", 1),
-            )
         response = self.client.get("/auth/me")
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json["authenticated"])
