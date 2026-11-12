@@ -12,17 +12,9 @@ import ipaddress
 import os
 import socket
 from urllib.parse import urlparse
-from flask import Blueprint, jsonify, request, send_from_directory
+from flask import Blueprint, current_app, g, jsonify, request, send_from_directory, session
 
 xfa = Blueprint("xfa", __name__, url_prefix="/xfa/api")
-
-
-def _authorized() -> bool:
-    expected = os.getenv("XFA_ACCESS_TOKEN", "").strip()
-    supplied = request.headers.get("Authorization", "")
-    if supplied.lower().startswith("bearer "):
-        supplied = supplied[7:].strip()
-    return bool(expected) and hmac.compare_digest(expected, supplied)
 
 
 def _validate_public_url(url: str):
@@ -56,9 +48,18 @@ def _guard_public_request(route):
 
 
 @xfa.before_request
-def require_agent_token():
-    if not _authorized():
-        return jsonify({"error": "Unauthorized. Configure XFA_ACCESS_TOKEN and send it as a Bearer token."}), 401
+def require_user_session():
+    if not current_app.secret_key:
+        return jsonify({"error": "FLASK_SECRET_KEY is not configured on the server."}), 503
+    user_id = session.get("xfa_user_id")
+    if not user_id:
+        return jsonify({"error": "Giriş gerekli. Google veya Discord hesabınla oturum aç."}), 401
+    g.xfa_user_id = user_id
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+        expected = session.get("xfa_csrf")
+        supplied = request.headers.get("X-CSRF-Token", "")
+        if not expected or not supplied or not hmac.compare_digest(str(expected), str(supplied)):
+            return jsonify({"error": "Güvenlik doğrulaması başarısız. Sayfayı yenileyip tekrar dene."}), 403
 
 
 @xfa.get("/health")
@@ -277,7 +278,7 @@ def run_task():
                 from xfa_agent.workspace import list_files
                 path = str(decision.get("path", "."))
                 trace.append({"step": step + 1, "action": "list_files", "path": path})
-                observations.append({"workspace": path, "files": list_files(path)})
+                observations.append({"workspace": path, "files": list_files(path, user_id=g.xfa_user_id)})
                 continue
             if action == "read_file":
                 from xfa_agent.workspace import read_file
@@ -288,7 +289,7 @@ def run_task():
                     continue
                 inspected_files.add(path)
                 trace.append({"step": step + 1, "action": "read_file", "path": path})
-                observations.append({"workspace_file": read_file(path)})
+                observations.append({"workspace_file": read_file(path, user_id=g.xfa_user_id)})
                 continue
             if action != "browse":
                 raise ValueError("Agent returned an unsupported action")
@@ -320,7 +321,7 @@ def run_task():
 def workspace_list():
     from xfa_agent.workspace import list_files
     try:
-        return jsonify({"ok": True, "files": list_files(request.args.get("path", "."))})
+        return jsonify({"ok": True, "files": list_files(request.args.get("path", "."), user_id=g.xfa_user_id)})
     except (ValueError, OSError) as exc:
         return jsonify({"error": str(exc)}), 400
 
@@ -330,7 +331,7 @@ def workspace_read():
     from xfa_agent.workspace import read_file
     body = request.get_json(silent=True) or {}
     try:
-        return jsonify({"ok": True, "file": read_file(str(body.get("path", "")))})
+        return jsonify({"ok": True, "file": read_file(str(body.get("path", "")), user_id=g.xfa_user_id)})
     except (ValueError, OSError) as exc:
         return jsonify({"error": str(exc)}), 400
 
@@ -340,7 +341,7 @@ def workspace_propose_create():
     from xfa_agent.workspace import propose_new_file
     body = request.get_json(silent=True) or {}
     try:
-        approval_id = propose_new_file(str(body.get("path", "")), str(body.get("content", "")))
+        approval_id = propose_new_file(str(body.get("path", "")), str(body.get("content", "")), user_id=g.xfa_user_id)
         return jsonify({"ok": True, "approval_id": approval_id, "expires_in_seconds": 600,
                         "message": "New file proposal created. Explicit dashboard approval is required."}), 202
     except (ValueError, OSError) as exc:
@@ -352,7 +353,7 @@ def workspace_propose_update():
     from xfa_agent.workspace import propose_update_file
     body = request.get_json(silent=True) or {}
     try:
-        approval_id = propose_update_file(str(body.get("path", "")), str(body.get("content", "")))
+        approval_id = propose_update_file(str(body.get("path", "")), str(body.get("content", "")), user_id=g.xfa_user_id)
         return jsonify({"ok": True, "approval_id": approval_id, "expires_in_seconds": 600,
                         "message": "File update proposal created. Explicit dashboard approval is required."}), 202
     except (ValueError, OSError) as exc:
@@ -364,7 +365,7 @@ def workspace_approve_create():
     from xfa_agent.workspace import approve_new_file
     body = request.get_json(silent=True) or {}
     try:
-        result = approve_new_file(str(body.get("approval_id", "")))
+        result = approve_new_file(str(body.get("approval_id", "")), user_id=g.xfa_user_id)
         return jsonify({"ok": True, "created": result})
     except (ValueError, OSError) as exc:
         return jsonify({"error": str(exc)}), 400
@@ -373,7 +374,7 @@ def workspace_approve_create():
 @xfa.get("/audit")
 def audit():
     from xfa_agent.workspace import audit_log
-    return jsonify({"ok": True, "events": audit_log()})
+    return jsonify({"ok": True, "events": audit_log(user_id=g.xfa_user_id)})
 
 
 def register_xfa(app):
