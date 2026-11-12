@@ -1421,12 +1421,13 @@ class AIService:
 
         async with self.memory.lock(channel_id):
             if provider in {"nvidia", "openai"}:
-                messages = self._nvidia_messages(channel_id, header, user_text, image)
                 if provider == "nvidia":
+                    messages = self._nvidia_messages(channel_id, header, user_text, image)
                     text = await asyncio.to_thread(
                         self._nvidia_request, messages, max(AI_TIMEOUT_SECONDS, 90)
                     )
                 else:
+                    messages = self._openai_messages(channel_id, header, user_text, image)
                     text = await asyncio.to_thread(
                         self._openai_request, messages, max(AI_TIMEOUT_SECONDS, 90)
                     )
@@ -1580,19 +1581,50 @@ class AIService:
             raise AIError("🤔 NVIDIA bir yanıt üretemedi.", "empty")
         return content
 
+    def _openai_messages(self, channel_id: int, header: str, user_text: str, image: Optional[tuple]):
+        messages = [{"role": "system", "content": SYSTEM_INSTRUCTION}]
+        for role, text in self.memory.history(channel_id):
+            messages.append({"role": "assistant" if role == "model" else "user", "content": text})
+        prompt = f"{header}\n{user_text}"
+        if image:
+            import base64
+            mime = image[1] or "image/jpeg"
+            url = "data:" + mime + ";base64," + base64.b64encode(image[0]).decode("ascii")
+            content = [
+                {"type": "text", "text": prompt},
+                {"type": "image_url", "image_url": {"url": url}},
+            ]
+        else:
+            content = prompt
+        messages.append({"role": "user", "content": content})
+        return messages
+
     @staticmethod
     def _openai_request(messages: list, timeout: float) -> str:
-        """OpenAI Chat Completions çağrısı; anahtar yalnızca ortam değişkeninden alınır."""
+        """OpenAI Responses API çağrısı; anahtar yalnızca ortam değişkeninden alınır."""
         import urllib.error
         import urllib.request
 
+        response_input = []
+        for item in messages:
+            raw_content = item.get("content", "")
+            if isinstance(raw_content, str):
+                content = [{"type": "input_text", "text": raw_content}]
+            else:
+                content = []
+                for part in raw_content:
+                    if part.get("type") == "text":
+                        content.append({"type": "input_text", "text": part.get("text", "")})
+                    elif part.get("type") == "image_url":
+                        content.append({"type": "input_image", "image_url": part.get("image_url", {}).get("url", "")})
+            response_input.append({"role": item["role"], "content": content})
         payload = json.dumps({
             "model": OPENAI_MODEL,
-            "messages": messages,
-            "max_completion_tokens": AI_MAX_OUTPUT_TOKENS,
+            "input": response_input,
+            "max_output_tokens": AI_MAX_OUTPUT_TOKENS,
         }).encode("utf-8")
         req = urllib.request.Request(
-            "https://api.openai.com/v1/chat/completions",
+            "https://api.openai.com/v1/responses",
             data=payload,
             headers={
                 "Authorization": f"Bearer {OPENAI_API_KEY}",
@@ -1620,13 +1652,14 @@ class AIService:
             kind = "timeout" if isinstance(getattr(exc, "reason", None), TimeoutError) else "server"
             raise AIError("⌛ OpenAI API zamanında yanıt veremedi.", kind) from exc
 
-        choice = (data.get("choices") or [{}])[0]
-        content = (choice.get("message") or {}).get("content")
-        if isinstance(content, list):
-            content = "\\n".join(
-                str(part.get("text", "")) for part in content if isinstance(part, dict)
-            )
-        content = str(content or "").strip()
+        content = str(data.get("output_text") or "").strip()
+        if not content:
+            chunks = []
+            for item in data.get("output") or []:
+                for part in item.get("content") or []:
+                    if part.get("type") == "output_text" and part.get("text"):
+                        chunks.append(part["text"])
+            content = "\\n".join(chunks).strip()
         if not content:
             raise AIError("🤔 OpenAI bir yanıt üretemedi.", "empty")
         return content
