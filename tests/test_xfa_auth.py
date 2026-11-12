@@ -9,6 +9,7 @@ from itsdangerous import URLSafeTimedSerializer
 
 from xfa_agent.auth import register_auth
 from xfa_agent.routes import register_xfa
+from xfa_agent.accounts import create_user
 
 
 class XFAAuthSmokeTests(unittest.TestCase):
@@ -16,11 +17,10 @@ class XFAAuthSmokeTests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.old_env = {
             key: os.environ.get(key)
-            for key in ("FLASK_SECRET_KEY", "XFA_DATA_DIR", "XFA_AUTH_DB", "XFA_COOKIE_SECURE")
+            for key in ("FLASK_SECRET_KEY", "XFA_DATABASE_PATH", "XFA_COOKIE_SECURE")
         }
         os.environ["FLASK_SECRET_KEY"] = "test-secret-key-that-is-long-enough-for-tests"
-        os.environ["XFA_DATA_DIR"] = self.temp_dir.name
-        os.environ.pop("XFA_AUTH_DB", None)
+        os.environ["XFA_DATABASE_PATH"] = str(Path(self.temp_dir.name) / "xfa.sqlite3")
         os.environ["XFA_COOKIE_SECURE"] = "true"
 
         app = Flask(__name__)
@@ -29,6 +29,7 @@ class XFAAuthSmokeTests(unittest.TestCase):
         register_xfa(app)
         self.app = app
         self.client = app.test_client()
+        self.user = create_user("test@example.invalid", "a-random-test-password-123")
 
     def tearDown(self):
         for key, value in self.old_env.items():
@@ -40,8 +41,9 @@ class XFAAuthSmokeTests(unittest.TestCase):
 
     def _login_test_session(self):
         with self.client.session_transaction() as sess:
-            sess["xfa_user_id"] = "test-user-01"
+            sess["xfa_user_id"] = self.user["id"]
             sess["xfa_display_name"] = "Test User"
+            sess["xfa_email"] = "test@example.invalid"
             sess["xfa_csrf"] = "csrf-test-value"
             sess.permanent = True
 
@@ -59,12 +61,12 @@ class XFAAuthSmokeTests(unittest.TestCase):
         sid = URLSafeTimedSerializer(
             self.app.secret_key, salt="xfa-server-session-v1"
         ).loads(cookie.value)
-        db_path = Path(self.temp_dir.name) / "auth.sqlite3"
+        db_path = Path(self.temp_dir.name) / "xfa.sqlite3"
         with sqlite3.connect(db_path) as db:
-            row = db.execute("SELECT data FROM sessions WHERE sid=?", (sid,)).fetchone()
+            row = db.execute("SELECT data FROM xfa_sessions WHERE sid=?", (sid,)).fetchone()
         self.assertIsNotNone(row)
-        self.assertIn("test-user-01", row[0])
-        self.assertNotIn("test-user-01", cookie.value)
+        self.assertIn(self.user["id"], row[0])
+        self.assertNotIn(self.user["id"], cookie.value)
         self.assertEqual(self.client.get("/xfa/api/health").status_code, 200)
 
     def test_api_post_requires_csrf_header(self):
