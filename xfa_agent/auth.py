@@ -6,6 +6,7 @@ subject IDs and minimal profile information are kept in SQLite.
 from __future__ import annotations
 
 import asyncio
+from contextlib import contextmanager
 import hashlib
 import hmac
 import json
@@ -34,14 +35,22 @@ def _db_path() -> Path:
     return Path(os.getenv("XFA_AUTH_DB", str(_data_dir() / "auth.sqlite3"))).expanduser().resolve()
 
 
+@contextmanager
 def _connect():
     path = _db_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(path, timeout=10)
     db.row_factory = sqlite3.Row
-    db.execute("PRAGMA foreign_keys = ON")
-    db.execute("PRAGMA journal_mode = WAL")
-    return db
+    try:
+        db.execute("PRAGMA foreign_keys = ON")
+        db.execute("PRAGMA journal_mode = WAL")
+        yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
 
 def _init_db() -> None:
@@ -85,7 +94,11 @@ def _provider_credentials(provider: str):
 
 def _callback_uri(provider: str) -> str:
     explicit = os.getenv(provider.upper() + "_REDIRECT_URI", "").strip()
-    return explicit or url_for("xfa_auth.callback", provider=provider, _external=True)
+    if explicit:
+        return explicit
+    base = os.getenv("XFA_PUBLIC_BASE_URL", "").strip().rstrip("/")
+    path = url_for("xfa_auth.callback", provider=provider)
+    return base + path if base else url_for("xfa_auth.callback", provider=provider, _external=True)
 
 
 def _http_json(url: str, *, data=None, headers=None) -> dict:
