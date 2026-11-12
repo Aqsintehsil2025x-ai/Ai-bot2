@@ -262,7 +262,12 @@ def _redirect_error(code: str):
 
 
 def _set_user_session(user_id: str, profile: dict, provider: str) -> None:
+    old_sid = getattr(session, "sid", None)
     session.clear()
+    if old_sid:
+        with _connect() as db:
+            db.execute("DELETE FROM sessions WHERE sid=?", (old_sid,))
+        session.sid = secrets.token_urlsafe(32)
     session.permanent = True
     session["xfa_user_id"] = user_id
     session["xfa_display_name"] = profile["name"]
