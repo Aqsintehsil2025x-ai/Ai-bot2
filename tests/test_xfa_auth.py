@@ -47,6 +47,14 @@ class XFAAuthSmokeTests(unittest.TestCase):
             sess["xfa_csrf"] = "csrf-test-value"
             sess.permanent = True
 
+    def test_oauth_provider_readiness_does_not_expose_secrets(self):
+        response = self.client.get("/auth/providers")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json["session_ready"])
+        self.assertFalse(response.json["google"])
+        self.assertFalse(response.json["discord"])
+        self.assertNotIn("client_secret", response.json)
+
     def test_api_requires_google_or_discord_login(self):
         response = self.client.get("/xfa/api/health")
         self.assertEqual(response.status_code, 401)
