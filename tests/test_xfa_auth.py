@@ -53,9 +53,9 @@ class XFAAuthSmokeTests(unittest.TestCase):
         self._login_test_session()
         cookie = self.client.get_cookie("xfa_session")
         self.assertIsNotNone(cookie)
-        self.assertTrue(cookie["httponly"])
-        self.assertTrue(cookie["secure"])
-        self.assertEqual(cookie["samesite"], "Lax")
+        self.assertTrue(cookie.http_only)
+        self.assertTrue(cookie.secure)
+        self.assertEqual(cookie.same_site, "Lax")
         sid = URLSafeTimedSerializer(
             self.app.secret_key, salt="xfa-server-session-v1"
         ).loads(cookie.value)
