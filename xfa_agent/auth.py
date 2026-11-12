@@ -21,6 +21,9 @@ import uuid
 from pathlib import Path
 
 from flask import Blueprint, current_app, jsonify, redirect, request, session, url_for
+from flask.sessions import SessionInterface, SessionMixin
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
+from werkzeug.datastructures import CallbackDict
 
 auth = Blueprint("xfa_auth", __name__)
 PROVIDERS = {"google", "discord"}
@@ -76,7 +79,90 @@ def _init_db() -> None:
                 user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
                 discord_enabled INTEGER NOT NULL DEFAULT 0
             );
+            CREATE TABLE IF NOT EXISTS sessions (
+                sid TEXT PRIMARY KEY,
+                data TEXT NOT NULL,
+                expires INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS sessions_expires_idx ON sessions(expires);
             """
+        )
+
+
+class _XFAUserSession(CallbackDict, SessionMixin):
+    def __init__(self, initial=None, sid=None, new=False):
+        def on_update(_self):
+            _self.modified = True
+        super().__init__(initial, on_update)
+        self.sid = sid or secrets.token_urlsafe(32)
+        self.new = new
+        self.modified = False
+
+
+class _SQLiteSessionInterface(SessionInterface):
+    """Store session contents server-side; the browser cookie contains only a signed random ID."""
+    salt = "xfa-server-session-v1"
+
+    def _serializer(self, app):
+        return URLSafeTimedSerializer(app.secret_key, salt=self.salt)
+
+    def open_session(self, app, req):
+        _init_db()
+        cookie_name = app.config.get("SESSION_COOKIE_NAME", "session")
+        signed_id = req.cookies.get(cookie_name)
+        if signed_id:
+            try:
+                sid = self._serializer(app).loads(
+                    signed_id,
+                    max_age=int(app.permanent_session_lifetime.total_seconds()),
+                )
+            except (BadSignature, SignatureExpired, TypeError, ValueError):
+                sid = None
+            if isinstance(sid, str) and 24 <= len(sid) <= 128:
+                with _connect() as db:
+                    row = db.execute(
+                        "SELECT data, expires FROM sessions WHERE sid=?", (sid,)
+                    ).fetchone()
+                if row and int(row["expires"]) > int(time.time()):
+                    try:
+                        data = json.loads(row["data"])
+                        if isinstance(data, dict):
+                            return _XFAUserSession(data, sid=sid)
+                    except (TypeError, json.JSONDecodeError):
+                        pass
+        return _XFAUserSession(new=True)
+
+    def save_session(self, app, sess, response):
+        name = app.config.get("SESSION_COOKIE_NAME", "session")
+        domain = self.get_cookie_domain(app)
+        path = self.get_cookie_path(app)
+        if not sess:
+            with _connect() as db:
+                db.execute("DELETE FROM sessions WHERE sid=?", (sess.sid,))
+            if sess.modified:
+                response.delete_cookie(
+                    name, domain=domain, path=path,
+                    secure=self.get_cookie_secure(app),
+                    httponly=self.get_cookie_httponly(app),
+                    samesite=self.get_cookie_samesite(app),
+                )
+            return
+        now = int(time.time())
+        max_age = int(app.permanent_session_lifetime.total_seconds()) if sess.permanent else 43200
+        expires_at = now + max_age
+        payload = json.dumps(dict(sess), ensure_ascii=False, separators=(",", ":"))
+        with _connect() as db:
+            db.execute(
+                "INSERT INTO sessions(sid, data, expires) VALUES(?,?,?) "
+                "ON CONFLICT(sid) DO UPDATE SET data=excluded.data, expires=excluded.expires",
+                (sess.sid, payload, expires_at),
+            )
+            db.execute("DELETE FROM sessions WHERE expires <= ?", (now,))
+        signed = self._serializer(app).dumps(sess.sid)
+        response.set_cookie(
+            name, signed, expires=self.get_expiration_time(app, sess),
+            httponly=self.get_cookie_httponly(app), secure=self.get_cookie_secure(app),
+            samesite=self.get_cookie_samesite(app), path=path, domain=domain,
         )
 
 
@@ -445,6 +531,7 @@ def register_auth(app) -> None:
         SESSION_COOKIE_PATH="/",
         PERMANENT_SESSION_LIFETIME=60 * 60 * 24 * 30,
     )
+    app.session_interface = _SQLiteSessionInterface()
     _init_db()
     if "xfa_auth" not in app.blueprints:
         app.register_blueprint(auth)
