@@ -11,7 +11,7 @@
 #                  DATA_DIR=/data         -> Kalıcı diskin yolu (Render paid Disk / Railway Volume varsa).
 #   PORT         : Render/Railway otomatik tanımlar; bot bu portta küçük bir /health sayfası açar (Render Web Service şartı).
 #   Önerilen     : BOT_OWNER_ID, MOD_LOG_CHANNEL_ID, WELCOME_CHANNEL_ID
-#   İsteğe bağlı : GEMINI_MODEL, NVIDIA_API_KEY, NVIDIA_MODEL, SEARCH_MODEL, BOT_TIMEZONE, COMMAND_PREFIX,
+#   İsteğe bağlı : GEMINI_MODEL, GEMMA_MODEL, NVIDIA_API_KEY, NVIDIA_MODEL, OPENAI_API_KEY, OPENAI_MODEL,
 #                  BLOCK_ALL_LINKS, ALLOWED_LINK_DOMAINS, WELCOME_ROLE_NAME, AI_ACTION_CONFIRM, MOD_AI_ENABLED, MOD_AI_MAX_PER_MINUTE,
 #                  BET_MAX, AUTO_SYNC, HOLOGRAM_ANNOUNCE, DAILY_QUESTION_TITLE ...
 #
@@ -157,7 +157,7 @@ SEARCH_MODEL = env_str("SEARCH_MODEL", "") or GEMINI_MODEL
 NVIDIA_API_KEY = env_str("NVIDIA_API_KEY")
 NVIDIA_MODEL = env_str("NVIDIA_MODEL", "nvidia/nemotron-3.5-super-vl-120b-a12b")
 OPENAI_API_KEY = env_str("OPENAI_API_KEY")
-OPENAI_MODEL = env_str("OPENAI_MODEL", "gpt-5.5")
+OPENAI_MODEL = env_str("OPENAI_MODEL", "gpt-6-astra")
 GEMMA_MODEL = env_str("GEMMA_MODEL", "gemma-4-26b-a4b-it")
 DEFAULT_AI_PROVIDER = env_str(
     "DEFAULT_AI_PROVIDER",
@@ -3447,7 +3447,7 @@ async def hologram_durum_komutu(ctx):
 async def sunucu_raporu(ctx):
     guild = ctx.guild
     bot_count = sum(1 for m in guild.members if m.bot)
-    ai_ok = bot.ai is not None and bot.ai.enabled
+    ai_ok = bool(bot.ai is not None and (bot.ai.enabled or NVIDIA_API_KEY or OPENAI_API_KEY))
     embed = discord.Embed(title=f"📊 {guild.name} - Rapor", color=discord.Color.blue())
     embed.add_field(name="👥 Toplam Üye", value=f"{guild.member_count} ({bot_count} bot)", inline=True)
     embed.add_field(name="💬 Kanallar", value=f"{len(guild.text_channels)} metin / {len(guild.voice_channels)} ses", inline=True)
