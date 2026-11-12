@@ -274,6 +274,17 @@ def _set_user_session(user_id: str, profile: dict, provider: str) -> None:
     session["xfa_csrf"] = secrets.token_urlsafe(32)
 
 
+@auth.get("/auth/providers")
+def available_providers():
+    google_id, google_secret = _provider_credentials("google")
+    discord_id, discord_secret = _provider_credentials("discord")
+    return jsonify({
+        "session_ready": _auth_ready(),
+        "google": bool(google_id and google_secret and _auth_ready()),
+        "discord": bool(discord_id and discord_secret and _auth_ready()),
+    })
+
+
 @auth.get("/auth/login/<provider>")
 def login(provider: str):
     return _start_oauth(provider, "login")
