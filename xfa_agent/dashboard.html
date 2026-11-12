@@ -112,7 +112,7 @@ button,input,textarea{font:inherit}button{cursor:pointer}button:disabled{opacity
 .eco-state:before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:#543878;margin-right:7px}
 .eco-state.online:before{background:var(--green);box-shadow:0 0 9px var(--green)}
 .beta{font:600 10px 'DM Sans';border-radius:18px;background:#7e25e9;padding:5px 9px;color:white}
-.lower{display:grid;grid-template-columns:1.18fr 1.12fr 1.18fr;gap:18px;margin-top:4px}
+.lower{grid-column:1/-1;display:grid;grid-template-columns:1.18fr 1.12fr 1.18fr;gap:18px;margin-top:4px}
 .promo{min-height:174px;padding:20px 18px;position:relative;overflow:hidden;display:flex;align-items:center}
 .promo-copy{position:relative;z-index:1;max-width:65%}
 .promo h3{font:600 17px 'Space Grotesk';margin:0 0 8px}
@@ -223,7 +223,7 @@ button,input,textarea{font:inherit}button{cursor:pointer}button:disabled{opacity
             <button data-prompt="İstediğim özellik için temiz ve açıklamalı kod yaz.">&lt;/&gt; Kod Yaz</button>
             <button data-prompt="Yeni ve uygulanabilir proje fikirleri öner.">♧ Fikir Al</button>
             <button data-prompt="Bu konuyu araştır ve önemli noktaları özetle.">⌕ Araştırma Yap</button>
-            <button data-prompt="Bu görev için adım adım bir AI Agent planı hazırla.">ϟ AI Agent</button>
+            <button data-prompt="Bu görev için adım adım bir Yapay Zekâ Ajanı planı hazırla.">ϟ AI Agent</button>
           </div>
           <div id="conversation" aria-live="polite"><div class="bubble ai"><span class="bubble-label">XFA</span>Merhaba! Ben XFA. Bir fikir, soru veya görev yaz; birlikte başlayalım.</div></div>
           <form class="composer" id="chatForm">
@@ -250,7 +250,7 @@ button,input,textarea{font:inherit}button{cursor:pointer}button:disabled{opacity
 
       <section class="section" id="view-workspace">
         <article class="panel section-panel">
-          <div class="section-heading"><h2>▦ Workspace</h2><button class="action" id="refreshFiles">Dosyaları Yenile</button></div>
+          <div class="section-heading"><h2>▦ Çalışma Alanı</h2><button class="action" id="refreshFiles">Dosyaları Yenile</button></div>
           <p class="muted">Proje klasörünü incele. Bir dosyayı okumak veya değişiklik taslağı hazırlamak için aşağıdaki alanları kullan.</p>
           <div class="split">
             <div><div class="section-heading"><h2 style="font-size:15px">Proje Dosyaları</h2></div><div id="fileList" class="file-list"><div class="muted">Dosyaları görmek için yenile.</div></div></div>
