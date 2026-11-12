@@ -152,6 +152,20 @@ button,input,textarea{font:inherit}button{cursor:pointer}button:disabled{opacity
 .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
 .toast{position:fixed;bottom:20px;right:22px;z-index:30;border:1px solid #8e4ac4;background:#160c25;padding:12px 16px;border-radius:12px;color:#f0e3ff;box-shadow:var(--shadow);display:none}
 .toast.show{display:block}
+.auth-screen{position:fixed;inset:0;z-index:100;display:grid;place-items:center;padding:22px;background:radial-gradient(ellipse at 50% 25%,#38136599,transparent 44%),#07040df7;backdrop-filter:blur(18px)}
+.auth-screen.hidden{display:none}.auth-card{width:min(460px,100%);padding:34px 28px;border:1px solid #a24de099;border-radius:24px;background:linear-gradient(150deg,#1a0d2beF,#0c0714f7);box-shadow:0 22px 90px #000b,0 0 42px #8738d52b;text-align:center}
+.auth-flower{margin:0 auto 13px;width:56px;height:56px}.auth-card h1{font:700 42px 'Space Grotesk';margin:0;background:linear-gradient(180deg,#fff,#bd7cff);background-clip:text;color:transparent}
+.auth-card p{color:var(--muted);line-height:1.6;font-size:13px}.auth-providers{display:grid;gap:11px;margin:22px 0 16px}
+.auth-provider{display:flex;align-items:center;justify-content:center;gap:10px;border:1px solid #9951cf88;border-radius:12px;padding:14px 16px;background:#160d24;color:#fff;font-weight:700;transition:.2s}
+.auth-provider:hover{border-color:#d19aff;background:#28113e;transform:translateY(-1px)}.auth-provider.discord{background:linear-gradient(120deg,#5632a8,#392078)}
+.auth-note{font-size:11px!important;color:#9985b0!important}.auth-error{min-height:20px;color:#ffb7d1;font-size:12px}
+.account-actions{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 16px}
+.account-actions .action{margin:0}.provider-list{display:flex;flex-wrap:wrap;gap:7px;margin:8px 0}
+.provider-chip{padding:6px 10px;border:1px solid #8850b966;border-radius:20px;background:#21132e;color:#dac5f2;font-size:11px}
+.local-note{padding:10px 12px;border:1px solid #6a48a15c;border-radius:10px;background:#130c20;color:#c9b6e0;font-size:12px;line-height:1.5}
+.local-import{display:inline-flex;align-items:center;gap:7px;border:1px solid #8f4bc188;border-radius:10px;padding:10px 13px;background:#160d24;color:#eadbfa;cursor:pointer}
+.setting-check{display:flex;align-items:center;gap:9px;margin:12px 0;color:#d9c9ea}.setting-check input{accent-color:#a64cff;width:16px;height:16px}
+
 @keyframes float{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-9px) rotate(2deg)}}
 @keyframes twinkle{from{opacity:.3;transform:scale(.7)}to{opacity:1;transform:scale(1.2)}}
 @media(max-width:1200px){:root{--sidebar:220px}.columns{grid-template-columns:minmax(0,1fr) 280px;gap:14px}.lower{gap:12px}.hero-bloom{transform:scale(.86)}.promo{padding:16px}.promo h3{font-size:15px}}
@@ -161,6 +175,19 @@ button,input,textarea{font:inherit}button{cursor:pointer}button:disabled{opacity
 </style>
 </head>
 <body>
+<div class="auth-screen" id="authScreen">
+  <div class="auth-card">
+    <div class="flower auth-flower" aria-hidden="true"><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i></div>
+    <h1>XFA</h1>
+    <p>Xyrin Flower AI hesabına Google veya Discord ile güvenli giriş yap.</p>
+    <div class="auth-providers">
+      <a class="auth-provider" href="/auth/login/google"><span>G</span> Google ile devam et</a>
+      <a class="auth-provider discord" href="/auth/login/discord"><span>◉</span> Discord ile devam et</a>
+    </div>
+    <div class="auth-error" id="authError"></div>
+    <p class="auth-note">Dosyaların bu cihazdaki tarayıcı depolamasında kalır. XFA bunları sunucuya yüklemez. Oturum için yalnızca güvenli bir çerez kullanılır.</p>
+  </div>
+</div>
 <aside class="sidebar">
   <div class="brand">
     <div class="flower" aria-hidden="true"><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i></div>
@@ -250,8 +277,9 @@ button,input,textarea{font:inherit}button{cursor:pointer}button:disabled{opacity
 
       <section class="section" id="view-workspace">
         <article class="panel section-panel">
-          <div class="section-heading"><h2>▦ Çalışma Alanı</h2><button class="action" id="refreshFiles">Dosyaları Yenile</button></div>
-          <p class="muted">Proje klasörünü incele. Bir dosyayı okumak veya değişiklik taslağı hazırlamak için aşağıdaki alanları kullan.</p>
+          <div class="section-heading"><h2>▦ Çalışma Alanı</h2><div><button class="action" id="refreshFiles">Yenile</button><label class="local-import" for="localFileInput">Dosya İçe Aktar</label><input id="localFileInput" type="file" accept=".txt,.md,.json,.csv,.yaml,.yml,.html,.css,.js,.py,.toml" hidden></div></div>
+          <p class="muted">Bu cihazdaki yerel çalışma alanını yönet. Dosyalar IndexedDB içinde tutulur ve XFA sunucusuna yüklenmez.</p>
+          <div class="local-note">Yerel depolama: yalnızca bu tarayıcı ve cihaz. Tarayıcı verilerini temizlersen dosyalar da silinebilir; dışa aktararak yedekleyebilirsin.</div>
           <div class="split">
             <div><div class="section-heading"><h2 style="font-size:15px">Proje Dosyaları</h2></div><div id="fileList" class="file-list"><div class="muted">Dosyaları görmek için yenile.</div></div></div>
             <div><div class="section-heading"><h2 style="font-size:15px">Dosya İçeriği</h2></div><div id="fileContent" class="output">Bir dosya seçtiğinde içeriği burada görünür.</div></div>
@@ -276,11 +304,22 @@ button,input,textarea{font:inherit}button{cursor:pointer}button:disabled{opacity
       <section class="section" id="view-settings">
         <article class="panel section-panel">
           <div class="section-heading"><h2>⚙ Ayarlar</h2><span class="tag">GİZLİLİK</span></div>
-          <p class="muted">XFA erişim anahtarı yalnızca açık sekmenin belleğinde tutulur. Sayfayı yenilediğinde yeniden girmen gerekir.</p>
-          <button class="action" id="openToken">Erişim Anahtarını Ayarla</button><button class="action" id="checkHealth">Bağlantıyı Kontrol Et</button>
+          <h2 style="font:600 16px 'Space Grotesk'">Hesabım</h2>
+          <div class="output" id="accountInfo">Hesap bilgileri yükleniyor...</div>
+          <div class="provider-list" id="providerList"></div>
+          <div class="account-actions">
+            <button class="action" id="linkGoogle">Google hesabını bağla</button>
+            <button class="action" id="linkDiscord">Discord hesabını bağla</button>
+            <button class="action" id="logoutButton">Çıkış Yap</button>
+          </div>
+          <h2 style="font:600 16px 'Space Grotesk';margin-top:22px">Discord Bildirimleri</h2>
+          <p class="muted">Yalnızca Discord hesabını bağladıktan ve açıkça izin verdikten sonra XFA sana özel mesaj gönderebilir.</p>
+          <label class="setting-check"><input type="checkbox" id="discordNotifications"> Discord özel mesaj bildirimlerine izin ver</label>
+          <button class="action" id="testDiscordNotification">Test mesajı gönder</button>
+          <button class="action" id="checkHealth">Bağlantıyı Kontrol Et</button>
           <div class="output" id="settingsOutput">Bağlantı bilgisi burada görünür.</div>
           <h2 style="font:600 16px 'Space Grotesk';margin-top:22px">Güvenlik ve Gizlilik</h2>
-          <p class="muted">Web inceleme herkese açık sayfalarla sınırlıdır. Dosya oluşturma ve güncelleme için açık onay gerekir. Terminal komutu, satın alma, mesaj gönderme veya dağıtım işlemi yapılmaz.</p>
+          <p class="muted">Giriş oturumu HttpOnly güvenli çerez ile yönetilir. Dosyaların bu tarayıcıda IndexedDB ile yerel saklanır. Sohbet ve web inceleme istekleri yanıt üretmek için sunucuya gönderilir; yerel dosyalar otomatik gönderilmez.</p>
           <button class="action" id="clearChat">Sohbeti Temizle</button>
         </article>
       </section>
@@ -352,43 +391,161 @@ button,input,textarea{font:inherit}button{cursor:pointer}button:disabled{opacity
   <footer class="footer">XFA · Xyrin Flower AI · Herkes için yapay zekâ.</footer>
 </div>
 
-<div class="modal" id="tokenModal"><div class="modal-card"><h2>Güvenli Bağlantı</h2><p>Replit Secrets bölümündeki XFA_ACCESS_TOKEN değerini gir. Bu anahtar sayfa açıkken yalnızca bellekte tutulur; kimseyle paylaşma.</p><input id="tokenInput" type="password" autocomplete="off" placeholder="XFA erişim anahtarı"><div class="modal-actions"><button class="action" id="cancelToken">Vazgeç</button><button class="action" id="saveToken">Bağlan</button></div><div class="muted" id="tokenStatus" style="font-size:12px;margin-top:10px"></div></div></div>
+
 <div class="toast" id="toast" role="status"></div>
 
 <script>
-let accessToken='',pendingApproval='',history=[],currentFolder='.';
+let csrfToken='',currentUser=null,pendingApproval=null,history=[],localDbPromise=null;
 const $=id=>document.getElementById(id);
 const labels={chat:'Sohbet',agent:'Yapay Zekâ Ajanı',workspace:'Çalışma Alanı',browser:'Web İnceleme',settings:'Ayarlar',more:'Daha Fazla'};
 function toast(message){$('toast').textContent=message;$('toast').classList.add('show');setTimeout(()=>$('toast').classList.remove('show'),2600)}
-function navigate(view){document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));const target=$('view-'+view);if(!target)return;target.classList.add('active');document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));$('homeHero').style.display=view==='chat'?'grid':'none';if(view==='workspace'&&accessToken)$('refreshFiles').click();if(view==='settings')$('settingsOutput').textContent='Bağlantı bilgisi burada görünür.'}
+function navigate(view){document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));const target=$('view-'+view);if(!target)return;target.classList.add('active');document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));$('homeHero').style.display=view==='chat'?'grid':'none';if(view==='workspace')loadFiles();if(view==='settings')$('settingsOutput').textContent='Bağlantı bilgisi burada görünür.'}
 document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>navigate(b.dataset.view)));
 document.querySelectorAll('[data-prompt]').forEach(b=>b.addEventListener('click',()=>{$('message').value=b.dataset.prompt;$('message').focus()}));
-$('profileButton').onclick=()=>navigate('settings');$('onlineStatus').onclick=()=>accessToken?health().catch(e=>toast(e.message)):showToken();
+$('profileButton').onclick=()=>navigate('settings');$('onlineStatus').onclick=()=>health().catch(e=>toast(e.message));
 $('webButton').onclick=()=>navigate('browser');$('attachButton').onclick=()=>$('attachFile').click();
 $('attachFile').onchange=async()=>{const file=$('attachFile').files[0];if(!file)return;try{const text=await file.text();$('message').value=($('message').value+'\n\n'+file.name+':\n'+text.slice(0,12000)).trim();$('message').focus();toast('Dosya içeriği mesaja eklendi.')}catch(e){toast('Dosya okunamadı.')}};
 $('globalSearch').addEventListener('input',e=>{const q=e.target.value.toLocaleLowerCase('tr');if(!q)return;const match=Object.entries(labels).find(([key,value])=>value.toLocaleLowerCase('tr').includes(q));if(match)navigate(match[0])});
-document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();$('globalSearch').focus()}if(e.key==='Escape')$('tokenModal').classList.remove('open')});
-function showToken(){$('tokenModal').classList.add('open');$('tokenInput').value='';$('tokenStatus').textContent=''}
-$('openToken').onclick=showToken;$('cancelToken').onclick=()=>$('tokenModal').classList.remove('open');
-async function api(path,body){if(!accessToken)throw new Error('Önce Ayarlar bölümünden erişim anahtarını gir.');const options={method:body?'POST':'GET',headers:{Authorization:'Bearer '+accessToken,...(body?{'Content-Type':'application/json'}:{})}};if(body)options.body=JSON.stringify(body);const response=await fetch('/xfa/api'+path,options);const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||'İstek başarısız (HTTP '+response.status+')');return data}
+document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();$('globalSearch').focus()}});
+async function api(path,body){
+  const headers={};
+  if(body){headers['Content-Type']='application/json';headers['X-CSRF-Token']=csrfToken;}
+  const options={method:body?'POST':'GET',headers,credentials:'same-origin'};
+  if(body)options.body=JSON.stringify(body);
+  const response=await fetch('/xfa/api'+path,options);
+  const data=await response.json().catch(()=>({}));
+  if(response.status===401){$('authScreen').classList.remove('hidden');throw new Error('Oturum sona erdi. Yeniden giriş yap.');}
+  if(!response.ok)throw new Error(data.error||'İstek başarısız (HTTP '+response.status+')');
+  return data;
+}
+function showAuthError(){
+  const params=new URLSearchParams(location.search),error=params.get('auth_error'),success=params.get('auth_success');
+  const messages={server_not_configured:'Sunucu kimlik doğrulaması henüz yapılandırılmadı.',google_not_configured:'Google OAuth anahtarları eksik.',discord_not_configured:'Discord OAuth anahtarları eksik.',state_invalid:'Güvenlik kontrolü başarısız oldu. Yeniden dene.',permission_denied:'Giriş izni verilmedi.',provider_error:'Giriş tamamlanamadı. Sunucu günlüklerini kontrol et.',identity_already_used:'Bu sağlayıcı hesabı başka bir XFA hesabına bağlı.',link_session_expired:'Hesap bağlantısı oturumu sona erdi.'};
+  if(error)$('authError').textContent=messages[error]||'Giriş sırasında bir sorun oluştu.';
+  if(success==='linked')toast('Hesap başarıyla bağlandı.');
+  else if(success==='1')toast('XFA hesabına giriş yaptın.');
+  if(error||success)historyReplace();
+}
+function historyReplace(){const url=new URL(location.href);url.searchParams.delete('auth_error');url.searchParams.delete('auth_success');historyReplaceState(url.toString())}
+function historyReplaceState(url){window.history.replaceState({},'',url)}
+async function initializeAuth(){
+  showAuthError();
+  try{
+    const response=await fetch('/auth/me',{credentials:'same-origin'});
+    const data=await response.json();
+    if(!response.ok||!data.authenticated){$('authScreen').classList.remove('hidden');return;}
+    currentUser=data.user;csrfToken=data.csrf_token||'';
+    $('authScreen').classList.add('hidden');
+    $('profileButton').querySelector('.avatar').textContent=(currentUser.name||'X').trim().charAt(0).toLocaleUpperCase('tr');
+    $('profileButton').querySelector('span:last-child').textContent=currentUser.name||'Hesap';
+    $('accountInfo').textContent=(currentUser.name||'Kullanıcı')+'\n'+(currentUser.email||'Doğrulanmış e-posta paylaşılmadı');
+    const connected=data.providers||[];
+    $('providerList').replaceChildren();
+    ['google','discord'].forEach(provider=>{const chip=document.createElement('span');chip.className='provider-chip';chip.textContent=(provider==='google'?'Google':'Discord')+(connected.includes(provider)?' · Bağlı':' · Bağlı değil');$('providerList').append(chip);});
+    $('linkGoogle').disabled=connected.includes('google');$('linkDiscord').disabled=connected.includes('discord');
+    $('linkGoogle').style.opacity=connected.includes('google')?'.45':'1';$('linkDiscord').style.opacity=connected.includes('discord')?'.45':'1';
+    $('discordNotifications').checked=!!data.discord_notifications;
+    try{await health();}catch(e){$('settingsOutput').textContent=e.message;}
+    await loadFiles();
+  }catch(e){$('authScreen').classList.remove('hidden');$('authError').textContent='Sunucuya bağlanılamadı. Sayfayı yenileyip tekrar dene.';}
+}
+function startLink(provider){
+  const form=document.createElement('form');form.method='POST';form.action='/auth/link/'+provider;
+  const input=document.createElement('input');input.type='hidden';input.name='csrf_token';input.value=csrfToken;form.append(input);document.body.append(form);form.submit();
+}
+$('linkGoogle').onclick=()=>startLink('google');$('linkDiscord').onclick=()=>startLink('discord');
+$('logoutButton').onclick=async()=>{
+  try{const r=await fetch('/auth/logout',{method:'POST',headers:{'X-CSRF-Token':csrfToken},credentials:'same-origin'});if(!r.ok)throw new Error('Çıkış yapılamadı.');currentUser=null;csrfToken='';$('authScreen').classList.remove('hidden');$('authError').textContent='Oturum kapatıldı.';}
+  catch(e){toast(e.message);}
+};
+$('discordNotifications').onchange=async()=>{
+  const enabled=$('discordNotifications').checked;
+  try{const r=await fetch('/auth/discord-notifications',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken},credentials:'same-origin',body:JSON.stringify({enabled})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Ayar kaydedilemedi.');toast(enabled?'Discord bildirimleri açıldı.':'Discord bildirimleri kapatıldı.');}
+  catch(e){$('discordNotifications').checked=!enabled;toast(e.message);}
+};
+$('testDiscordNotification').onclick=async()=>{
+  try{const r=await fetch('/auth/discord-notifications/test',{method:'POST',headers:{'X-CSRF-Token':csrfToken},credentials:'same-origin});const d=await r.json();if(!r.ok)throw new Error(d.error||'Test mesajı gönderilemedi.');toast('Test mesajı Discord DM olarak gönderildi.');}
+  catch(e){toast(e.message);}
+};
 async function health(){const d=await api('/health');$('connection').textContent='Bağlı';$('botState').textContent='Çevrimiçi';$('botState').classList.add('online');$('settingsOutput').textContent='Bağlantı başarılı.\nPlanlama: '+(d.planner_ready?'Hazır':'API anahtarı eksik')+'\nUzak tarayıcı: '+(d.remote_browser_ready?'Hazır':'Kurulmadı')+'\nÇalışma modu: '+d.execution_mode;return d}
 async function publicStats(){try{const r=await fetch('/api/stats');if(!r.ok)return;const d=await r.json();$('memberCount').textContent=(d.members||0).toLocaleString('tr-TR')+'+';$('serverCount').textContent=String(d.guilds||0);if(d.ready){$('connection').textContent='Çevrimiçi';$('connectionDot').style.background='var(--green)';$('connectionDot').style.boxShadow='0 0 13px #2ce79a';$('botState').textContent='Çevrimiçi';$('botState').classList.add('online')}else{$('connection').textContent='Çevrimdışı';$('connectionDot').style.background='#a78bba';$('connectionDot').style.boxShadow='none';$('botState').textContent='Çevrimdışı';$('botState').classList.remove('online')}}catch(e){$('memberCount').textContent='—';$('serverCount').textContent='—';$('connection').textContent='Durum alınamadı';$('connectionDot').style.background='#a78bba';$('connectionDot').style.boxShadow='none'}}
-$('saveToken').onclick=async()=>{const value=$('tokenInput').value.trim();if(!value){$('tokenStatus').textContent='Erişim anahtarı boş olamaz.';return}accessToken=value;$('tokenStatus').textContent='Bağlantı kontrol ediliyor...';try{await health();$('tokenStatus').textContent='Bağlantı kuruldu.';setTimeout(()=>$('tokenModal').classList.remove('open'),450)}catch(e){accessToken='';$('tokenStatus').textContent=e.message;$('connection').textContent='Bağlantı yok'}};
-$('checkHealth').onclick=async()=>{try{await health()}catch(e){$('settingsOutput').textContent=e.message}};
 function bubble(who,text){const el=document.createElement('div');el.className='bubble '+(who==='Sen'?'user':'ai');const label=document.createElement('span');label.className='bubble-label';label.textContent=who;const body=document.createElement('div');body.textContent=text;el.append(label,body);$('conversation').append(el);$('conversation').scrollTop=$('conversation').scrollHeight}
 async function sendChat(task){history.push({role:'user',content:task});history=history.slice(-20);const data=await api('/chat',{messages:history});const reply=data.reply||'Şu anda yanıt oluşturamadım.';history.push({role:'model',content:reply});history=history.slice(-20);return reply}
-$('chatForm').onsubmit=async e=>{e.preventDefault();const task=$('message').value.trim();if(!task)return;$('message').value='';bubble('Sen',task);$('send').disabled=true;$('send').textContent='…';try{bubble('XFA',await sendChat(task))}catch(err){bubble('XFA',err.message);if(!accessToken)showToken()}finally{$('send').disabled=false;$('send').textContent='➤'}};
+$('chatForm').onsubmit=async e=>{e.preventDefault();const task=$('message').value.trim();if(!task)return;$('message').value='';bubble('Sen',task);$('send').disabled=true;$('send').textContent='…';try{bubble('XFA',await sendChat(task))}catch(err){bubble('XFA',err.message)}finally{$('send').disabled=false;$('send').textContent='➤'}};
 $('makePlan').onclick=async()=>{const task=$('agentTask').value.trim();if(!task)return $('agentOutput').textContent='Lütfen önce bir görev yaz.';$('makePlan').disabled=true;$('agentOutput').textContent='Plan hazırlanıyor...';try{const d=await api('/tasks/plan',{task});$('agentOutput').textContent=d.plan}catch(e){$('agentOutput').textContent=e.message}finally{$('makePlan').disabled=false}};
 $('runResearch').onclick=async()=>{const task=$('agentTask').value.trim();if(!task)return $('agentOutput').textContent='Lütfen önce bir görev yaz.';$('runResearch').disabled=true;$('agentOutput').textContent='Araştırma yapılıyor...';try{const d=await api('/tasks/run',{task});$('agentOutput').textContent=d.answer+'\n\nTamamlanan adımlar: '+(d.steps||[]).length+' · İncelenen sayfa: '+(d.pages_read||0)}catch(e){$('agentOutput').textContent=e.message}finally{$('runResearch').disabled=false}};
 $('inspectPage').onclick=async()=>{const url=$('webUrl').value.trim();if(!url)return $('webOutput').textContent='Lütfen geçerli bir web adresi gir.';$('inspectPage').disabled=true;$('webOutput').textContent='Sayfa inceleniyor...';try{const d=await api('/browser/open',{url});$('webOutput').textContent=d.title+'\n'+d.url+'\n\n'+d.text}catch(e){$('webOutput').textContent=e.message}finally{$('inspectPage').disabled=false}};
-async function loadFiles(folder){currentFolder=folder;const box=$('fileList');box.textContent='Dosyalar yükleniyor...';try{const d=await api('/workspace/list?path='+encodeURIComponent(folder));box.textContent='';if(folder!=='.'){const up=document.createElement('div');up.className='file-item';up.textContent='↰ Üst klasör';up.style.cursor='pointer';up.onclick=()=>loadFiles(folder.split('/').slice(0,-1).join('/')||'.');box.append(up)}(d.files||[]).forEach(file=>{const row=document.createElement('div');row.className='file-item';const name=document.createElement('span');name.textContent=(file.type==='directory'?'▸ ':'')+file.name;const btn=document.createElement('button');btn.textContent=file.type==='directory'?'Aç':'Oku';btn.onclick=async()=>{if(file.type==='directory'){loadFiles(file.path);return}try{const r=await api('/workspace/read',{path:file.path});$('fileContent').textContent=r.file.content||JSON.stringify(r.file,null,2);$('updatePath').value=r.file.path;$('updateContent').value=r.file.content}catch(e){$('fileContent').textContent=e.message}};row.append(name,btn);box.append(row)});if(!box.children.length)box.textContent='Bu klasörde gösterilecek dosya yok.'}catch(e){box.textContent=e.message}}
-$('refreshFiles').onclick=()=>loadFiles(currentFolder);
-async function propose(path,content,kind){if(!path||!content)return $('workspaceOutput').textContent='Dosya yolu ve içerik gerekli.';$('workspaceOutput').textContent='Öneri hazırlanıyor...';try{const d=await api(kind==='create'?'/workspace/propose-create':'/workspace/propose-update',{path,content});pendingApproval=d.approval_id;$('approveChange').disabled=false;$('workspaceOutput').textContent=d.message+'\nOnay kodu: '+pendingApproval+'\nOnaylamadan önce yol ve içeriği kontrol et.'}catch(e){$('workspaceOutput').textContent=e.message}}
+
+function openLocalDb(){
+  if(localDbPromise)return localDbPromise;
+  localDbPromise=new Promise((resolve,reject)=>{
+    if(!('indexedDB' in window)){reject(new Error('Tarayıcı yerel depolamayı desteklemiyor.'));return;}
+    const req=indexedDB.open('xfa-local-workspace',1);
+    req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains('files')){const store=db.createObjectStore('files',{keyPath:['userId','path']});store.createIndex('byUser','userId',{unique:false});}};
+    req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error||new Error('Yerel depo açılamadı.'));
+  });
+  return localDbPromise;
+}
+function normalizeLocalPath(path){
+  const value=String(path||'').trim().replace(/\\/g,'/');
+  if(!value||value.length>240||value.startsWith('/')||value.split('/').some(part=>!part||part==='.'||part==='..'||part.startsWith('.')))throw new Error('Geçerli ve gizli olmayan bir dosya yolu gir.');
+  return value;
+}
+async function putLocalFile(path,content){
+  const userId=currentUser&&currentUser.id;if(!userId)throw new Error('Önce giriş yap.');
+  const db=await openLocalDb();
+  return new Promise((resolve,reject)=>{const tx=db.transaction('files','readwrite');tx.objectStore('files').put({userId,path:normalizeLocalPath(path),content:String(content),updatedAt:Date.now()});tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error||new Error('Dosya yerel olarak kaydedilemedi.'));});
+}
+async function getLocalFile(path){
+  const db=await openLocalDb(),userId=currentUser.id;
+  return new Promise((resolve,reject)=>{const req=db.transaction('files','readonly').objectStore('files').get([userId,normalizeLocalPath(path)]);req.onsuccess=()=>resolve(req.result||null);req.onerror=()=>reject(req.error);});
+}
+async function listLocalFiles(){
+  const db=await openLocalDb(),userId=currentUser.id;
+  return new Promise((resolve,reject)=>{const store=db.transaction('files','readonly').objectStore('files');const req=store.index('byUser').getAll(IDBKeyRange.only(userId));req.onsuccess=()=>resolve((req.result||[]).sort((a,b)=>a.path.localeCompare(b.path)));req.onerror=()=>reject(req.error);});
+}
+function downloadLocalFile(path,content){
+  const blob=new Blob([content],{type:'text/plain;charset=utf-8'}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=path.split('/').pop()||'xfa-file.txt';document.body.append(link);link.click();link.remove();URL.revokeObjectURL(url);
+}
+async function loadFiles(){
+  const box=$('fileList');box.textContent='Yerel dosyalar yükleniyor...';
+  try{
+    const files=await listLocalFiles();box.replaceChildren();
+    if(!files.length){box.textContent='Henüz yerel dosya yok. Dosya İçe Aktar ile ekleyebilir veya yeni bir dosya oluşturabilirsin.';return;}
+    files.forEach(file=>{
+      const row=document.createElement('div');row.className='file-item';
+      const name=document.createElement('span');name.textContent=file.path;name.title=file.path;
+      const controls=document.createElement('span');
+      const open=document.createElement('button');open.textContent='Aç';open.onclick=async()=>{try{const item=await getLocalFile(file.path);$('fileContent').textContent=item.content;$('updatePath').value=item.path;$('updateContent').value=item.content;const exp=document.createElement('button');exp.className='action';exp.textContent='İndir';exp.onclick=()=>downloadLocalFile(item.path,item.content);const area=$('fileContent');area.append(document.createTextNode('\n'));area.append(exp);}catch(e){toast(e.message)}};
+      const save=document.createElement('button');save.textContent='İndir';save.onclick=async()=>{const item=await getLocalFile(file.path);if(item)downloadLocalFile(item.path,item.content);};
+      controls.append(open,save);row.append(name,controls);box.append(row);
+    });
+  }catch(e){box.textContent=e.message;}
+}
+$('refreshFiles').onclick=loadFiles;
+$('localFileInput').onchange=async()=>{
+  const file=$('localFileInput').files[0];if(!file)return;
+  try{if(file.size>1024*1024)throw new Error('Tek dosya için en fazla 1 MB desteklenir.');const content=await file.text();await putLocalFile(file.name,content);$('fileContent').textContent='Yerel olarak kaydedildi: '+file.name;$('workspaceOutput').textContent='Dosya bu cihazın tarayıcı deposuna kaydedildi. Sunucuya yüklenmedi.';await loadFiles();toast('Dosya cihazına kaydedildi.');}
+  catch(e){toast(e.message);}finally{$('localFileInput').value='';}
+};
+async function propose(path,content,kind){
+  if(!path||!content)return $('workspaceOutput').textContent='Dosya yolu ve içerik gerekli.';
+  try{const cleanPath=normalizeLocalPath(path);if(new TextEncoder().encode(content).length>1024*1024)throw new Error('Dosya 1 MB sınırını aşıyor.');const existing=await getLocalFile(cleanPath);if(kind==='create'&&existing)throw new Error('Bu dosya zaten var. Güncelleme taslağını kullan.');if(kind==='update'&&!existing)throw new Error('Güncellenecek yerel dosya bulunamadı.');pendingApproval={path:cleanPath,content,kind};$('approveChange').disabled=false;$('workspaceOutput').textContent='Yerel değişiklik taslağı hazır.\nYol: '+cleanPath+'\nİşlem: '+(kind==='create'?'Yeni dosya oluştur':'Dosyayı güncelle')+'\nOnaylarsan bu cihazda saklanır; sunucuya gönderilmez.';}
+  catch(e){$('workspaceOutput').textContent=e.message;}
+}
 $('proposeCreate').onclick=()=>propose($('newPath').value.trim(),$('newContent').value,'create');
 $('proposeUpdate').onclick=()=>propose($('updatePath').value.trim(),$('updateContent').value,'update');
-$('approveChange').onclick=async()=>{if(!pendingApproval)return;$('approveChange').disabled=true;try{const d=await api('/workspace/approve-create',{approval_id:pendingApproval});$('workspaceOutput').textContent='İşlem tamamlandı: '+d.created.path+' · '+d.created.operation;pendingApproval='';loadFiles(currentFolder)}catch(e){$('workspaceOutput').textContent=e.message}finally{$('approveChange').disabled=!pendingApproval}};
+$('approveChange').onclick=async()=>{
+  if(!pendingApproval)return;$('approveChange').disabled=true;
+  try{await putLocalFile(pendingApproval.path,pendingApproval.content);$('workspaceOutput').textContent='Yerel dosya kaydedildi: '+pendingApproval.path+' · '+(pendingApproval.kind==='create'?'oluşturuldu':'güncellendi')+'.';pendingApproval=null;$('newPath').value='';$('newContent').value='';await loadFiles();toast('Dosya bu cihazda kaydedildi.');}
+  catch(e){$('workspaceOutput').textContent=e.message;}
+  finally{$('approveChange').disabled=!pendingApproval;}
+};
 $('clearChat').onclick=()=>{history=[];$('conversation').replaceChildren();bubble('XFA','Sohbet temizlendi. Yeni bir mesajla başlayabiliriz.')};
+$('checkHealth').onclick=async()=>{try{await health()}catch(e){$('settingsOutput').textContent=e.message}};
 publicStats();
+initializeAuth();
+
 </script>
 </body>
 </html>
