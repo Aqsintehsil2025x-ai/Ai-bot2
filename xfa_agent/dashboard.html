@@ -169,7 +169,7 @@ button,input,textarea{font:inherit}button{cursor:pointer}button:disabled{opacity
   <div class="nav-title">ÇALIŞMA ALANI</div>
   <nav class="nav">
     <button class="active" data-view="chat"><span class="nav-icon">▣</span>Sohbet</button>
-    <button data-view="agent"><span class="nav-icon">♙</span>AI Agent</button>
+    <button data-view="agent"><span class="nav-icon">♙</span>Yapay Zekâ Ajanı</button>
     <button data-view="workspace"><span class="nav-icon">▦</span>Çalışma Alanı</button>
     <button data-view="browser"><span class="nav-icon">⌕</span>Web İnceleme</button>
     <button data-view="settings"><span class="nav-icon">⚙</span>Ayarlar</button>
@@ -291,7 +291,7 @@ button,input,textarea{font:inherit}button{cursor:pointer}button:disabled{opacity
           <p class="muted">XFA; sohbet, AI Agent, web inceleme ve proje çalışma alanını tek bir deneyimde birleştirmeyi hedefler.</p>
           <div class="eco-row"><span class="eco-icon">◉</span><span class="eco-name">Discord Bot</span><span class="eco-state online">Çevrimiçi durumunu kontrol et</span></div>
           <div class="eco-row"><span class="eco-icon">◎</span><span class="eco-name">Web Platformu</span><span class="eco-state">Geliştiriliyor</span></div>
-          <div class="eco-row"><span class="eco-icon">▣</span><span class="eco-name">XFA Desktop</span><span class="eco-state">Planlanıyor</span></div>
+          <div class="eco-row"><span class="eco-icon">▣</span><span class="eco-name">XFA Masaüstü</span><span class="eco-state">Planlanıyor</span></div>
           <a class="action" href="https://discord.gg/Dkj8VFnga" target="_blank" rel="noopener">Discord Topluluğuna Katıl →</a>
         </article>
       </section>
@@ -316,7 +316,7 @@ button,input,textarea{font:inherit}button{cursor:pointer}button:disabled{opacity
         <div class="card-title"><span><b class="symbol">✿</b> XFA Ekosistemi</span><span class="beta">Beta</span></div>
         <div class="eco-row"><span class="eco-icon">◉</span><span class="eco-name">Discord Bot</span><span class="eco-state" id="botState">Kontrol ediliyor</span></div>
         <div class="eco-row"><span class="eco-icon">◎</span><span class="eco-name">Web Platformu</span><span class="eco-state">Yakında</span></div>
-        <div class="eco-row"><span class="eco-icon">▣</span><span class="eco-name">XFA Desktop</span><span class="eco-state">Yakında</span></div>
+        <div class="eco-row"><span class="eco-icon">▣</span><span class="eco-name">XFA Masaüstü</span><span class="eco-state">Yakında</span></div>
       </article>
     </aside>
 
@@ -360,7 +360,7 @@ let accessToken='',pendingApproval='',history=[],currentFolder='.';
 const $=id=>document.getElementById(id);
 const labels={chat:'Sohbet',agent:'Yapay Zekâ Ajanı',workspace:'Çalışma Alanı',browser:'Web İnceleme',settings:'Ayarlar',more:'Daha Fazla'};
 function toast(message){$('toast').textContent=message;$('toast').classList.add('show');setTimeout(()=>$('toast').classList.remove('show'),2600)}
-function navigate(view){document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));const target=$('view-'+view);if(!target)return;target.classList.add('active');document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));$('homeHero').style.display=view==='chat'?'grid':'none';$('crumb');if(view==='workspace'&&accessToken)$('refreshFiles').click();if(view==='settings')$('settingsOutput').textContent='Bağlantı bilgisi burada görünür.'}
+function navigate(view){document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));const target=$('view-'+view);if(!target)return;target.classList.add('active');document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));$('homeHero').style.display=view==='chat'?'grid':'none';if(view==='workspace'&&accessToken)$('refreshFiles').click();if(view==='settings')$('settingsOutput').textContent='Bağlantı bilgisi burada görünür.'}
 document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>navigate(b.dataset.view)));
 document.querySelectorAll('[data-prompt]').forEach(b=>b.addEventListener('click',()=>{$('message').value=b.dataset.prompt;$('message').focus()}));
 $('profileButton').onclick=()=>navigate('settings');$('onlineStatus').onclick=()=>accessToken?health().catch(e=>toast(e.message)):showToken();
