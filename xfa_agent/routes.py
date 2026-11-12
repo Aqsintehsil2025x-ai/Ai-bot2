@@ -82,7 +82,7 @@ def chat():
 
     transcript = []
     for item in messages:
-        if not isinstance(item, dict) or item.get("role") not in {"user", "model"}:
+        if not isinstance(item, dict) or not isinstance(item.get("role"), str) or item.get("role") not in {"user", "model"}:
             return jsonify({"error": "Each message must have a user or model role"}), 400
         content = str(item.get("content", "")).strip()
         if not content or len(content) > 4000:
