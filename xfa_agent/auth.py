@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import contextmanager
+from datetime import timedelta
 import hashlib
 import hmac
 import json
@@ -534,7 +535,7 @@ def register_auth(app) -> None:
         SESSION_COOKIE_SECURE=os.getenv("XFA_COOKIE_SECURE", "true").strip().lower() not in {"0", "false", "no"},
         SESSION_COOKIE_SAMESITE="Lax",
         SESSION_COOKIE_PATH="/",
-        PERMANENT_SESSION_LIFETIME=60 * 60 * 24 * 30,
+        PERMANENT_SESSION_LIFETIME=timedelta(days=30),
     )
     app.session_interface = _SQLiteSessionInterface()
     _init_db()
