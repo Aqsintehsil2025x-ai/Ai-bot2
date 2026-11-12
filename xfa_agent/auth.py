@@ -14,6 +14,7 @@ import json
 import os
 import secrets
 import sqlite3
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -45,7 +46,6 @@ def _connect():
     db.row_factory = sqlite3.Row
     try:
         db.execute("PRAGMA foreign_keys = ON")
-        db.execute("PRAGMA journal_mode = WAL")
         yield db
         db.commit()
     except Exception:
@@ -55,25 +55,36 @@ def _connect():
         db.close()
 
 
+_db_init_lock = threading.Lock()
+_initialized_databases: set[str] = set()
+
+
 def _init_db() -> None:
-    # Reuse the existing XFA user, OAuth identity and integration schema.
-    from xfa_agent.accounts import init_db as init_accounts_db
-    init_accounts_db()
-    with _connect() as db:
-        db.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS xfa_notification_preferences (
-                user_id TEXT PRIMARY KEY REFERENCES xfa_users(id) ON DELETE CASCADE,
-                discord_enabled INTEGER NOT NULL DEFAULT 0
-            );
-            CREATE TABLE IF NOT EXISTS xfa_sessions (
-                sid TEXT PRIMARY KEY,
-                data TEXT NOT NULL,
-                expires INTEGER NOT NULL
-            );
-            CREATE INDEX IF NOT EXISTS xfa_sessions_expires_idx ON xfa_sessions(expires);
-            """
-        )
+    path_key = str(_db_path())
+    if path_key in _initialized_databases:
+        return
+    with _db_init_lock:
+        if path_key in _initialized_databases:
+            return
+        # Reuse the existing XFA user, OAuth identity and integration schema.
+        from xfa_agent.accounts import init_db as init_accounts_db
+        init_accounts_db()
+        with _connect() as db:
+            db.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS xfa_notification_preferences (
+                    user_id TEXT PRIMARY KEY REFERENCES xfa_users(id) ON DELETE CASCADE,
+                    discord_enabled INTEGER NOT NULL DEFAULT 0
+                );
+                CREATE TABLE IF NOT EXISTS xfa_sessions (
+                    sid TEXT PRIMARY KEY,
+                    data TEXT NOT NULL,
+                    expires INTEGER NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS xfa_sessions_expires_idx ON xfa_sessions(expires);
+                """
+            )
+        _initialized_databases.add(path_key)
 
 
 class _XFAUserSession(CallbackDict, SessionMixin):
