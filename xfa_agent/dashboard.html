@@ -267,11 +267,11 @@ button,input,textarea{font:inherit}button{cursor:pointer}button:disabled{opacity
       <section class="section" id="view-agent">
         <article class="panel section-panel">
           <div class="section-heading"><h2>♙ Yapay Zekâ Ajanı</h2><span class="tag">KONTROLLÜ ÇALIŞMA</span></div>
-          <p class="muted">Görevini tanımla. XFA önce bir plan oluşturabilir, ardından herkese açık web sayfalarını ve izin verilen proje dosyalarını salt okunur biçimde inceleyebilir.</p>
+          <p class="muted">Görevini tanımla. XFA önce bir plan oluşturabilir, ardından yalnızca herkese açık web sayfalarını salt okunur biçimde araştırabilir. Cihazındaki yerel dosyalar bu ajana gönderilmez.</p>
           <div class="field"><label for="agentTask">Görev tanımı</label><textarea id="agentTask" maxlength="2000" placeholder="Örn. XFA projesini incele ve kullanıcı deneyimini geliştirmek için öneriler hazırla."></textarea></div>
           <button class="action" id="makePlan">Plan Oluştur</button><button class="action" id="runResearch">Araştırmayı Başlat</button>
           <div class="output" id="agentOutput">Plan ve araştırma sonucu burada görünecek.</div>
-          <p class="muted">Agent terminal komutu çalıştırmaz, hesaplara giriş yapmaz ve dış dünyada işlem yapmaz. Dosya değişiklikleri ayrıca onay gerektirir.</p>
+          <p class="muted">Agent terminal komutu çalıştırmaz, hesaplara giriş yapmaz ve dış dünyada işlem yapmaz. Yerel dosyaların otomatik olarak sunucuya aktarılmaz.</p>
         </article>
       </section>
 
@@ -281,7 +281,7 @@ button,input,textarea{font:inherit}button{cursor:pointer}button:disabled{opacity
           <p class="muted">Bu cihazdaki yerel çalışma alanını yönet. Dosyalar IndexedDB içinde tutulur ve XFA sunucusuna yüklenmez.</p>
           <div class="local-note">Yerel depolama: yalnızca bu tarayıcı ve cihaz. Tarayıcı verilerini temizlersen dosyalar da silinebilir; dışa aktararak yedekleyebilirsin.</div>
           <div class="split">
-            <div><div class="section-heading"><h2 style="font-size:15px">Proje Dosyaları</h2></div><div id="fileList" class="file-list"><div class="muted">Dosyaları görmek için yenile.</div></div></div>
+            <div><div class="section-heading"><h2 style="font-size:15px">Yerel Dosyalar</h2></div><div id="fileList" class="file-list"><div class="muted">Dosyaları görmek için yenile.</div></div></div>
             <div><div class="section-heading"><h2 style="font-size:15px">Dosya İçeriği</h2></div><div id="fileContent" class="output">Bir dosya seçtiğinde içeriği burada görünür.</div></div>
           </div>
           <div class="split" style="margin-top:22px">
