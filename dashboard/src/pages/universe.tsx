@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Maximize2, Sparkles, Orbit, Activity, MessageCircle, Bot, Grid3X3, Search, Settings, Zap, Send, Plus, Smile } from 'lucide-react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { ArrowLeft, ArrowRight, Maximize2, Sparkles, Orbit, Activity, MessageCircle, Bot, Grid3X3, Search, Settings, Zap, Send, Plus, Smile } from 'lucide-react';
 import { Link } from 'wouter';
 import './universe.css';
 
@@ -43,9 +43,7 @@ function SpaceCanvas({ scene }: { scene: Scene }) {
     const draw = () => {
       frame += .008;
       context.clearRect(0, 0, width, height);
-      const bg = context.createLinearGradient(0, 0, width, height);
-      bg.addColorStop(0, '#05030d'); bg.addColorStop(.48, '#10051e'); bg.addColorStop(1, '#070312');
-      context.fillStyle = bg; context.fillRect(0, 0, width, height);
+      // The generated black-hole artwork is the image layer; this canvas adds live particles and light.
       glow(width * .48, height * .47, Math.max(width, height) * .58, 'rgba(91,22,160,.28)');
       glow(width * .12, height * .78, width * .32, 'rgba(87,24,180,.2)');
       stars.forEach((s) => {
@@ -177,7 +175,7 @@ export default function UniversePage() {
     else await document.exitFullscreen();
   }
 
-  async function sendMessage(event?: React.FormEvent<HTMLFormElement>) {
+  async function sendMessage(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
     const content = message.trim();
     if (!content || busy) return;
