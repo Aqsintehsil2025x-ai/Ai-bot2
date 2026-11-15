@@ -52,12 +52,16 @@ class XFAAuthSmokeTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json["session_ready"])
         self.assertFalse(response.json["google"])
-        self.assertFalse(response.json["discord"])
+        self.assertNotIn("discord", response.json)
         self.assertNotIn("client_secret", response.json)
 
-    def test_api_requires_google_or_discord_login(self):
+    def test_api_requires_google_login(self):
         response = self.client.get("/xfa/api/health")
         self.assertEqual(response.status_code, 401)
+
+    def test_discord_oauth_is_disabled(self):
+        response = self.client.get("/auth/login/discord")
+        self.assertEqual(response.status_code, 404)
 
     def test_session_cookie_is_opaque_and_server_side(self):
         self._login_test_session()
