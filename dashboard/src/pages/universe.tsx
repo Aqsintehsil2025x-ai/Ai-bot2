@@ -144,9 +144,6 @@ export default function UniversePage() {
     }
   }
 
-  useEffect(() => {
-  
-  }, []);
 
   return (
     <main className="universe-page" ref={rootRef}>
