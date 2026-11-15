@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Maximize2, Minimize2, Sparkles, Orbit, Activity, MessageCircle, Bot, Grid3X3, Search, Settings, Zap, Crown, Send, Plus, Smile } from 'lucide-react';
+import { ArrowLeft, Maximize2, Sparkles, Orbit, Activity, MessageCircle, Bot, Grid3X3, Search, Settings, Zap, Send, Plus, Smile } from 'lucide-react';
 import { Link } from 'wouter';
-import './universe-page.css';
+import './universe.css';
 
 type Scene = 'black-hole' | 'pulsar';
 
@@ -129,7 +129,7 @@ function SpaceCanvas({ scene }: { scene: Scene }) {
 
 export default function UniversePage() {
   const [scene, setScene] = useState<Scene>('black-hole');
-  const [fullscreen, setFullscreen] = useState(false);
+
   const [message, setMessage] = useState('');
   const [sent, setSent] = useState('Merhaba! Ben XFA. Bir fikir, soru veya görev yaz; birlikte başlayalım.');
   const rootRef = useRef<HTMLDivElement>(null);
@@ -137,17 +137,15 @@ export default function UniversePage() {
   async function toggleFullscreen() {
     if (!document.fullscreenElement) {
       await rootRef.current?.requestFullscreen?.();
-      setFullscreen(Boolean(document.fullscreenElement));
+
     } else {
       await document.exitFullscreen();
-      setFullscreen(false);
+
     }
   }
 
   useEffect(() => {
-    const update = () => setFullscreen(Boolean(document.fullscreenElement));
-    document.addEventListener('fullscreenchange', update);
-    return () => document.removeEventListener('fullscreenchange', update);
+  
   }, []);
 
   return (
