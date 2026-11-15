@@ -179,10 +179,10 @@ button,input,textarea{font:inherit}button{cursor:pointer}button:disabled{opacity
   <div class="auth-card">
     <div class="flower auth-flower" aria-hidden="true"><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i><i class="petal"></i></div>
     <h1>XFA</h1>
-    <p>Xyrin Flower AI hesabına Google veya Discord ile güvenli giriş yap.</p>
+    <p>Xyrin Flower AI hesabına Google ile güvenli giriş yap.</p>
     <div class="auth-providers">
       <a class="auth-provider" id="googleLoginButton" href="/auth/login/google"><span>G</span> Google ile devam et</a>
-      <a class="auth-provider discord" id="discordLoginButton" href="/auth/login/discord"><span>◉</span> Discord ile devam et</a>
+      <a class="action" href="https://discord.gg/Dkj8VFnga" target="_blank" rel="noopener">Hesap sorunu mu var? Discord Tickets →</a>
     </div>
     <div class="auth-error" id="authError"></div>
     <p class="auth-note">Dosyaların bu cihazdaki tarayıcı depolamasında kalır. XFA bunları sunucuya yüklemez. Oturum için yalnızca güvenli bir çerez kullanılır.</p>
@@ -306,16 +306,12 @@ button,input,textarea{font:inherit}button{cursor:pointer}button:disabled{opacity
           <div class="section-heading"><h2>⚙ Ayarlar</h2><span class="tag">GİZLİLİK</span></div>
           <h2 style="font:600 16px 'Space Grotesk'">Hesabım</h2>
           <div class="output" id="accountInfo">Hesap bilgileri yükleniyor...</div>
-          <div class="provider-list" id="providerList"></div>
           <div class="account-actions">
-            <button class="action" id="linkGoogle">Google hesabını bağla</button>
-            <button class="action" id="linkDiscord">Discord hesabını bağla</button>
             <button class="action" id="logoutButton">Çıkış Yap</button>
           </div>
-          <h2 style="font:600 16px 'Space Grotesk';margin-top:22px">Discord Bildirimleri</h2>
-          <p class="muted">Yalnızca Discord hesabını bağladıktan ve açıkça izin verdikten sonra XFA sana özel mesaj gönderebilir.</p>
-          <label class="setting-check"><input type="checkbox" id="discordNotifications"> Discord özel mesaj bildirimlerine izin ver</label>
-          <button class="action" id="testDiscordNotification">Test mesajı gönder</button>
+          <h2 style="font:600 16px 'Space Grotesk';margin-top:22px">Hesap Desteği</h2>
+          <p class="muted">Hesabına erişemiyorsan veya hesabın silindiyse Discord sunucusundaki Tickets bölümünden başvuru oluştur. Hesap e-postanı ve sorunun açıklamasını paylaş; parola veya doğrulama kodu gönderme.</p>
+          <a class="action" href="https://discord.gg/Dkj8VFnga" target="_blank" rel="noopener">Discord Tickets →</a>
           <button class="action" id="checkHealth">Bağlantıyı Kontrol Et</button>
           <div class="output" id="settingsOutput">Bağlantı bilgisi burada görünür.</div>
           <h2 style="font:600 16px 'Space Grotesk';margin-top:22px">Güvenlik ve Gizlilik</h2>
@@ -420,10 +416,9 @@ async function api(path,body){
 }
 function showAuthError(){
   const params=new URLSearchParams(location.search),error=params.get('auth_error'),success=params.get('auth_success');
-  const messages={server_not_configured:'Sunucu kimlik doğrulaması henüz yapılandırılmadı.',google_not_configured:'Google OAuth anahtarları eksik.',discord_not_configured:'Discord OAuth anahtarları eksik.',state_invalid:'Güvenlik kontrolü başarısız oldu. Yeniden dene.',permission_denied:'Giriş izni verilmedi.',provider_error:'Giriş tamamlanamadı. Sunucu günlüklerini kontrol et.',identity_already_used:'Bu sağlayıcı hesabı başka bir XFA hesabına bağlı.',link_session_expired:'Hesap bağlantısı oturumu sona erdi.'};
+  const messages={server_not_configured:'Sunucu kimlik doğrulaması henüz yapılandırılmadı.',google_not_configured:'Google OAuth anahtarları eksik.',state_invalid:'Güvenlik kontrolü başarısız oldu. Yeniden dene.',permission_denied:'Giriş izni verilmedi.',provider_error:'Giriş tamamlanamadı. Sunucu günlüklerini kontrol et.',identity_already_used:'Bu sağlayıcı hesabı başka bir XFA hesabına bağlı.',link_session_expired:'Hesap bağlantısı oturumu sona erdi.'};
   if(error)$('authError').textContent=messages[error]||'Giriş sırasında bir sorun oluştu.';
-  if(success==='linked')toast('Hesap başarıyla bağlandı.');
-  else if(success==='1')toast('XFA hesabına giriş yaptın.');
+  if(success==='1')toast('XFA hesabına giriş yaptın.');
   if(error||success)historyReplace();
 }
 function historyReplace(){const url=new URL(location.href);url.searchParams.delete('auth_error');url.searchParams.delete('auth_success');historyReplaceState(url.toString())}
@@ -433,12 +428,11 @@ async function initializeAuth(){
   try{
     const providersResponse=await fetch('/auth/providers',{credentials:'same-origin'});
     const providers=providersResponse.ok?await providersResponse.json():{};
-    [['google','googleLoginButton'],['discord','discordLoginButton']].forEach(([key,id])=>{
-      const button=$(id),enabled=!!providers[key]&&!!providers.session_ready;
-      button.classList.toggle('disabled',!enabled);
-      button.setAttribute('aria-disabled',String(!enabled));
-      if(!enabled)button.title='Bu giriş yöntemi henüz sunucuda yapılandırılmadı.';
-    });
+    const googleButton=$('googleLoginButton');
+    const googleEnabled=!!providers.google&&!!providers.session_ready;
+    googleButton.classList.toggle('disabled',!googleEnabled);
+    googleButton.setAttribute('aria-disabled',String(!googleEnabled));
+    if(!googleEnabled)googleButton.title='Google OAuth henüz sunucuda yapılandırılmadı.';
     const response=await fetch('/auth/me',{credentials:'same-origin'});
     const data=await response.json();
     if(!response.ok||!data.authenticated){
@@ -451,32 +445,12 @@ async function initializeAuth(){
     $('profileButton').querySelector('.avatar').textContent=(currentUser.name||'X').trim().charAt(0).toLocaleUpperCase('tr');
     $('profileButton').querySelector('span:last-child').textContent=currentUser.name||'Hesap';
     $('accountInfo').textContent=(currentUser.name||'Kullanıcı')+'\n'+(currentUser.email||'Doğrulanmış e-posta paylaşılmadı');
-    const connected=data.providers||[];
-    $('providerList').replaceChildren();
-    ['google','discord'].forEach(provider=>{const chip=document.createElement('span');chip.className='provider-chip';chip.textContent=(provider==='google'?'Google':'Discord')+(connected.includes(provider)?' · Bağlı':' · Bağlı değil');$('providerList').append(chip);});
-    $('linkGoogle').disabled=connected.includes('google');$('linkDiscord').disabled=connected.includes('discord');
-    $('linkGoogle').style.opacity=connected.includes('google')?'.45':'1';$('linkDiscord').style.opacity=connected.includes('discord')?'.45':'1';
-    $('discordNotifications').checked=!!data.discord_notifications;
     try{await health();}catch(e){$('settingsOutput').textContent=e.message;}
     await loadFiles();
   }catch(e){$('authScreen').classList.remove('hidden');$('authError').textContent='Sunucuya bağlanılamadı. Sayfayı yenileyip tekrar dene.';}
 }
-function startLink(provider){
-  const form=document.createElement('form');form.method='POST';form.action='/auth/link/'+provider;
-  const input=document.createElement('input');input.type='hidden';input.name='csrf_token';input.value=csrfToken;form.append(input);document.body.append(form);form.submit();
-}
-$('linkGoogle').onclick=()=>startLink('google');$('linkDiscord').onclick=()=>startLink('discord');
 $('logoutButton').onclick=async()=>{
   try{const r=await fetch('/auth/logout',{method:'POST',headers:{'X-CSRF-Token':csrfToken},credentials:'same-origin'});if(!r.ok)throw new Error('Çıkış yapılamadı.');currentUser=null;csrfToken='';$('authScreen').classList.remove('hidden');$('authError').textContent='Oturum kapatıldı.';}
-  catch(e){toast(e.message);}
-};
-$('discordNotifications').onchange=async()=>{
-  const enabled=$('discordNotifications').checked;
-  try{const r=await fetch('/auth/discord-notifications',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken},credentials:'same-origin',body:JSON.stringify({enabled})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Ayar kaydedilemedi.');toast(enabled?'Discord bildirimleri açıldı.':'Discord bildirimleri kapatıldı.');}
-  catch(e){$('discordNotifications').checked=!enabled;toast(e.message);}
-};
-$('testDiscordNotification').onclick=async()=>{
-  try{const r=await fetch('/auth/discord-notifications/test',{method:'POST',headers:{'X-CSRF-Token':csrfToken},credentials:'same-origin'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Test mesajı gönderilemedi.');toast('Test mesajı Discord DM olarak gönderildi.');}
   catch(e){toast(e.message);}
 };
 async function health(){const d=await api('/health');$('connection').textContent='Bağlı';$('botState').textContent='Çevrimiçi';$('botState').classList.add('online');$('settingsOutput').textContent='Bağlantı başarılı.\nPlanlama: '+(d.planner_ready?'Hazır':'API anahtarı eksik')+'\nUzak tarayıcı: '+(d.remote_browser_ready?'Hazır':'Kurulmadı')+'\nÇalışma modu: '+d.execution_mode;return d}

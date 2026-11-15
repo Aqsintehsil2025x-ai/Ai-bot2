@@ -53,7 +53,7 @@ def require_user_session():
         return jsonify({"error": "FLASK_SECRET_KEY is not configured on the server."}), 503
     user_id = session.get("xfa_user_id")
     if not user_id:
-        return jsonify({"error": "Giriş gerekli. Google veya Discord hesabınla oturum aç."}), 401
+        return jsonify({"error": "Giriş gerekli. Google hesabınla oturum aç."}), 401
     g.xfa_user_id = user_id
     if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
         expected = session.get("xfa_csrf")
