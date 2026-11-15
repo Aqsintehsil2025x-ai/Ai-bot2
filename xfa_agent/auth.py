@@ -402,7 +402,11 @@ def me():
         return jsonify({"authenticated": False, "error": "server_not_configured"}), 503
     user_id = session.get("xfa_user_id")
     if not user_id:
-        return jsonify({"authenticated": False})
+        csrf_token = session.get("xfa_csrf")
+        if not csrf_token:
+            csrf_token = secrets.token_urlsafe(32)
+            session["xfa_csrf"] = csrf_token
+        return jsonify({"authenticated": False, "csrf_token": csrf_token})
     _init_db()
     with _connect() as db:
         user = db.execute(
