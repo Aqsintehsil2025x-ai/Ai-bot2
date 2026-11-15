@@ -166,6 +166,58 @@ button,input,textarea{font:inherit}button{cursor:pointer}button:disabled{opacity
 .local-import{display:inline-flex;align-items:center;gap:7px;border:1px solid #8f4bc188;border-radius:10px;padding:10px 13px;background:#160d24;color:#eadbfa;cursor:pointer}
 .setting-check{display:flex;align-items:center;gap:9px;margin:12px 0;color:#d9c9ea}.setting-check input{accent-color:#a64cff;width:16px;height:16px}
 
+
+/* XFA FUTURISTIC MOTION LAYER */
+:root{--motion-fast:220ms;--motion-mid:650ms;--motion-slow:18s}
+body{background-attachment:fixed;isolation:isolate}
+body:before,body:after{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1}
+body:before{background:radial-gradient(circle at 12% 18%,#a044ff16 0 1px,transparent 2px),radial-gradient(circle at 78% 24%,#e4a4ff22 0 1.5px,transparent 3px),radial-gradient(circle at 61% 82%,#923dff20 0 1px,transparent 2px),radial-gradient(ellipse at 50% 0%,#812bca18,transparent 48%);background-size:190px 190px,260px 260px,220px 220px,100% 100%;animation:ambientDrift 28s linear infinite}
+body:after{opacity:.13;background-image:linear-gradient(#a95bff16 1px,transparent 1px),linear-gradient(90deg,#a95bff16 1px,transparent 1px);background-size:54px 54px;mask-image:linear-gradient(to bottom,black,transparent 78%)}
+.sidebar,.panel,.search,.auth-card{backdrop-filter:blur(18px) saturate(1.2)}
+.panel{transition:transform .35s cubic-bezier(.2,.8,.2,1),border-color .35s,box-shadow .35s;animation:panelArrive .8s both}
+.panel:hover{transform:translateY(-4px);border-color:#c17affb0;box-shadow:0 16px 42px #7026b533,0 0 25px #9e45ff18,inset 0 0 26px #9b43ff12}
+.sidebar{animation:sidebarArrive .85s both}
+.brand .flower{animation:flowerBreath 5s ease-in-out infinite}
+.hero{animation:heroArrive 1s both}
+.hero-orbit{animation:orbitSpin 26s linear infinite}
+.hero-orbit.two{animation:orbitSpinReverse 34s linear infinite}
+.hero-orbit.three{animation:orbitSpin 42s linear infinite}
+.hero-bloom{animation:float 7s ease-in-out infinite,flowerAura 4.5s ease-in-out infinite}
+.spark{animation:twinkle 2.5s infinite alternate,sparkDrift 7s ease-in-out infinite}
+.spark.s2{animation-delay:.6s,1s}.spark.s3{animation-delay:1.2s,2s}.spark.s4{animation-delay:1.8s,3s}
+.trait,.quick button,.action,.pill-button,.round-tool,.top-icon,.nav button,.send,.auth-provider{position:relative;overflow:hidden;transition:transform .25s,border-color .25s,background .25s,box-shadow .25s}
+.trait:after,.quick button:after,.action:after,.pill-button:after,.send:after,.auth-provider:after{content:"";position:absolute;inset:-80% auto -80% -45%;width:35%;transform:rotate(22deg);background:linear-gradient(90deg,transparent,#fff4,transparent);transition:left .65s}
+.trait:hover:after,.quick button:hover:after,.action:hover:after,.pill-button:hover:after,.send:hover:after,.auth-provider:hover:after{left:125%}
+.trait:hover,.quick button:hover,.action:hover,.pill-button:hover,.round-tool:hover,.top-icon:hover,.nav button:hover,.auth-provider:hover{transform:translateY(-2px);box-shadow:0 0 20px #a64cff33}
+.send{animation:sendPulse 3.5s ease-in-out infinite}
+.stat-card .chart{transform-origin:bottom;animation:chartRise 1.8s cubic-bezier(.2,.8,.2,1) both}
+.stat strong{ text-shadow:0 0 16px #b45cff44}
+.eco-row{transition:padding .25s,background .25s,border-color .25s;border-radius:10px}
+.eco-row:hover{padding-left:8px;background:#8f3de814}
+.bubble{animation:messageArrive .35s cubic-bezier(.2,.8,.2,1) both}
+.chat-mark{animation:markGlow 4s ease-in-out infinite}
+.promo{animation:panelArrive .9s both}
+.promo:nth-child(2){animation-delay:.12s}.promo:nth-child(3){animation-delay:.24s}
+.why-flower{animation:float 8s ease-in-out infinite,flowerAura 5s ease-in-out infinite}
+.discord-art{animation:mascotFloat 5s ease-in-out infinite}
+button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid #d4a0ff;outline-offset:3px}
+@keyframes ambientDrift{0%{background-position:0 0,0 0,0 0,center}50%{background-position:95px 45px,-80px 70px,55px -65px,center}100%{background-position:190px 90px,-160px 140px,110px -130px,center}}
+@keyframes orbitSpin{from{rotate:0deg}to{rotate:360deg}}
+@keyframes orbitSpinReverse{from{rotate:0deg}to{rotate:-360deg}}
+@keyframes flowerBreath{0%,100%{transform:scale(1) rotate(0)}50%{transform:scale(1.07) rotate(8deg)}}
+@keyframes flowerAura{0%,100%{filter:drop-shadow(0 0 18px #8f38ff88)}50%{filter:drop-shadow(0 0 34px #c16affcc)}}
+@keyframes sparkDrift{0%,100%{translate:0 0}50%{translate:13px -18px}}
+@keyframes panelArrive{from{opacity:0;translate:0 16px}to{opacity:1;translate:0 0}}
+@keyframes sidebarArrive{from{opacity:0;translate:-14px 0}to{opacity:1;translate:0 0}}
+@keyframes heroArrive{from{opacity:0;translate:0 12px}to{opacity:1;translate:0 0}}
+@keyframes messageArrive{from{opacity:0;translate:0 8px;scale:.985}to{opacity:1;translate:0 0;scale:1}}
+@keyframes sendPulse{0%,100%{box-shadow:0 0 18px #8a28ff55}50%{box-shadow:0 0 30px #b75affaa,0 0 55px #8a28ff44}}
+@keyframes chartRise{from{clip-path:inset(100% 0 0)}to{clip-path:inset(0 0 0)}}
+@keyframes markGlow{0%,100%{box-shadow:0 0 14px #8f3fff33}50%{box-shadow:0 0 27px #b45cff88}}
+@keyframes mascotFloat{0%,100%{translate:0 0;rotate:-2deg}50%{translate:0 -8px;rotate:2deg}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
+@media(max-width:680px){.panel:hover{transform:none}.hero-orbit{animation-duration:38s}.hero-bloom{animation:float 9s ease-in-out infinite}}
+
 @keyframes float{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-9px) rotate(2deg)}}
 @keyframes twinkle{from{opacity:.3;transform:scale(.7)}to{opacity:1;transform:scale(1.2)}}
 @media(max-width:1200px){:root{--sidebar:220px}.columns{grid-template-columns:minmax(0,1fr) 280px;gap:14px}.lower{gap:12px}.hero-bloom{transform:scale(.86)}.promo{padding:16px}.promo h3{font-size:15px}}
