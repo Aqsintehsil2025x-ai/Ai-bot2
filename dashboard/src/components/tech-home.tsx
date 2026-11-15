@@ -55,6 +55,9 @@ export function TechHeader({ activePanel = false }: { activePanel?: boolean }) {
           {activePanel ? 'Siteye dön' : 'Panel önizlemesi'}
           <ArrowUpRight size={14} />
         </Link>
+        <Link className="tech-panel-link" href="/universe" data-testid="link-xfa-universe">
+          XFA Universe <Sparkles size={14} />
+        </Link>
       </nav>
       <a
         className="tech-nav-cta"

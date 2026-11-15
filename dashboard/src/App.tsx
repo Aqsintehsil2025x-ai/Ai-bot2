@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { TechHeader, TechHome } from '@/components/tech-home';
 import NotFound from '@/pages/not-found';
+import UniversePage from '@/pages/universe';
 import {
   ArrowRight,
   Bot,
@@ -376,6 +377,7 @@ function Router() {
       <Switch>
         <Route path="/" component={Home}/>
         <Route path="/panel" component={Panel}/>
+        <Route path="/universe" component={UniversePage}/>
         <Route component={NotFound}/>
       </Switch>
     </RoutedErrorBoundary>
