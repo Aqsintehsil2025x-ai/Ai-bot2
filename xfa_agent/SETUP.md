@@ -15,7 +15,7 @@ Optional:
 
 ## OAuth callback URLs
 
-Register these exact redirect URLs in both provider dashboards:
+Register this exact redirect URL in Google Cloud Console:
 
 - Google: `https://ai-bot-2--aqsintehsil2025.replit.app/auth/callback/google`
 
@@ -39,7 +39,7 @@ Google OAuth:
 
 ## Removed legacy access token
 
-The XFA dashboard and `/xfa/api` no longer use `XFA_ACCESS_TOKEN` or Bearer-token entry. Remove the old `XFA_ACCESS_TOKEN` secret from Replit after deploying this branch. Keep `FLASK_SECRET_KEY` and all provider secrets server-side.
+The XFA dashboard and `/xfa/api` no longer use `XFA_ACCESS_TOKEN` or Bearer-token entry. Remove the old `XFA_ACCESS_TOKEN` secret from Replit after deploying this branch. Keep `FLASK_SECRET_KEY` and Google OAuth secrets server-side.
 
 ## Email
 
