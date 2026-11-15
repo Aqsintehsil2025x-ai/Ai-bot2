@@ -346,13 +346,67 @@ def callback(provider: str):
         current_app.logger.exception("XFA Google OAuth callback failed")
         return _redirect_error("provider_error")
 
+@auth.post("/auth/register")
+def register_password():
+    if not _auth_ready():
+        return jsonify({"error": "Sunucu oturum anahtarı yapılandırılmamış."}), 503
+    if not _csrf_valid(request.headers.get("X-CSRF-Token")):
+        return jsonify({"error": "Güvenlik doğrulaması başarısız."}), 403
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "Geçerli kayıt bilgileri gönderilmelidir."}), 400
+    email = payload.get("email")
+    password = payload.get("password")
+    if not isinstance(email, str) or not isinstance(password, str):
+        return jsonify({"error": "E-posta ve parola zorunludur."}), 400
+    try:
+        from xfa_agent.accounts import create_user
+        user = create_user(email, password)
+    except ValueError as exc:
+        message = str(exc)
+        if "already exists" in message:
+            return jsonify({"error": "Bu e-posta ile hesap açılamadı. E-posta daha önce kullanılmış olabilir."}), 409
+        if "Password must" in message:
+            return jsonify({"error": "Parola 12 ile 1024 karakter arasında olmalıdır."}), 400
+        return jsonify({"error": "Geçerli bir e-posta adresi gir."}), 400
+    display_name = user["email"].split("@", 1)[0][:100] or "XFA kullanıcısı"
+    _set_user_session(user["id"], {"name": display_name, "email": user["email"]}, "email")
+    return jsonify({"ok": True})
+
+
+@auth.post("/auth/login/password")
+def login_password():
+    if not _auth_ready():
+        return jsonify({"error": "Sunucu oturum anahtarı yapılandırılmamış."}), 503
+    if not _csrf_valid(request.headers.get("X-CSRF-Token")):
+        return jsonify({"error": "Güvenlik doğrulaması başarısız."}), 403
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "Geçerli giriş bilgileri gönderilmelidir."}), 400
+    email = payload.get("email")
+    password = payload.get("password")
+    if not isinstance(email, str) or not isinstance(password, str):
+        return jsonify({"error": "E-posta ve parola zorunludur."}), 400
+    from xfa_agent.accounts import verify_user
+    user = verify_user(email, password)
+    if not user:
+        return jsonify({"error": "E-posta veya parola hatalı."}), 401
+    display_name = user["email"].split("@", 1)[0][:100] or "XFA kullanıcısı"
+    _set_user_session(user["id"], {"name": display_name, "email": user["email"]}, "email")
+    return jsonify({"ok": True})
+
+
 @auth.get("/auth/me")
 def me():
     if not _auth_ready():
         return jsonify({"authenticated": False, "error": "server_not_configured"}), 503
     user_id = session.get("xfa_user_id")
     if not user_id:
-        return jsonify({"authenticated": False})
+        csrf_token = session.get("xfa_csrf")
+        if not csrf_token:
+            csrf_token = secrets.token_urlsafe(32)
+            session["xfa_csrf"] = csrf_token
+        return jsonify({"authenticated": False, "csrf_token": csrf_token})
     _init_db()
     with _connect() as db:
         user = db.execute(

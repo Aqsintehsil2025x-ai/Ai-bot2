@@ -94,6 +94,71 @@ class XFAAuthSmokeTests(unittest.TestCase):
         # succeeds and the endpoint then reports that the planner is unavailable.
         self.assertEqual(allowed_through_csrf.status_code, 503)
 
+    def test_anonymous_auth_me_issues_csrf_token(self):
+        response = self.client.get("/auth/me")
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json["authenticated"])
+        self.assertTrue(response.json["csrf_token"])
+
+    def test_email_registration_and_password_login(self):
+        anonymous = self.client.get("/auth/me")
+        csrf = anonymous.json["csrf_token"]
+        registered = self.client.post(
+            "/auth/register",
+            json={"email": "new-user@example.invalid", "password": "a-strong-test-password-123"},
+            headers={"X-CSRF-Token": csrf},
+        )
+        self.assertEqual(registered.status_code, 200)
+        self.assertTrue(registered.json["ok"])
+        profile = self.client.get("/auth/me")
+        self.assertTrue(profile.json["authenticated"])
+        self.assertEqual(profile.json["user"]["email"], "new-user@example.invalid")
+        self.assertEqual(profile.json["csrf_token"] != csrf, True)
+
+        self.client.post(
+            "/auth/logout",
+            headers={"X-CSRF-Token": profile.json["csrf_token"]},
+        )
+        anonymous_again = self.client.get("/auth/me")
+        login = self.client.post(
+            "/auth/login/password",
+            json={"email": "NEW-USER@example.invalid", "password": "a-strong-test-password-123"},
+            headers={"X-CSRF-Token": anonymous_again.json["csrf_token"]},
+        )
+        self.assertEqual(login.status_code, 200)
+        self.assertTrue(self.client.get("/auth/me").json["authenticated"])
+
+    def test_password_auth_rejects_invalid_password_and_csrf(self):
+        anonymous = self.client.get("/auth/me")
+        csrf = anonymous.json["csrf_token"]
+        no_csrf = self.client.post(
+            "/auth/register",
+            json={"email": "another@example.invalid", "password": "a-strong-test-password-123"},
+        )
+        self.assertEqual(no_csrf.status_code, 403)
+        weak_password = self.client.post(
+            "/auth/register",
+            json={"email": "another@example.invalid", "password": "short"},
+            headers={"X-CSRF-Token": csrf},
+        )
+        self.assertEqual(weak_password.status_code, 400)
+        bad_login = self.client.post(
+            "/auth/login/password",
+            json={"email": "test@example.invalid", "password": "incorrect-password-123"},
+            headers={"X-CSRF-Token": csrf},
+        )
+        self.assertEqual(bad_login.status_code, 401)
+        self.assertEqual(bad_login.json["error"], "E-posta veya parola hatalı.")
+
+    def test_duplicate_email_registration_is_rejected(self):
+        anonymous = self.client.get("/auth/me")
+        response = self.client.post(
+            "/auth/register",
+            json={"email": "TEST@example.invalid", "password": "a-strong-test-password-123"},
+            headers={"X-CSRF-Token": anonymous.json["csrf_token"]},
+        )
+        self.assertEqual(response.status_code, 409)
+
     def test_auth_me_reports_authenticated_profile(self):
         self._login_test_session()
         response = self.client.get("/auth/me")
