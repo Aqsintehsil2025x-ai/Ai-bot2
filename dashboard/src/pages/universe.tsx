@@ -129,21 +129,86 @@ function SpaceCanvas({ scene }: { scene: Scene }) {
 
 export default function UniversePage() {
   const [scene, setScene] = useState<Scene>('black-hole');
-
   const [message, setMessage] = useState('');
-  const [sent, setSent] = useState('Merhaba! Ben XFA. Bir fikir, soru veya görev yaz; birlikte başlayalım.');
+  const [messages, setMessages] = useState<{ role: 'user' | 'model'; content: string }[]>([
+    { role: 'model', content: 'Merhaba! Ben XFA. Bir fikir, soru veya görev yaz; birlikte başlayalım.' },
+  ]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [auth, setAuth] = useState<{ loading: boolean; authenticated: boolean; csrf: string; name: string; google: boolean }>({
+    loading: true, authenticated: false, csrf: '', name: '', google: false,
+  });
+  const [stats, setStats] = useState<{ guilds: number; members: number; latency: number; ready: boolean }>({
+    guilds: 0, members: 0, latency: 0, ready: false,
+  });
   const rootRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetch('/auth/me', { credentials: 'same-origin' })
+      .then(async (response) => ({ response, data: await response.json() }))
+      .then(({ response, data }) => {
+        if (!active) return;
+        setAuth({
+          loading: false,
+          authenticated: response.ok && data.authenticated === true,
+          csrf: typeof data.csrf_token === 'string' ? data.csrf_token : '',
+          name: data.user?.name || '',
+          google: false,
+        });
+      })
+      .catch(() => { if (active) setAuth((current) => ({ ...current, loading: false })); });
+    fetch('/auth/providers', { credentials: 'same-origin' })
+      .then((response) => response.json())
+      .then((data) => { if (active) setAuth((current) => ({ ...current, google: data.google === true })); })
+      .catch(() => undefined);
+    const loadStats = () => fetch('/api/stats', { credentials: 'same-origin' })
+      .then((response) => response.json())
+      .then((data) => { if (active) setStats({ guilds: Number(data.guilds) || 0, members: Number(data.members) || 0, latency: Number(data.latency) || 0, ready: data.ready === true }); })
+      .catch(() => undefined);
+    void loadStats();
+    const timer = window.setInterval(loadStats, 30000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
 
   async function toggleFullscreen() {
-    if (!document.fullscreenElement) {
-      await rootRef.current?.requestFullscreen?.();
+    if (!document.fullscreenElement) await rootRef.current?.requestFullscreen?.();
+    else await document.exitFullscreen();
+  }
 
-    } else {
-      await document.exitFullscreen();
-
+  async function sendMessage(event?: React.FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
+    const content = message.trim();
+    if (!content || busy) return;
+    if (!auth.authenticated) {
+      setError('Söhbət üçün əvvəlcə XFA hesabına daxil ol.');
+      return;
+    }
+    const next = [...messages, { role: 'user' as const, content }];
+    setMessages(next);
+    setMessage('');
+    setBusy(true);
+    setError('');
+    try {
+      const response = await fetch('/xfa/api/chat', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': auth.csrf },
+        body: JSON.stringify({ messages: next.slice(-20) }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `Sohbet isteği başarısız (HTTP ${response.status}).`);
+      setMessages((current) => [...current, { role: 'model', content: data.reply || 'Şu anda yanıt oluşturamadım.' }]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'XFA bağlantısı başarısız oldu.');
+    } finally {
+      setBusy(false);
+      inputRef.current?.focus();
     }
   }
 
+  const quickPrompts = ['Kara delikler nasıl oluşur?', 'Bana bir Python örneği yaz', 'Yeni bir proje fikri bul', 'Bugünkü hedeflerimi planla'];
 
   return (
     <main className="universe-page" ref={rootRef}>
@@ -152,36 +217,40 @@ export default function UniversePage() {
       <aside className="universe-sidebar">
         <Link href="/" className="universe-brand"><span className="universe-flower">✿</span><strong>XFA</strong><small>XYRIN FLOWER AI</small></Link>
         <div className="universe-nav-label">ÇALIŞMA ALANI</div>
-        <a className="universe-nav-item active" href="/"><MessageCircle size={16}/> Sohbet</a>
-        <a className="universe-nav-item" href="/"><Bot size={16}/> Yapay Zekâ Ajanı</a>
-        <a className="universe-nav-item" href="/"><Grid3X3 size={16}/> Çalışma Alanı</a>
-        <a className="universe-nav-item" href="/"><Search size={16}/> Web İnceleme</a>
-        <a className="universe-nav-item" href="/"><Settings size={16}/> Ayarlar</a>
-        <div className="universe-premium"><strong>👑 XFA Premium</strong><p>Gelecekte de herkes için ücretsiz kalma hedefiyle geliştiriliyor.</p><button type="button">Destek Ol ♡</button></div>
+        <a className="universe-nav-item active" href="#chat"><MessageCircle size={16}/> Sohbet</a>
+        <a className="universe-nav-item" href="/xfa"><Bot size={16}/> Yapay Zekâ Ajanı</a>
+        <a className="universe-nav-item" href="/panel"><Grid3X3 size={16}/> Çalışma Alanı</a>
+        <a className="universe-nav-item" href="/xfa"><Search size={16}/> Web inceleme</a>
+        <a className="universe-nav-item" href="/panel"><Settings size={16}/> Ayarlar</a>
+        <div className="universe-premium"><strong>👑 XFA</strong><p>Herkes için ücretsiz yapay zekâ deneyimi.</p><a href="/panel">Kontrol paneli →</a></div>
         <div className="universe-sidebar-foot">© 2026 XFA.<br/>Herkes için geliştirildi. ♡</div>
       </aside>
       <header className="universe-topbar">
         <Link href="/" className="universe-back"><ArrowLeft size={15}/> XFA'ya dön</Link>
-        <div className="universe-search"><Search size={14}/> XFA'da her şeyi ara... <kbd>Ctrl + K</kbd></div>
-        <div className="universe-status"><i/> Bağlı <span>◉</span><b>A</b> aqsin.ehsil2025x</div>
+        <button className="universe-search" type="button" onClick={() => inputRef.current?.focus()}><Search size={14}/> Sohbette ara veya mesaj yaz... <kbd>Ctrl + K</kbd></button>
+        <div className="universe-status"><i className={stats.ready ? '' : 'offline'}/> {auth.authenticated ? (auth.name || 'Hesabım') : 'Misafir'} <span>◉</span><b>{auth.name ? auth.name.slice(0,1).toUpperCase() : 'A'}</b></div>
       </header>
       <section className="universe-center">
-        <div className="universe-brand-title"><h1>XFA</h1><h2>Xyrin Flower AI</h2><p>Sonsuz imkânlar. Tamamen <em>ücretsiz.</em></p><div className="universe-pills"><span>∞ Ücretsiz erişim</span><span>♢ Güvenli çalışma</span><span>ϟ Hızlı yanıt</span></div></div>
-        <div className="universe-chat">
-          <div className="universe-chat-head"><span className="universe-avatar">✿</span><div><strong>Merhaba! 👋</strong><small>XFA burada. Sana nasıl yardımcı olabilirim?</small></div></div>
-          <div className="universe-quick"><button>✦ Metin Yaz</button><button>‹/› Kod Yaz</button><button>♧ Fikir AI</button><button>⌕ Araştırma Yap</button><button>ϟ Yapay Zekâ Ajanı</button></div>
-          <div className="universe-message"><small>XFA</small>{sent}</div>
-          <div className="universe-user-message">Selam</div>
-          <form className="universe-input" onSubmit={(event) => { event.preventDefault(); if (message.trim()) { setSent(message.trim()); setMessage(''); } }}>
-            <button type="button" aria-label="Əlavə et"><Plus size={19}/></button><button type="button" aria-label="Emoji"><Smile size={18}/></button><input value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Mesajınızı yazın..." /><button className="universe-send" type="submit"><Send size={19}/></button>
+        <div className="universe-brand-title"><h1>XFA</h1><h2>Xyrin Flower AI</h2><p>Sonsuz imkânlar. Tamamen <em>ücretsiz.</em></p><div className="universe-pills"><span>∞ Ücretsiz erişim</span><span>♢ Güvenli çalışma</span><span>ϟ Canlı AI sohbeti</span></div></div>
+        <div className="universe-chat" id="chat">
+          <div className="universe-chat-head"><span className="universe-avatar">✿</span><div><strong>{auth.authenticated ? `Merhaba, ${auth.name || 'gezgin'}! 👋` : 'XFA Universe’e hoş geldin! 👋'}</strong><small>{auth.authenticated ? 'XFA hazır. Ne yapmak istersin?' : 'AI sohbetini kullanmak için hesabına giriş yap.'}</small></div></div>
+          {!auth.authenticated && !auth.loading && <div className="universe-login"><span>Giriş yapmadan sohbet başlatılamaz.</span><a href={auth.google ? '/auth/login/google' : '/xfa'}>{auth.google ? 'Google ile giriş yap' : 'XFA giriş sayfasını aç'} <ArrowRight size={14}/></a></div>}
+          <div className="universe-quick">{quickPrompts.map((prompt) => <button key={prompt} type="button" onClick={() => { setMessage(prompt); inputRef.current?.focus(); }}>✦ {prompt}</button>)}</div>
+          <div className="universe-transcript" aria-live="polite">
+            {messages.map((item, index) => <div className={item.role === 'user' ? 'universe-user-message' : 'universe-message'} key={index}>{item.role === 'model' && <small>XFA</small>}{item.content}</div>)}
+            {busy && <div className="universe-message universe-thinking"><small>XFA</small><span className="universe-dots">Yanıt hazırlanıyor</span></div>}
+          </div>
+          {error && <p className="universe-error" role="alert">{error}</p>}
+          <form className="universe-input" onSubmit={sendMessage}>
+            <button type="button" aria-label="Mesaj alanına odaklan" onClick={() => inputRef.current?.focus()}><Plus size={19}/></button><button type="button" aria-label="Örnek istem ekle" onClick={() => setMessage('Lütfen bunu adım adım açıkla: ')}><Smile size={18}/></button><input ref={inputRef} value={message} onChange={(event) => setMessage(event.target.value)} placeholder={auth.authenticated ? 'XFA’ya mesajını yaz...' : 'Önce giriş yapmalısın...'} disabled={!auth.authenticated || busy} /><button className="universe-send" type="submit" disabled={!auth.authenticated || busy || !message.trim()} aria-label="Mesajı gönder"><Send size={19}/></button>
           </form>
         </div>
       </section>
       <aside className="universe-right">
-        <section className="universe-stat-card"><h3>▥ &nbsp; XFA İstatistikleri</h3><div><Sparkles/><strong>1.343+<small>Discord Üyesi</small></strong></div><div><Grid3X3/><strong>3<small>Sunucu</small></strong></div><div><Zap/><strong>∞<small>Potansiyel</small></strong></div><svg viewBox="0 0 260 75" preserveAspectRatio="none"><path d="M0 65 C30 61 35 59 55 51 S82 49 100 42 S126 49 148 32 S177 35 193 22 S221 18 260 2" fill="none" stroke="#b34dff" strokeWidth="2.5"/></svg></section>
-        <section className="universe-ecosystem"><h3><Orbit size={15}/> XFA Ekosistemi <span>Beta</span></h3><p>◉ &nbsp; Discord Bot <small>● Çevrimiçi</small></p><p>◎ &nbsp; Web Platformu <small>Yakında</small></p><p>▣ &nbsp; XFA Masaüstü <small>Yakında</small></p></section>
+        <section className="universe-stat-card"><h3>▥ &nbsp; XFA Canlı İstatistikleri</h3><div><Sparkles/><strong>{stats.members.toLocaleString('tr-TR')}<small>Discord Üyesi</small></strong></div><div><Grid3X3/><strong>{stats.guilds}<small>Sunucu</small></strong></div><div><Zap/><strong>{stats.ready ? `${stats.latency} ms` : 'Çevrimdışı'}<small>Bot gecikmesi</small></strong></div><svg viewBox="0 0 260 75" preserveAspectRatio="none"><path d="M0 65 C30 61 35 59 55 51 S82 49 100 42 S126 49 148 32 S177 35 193 22 S221 18 260 2" fill="none" stroke="#b34dff" strokeWidth="2.5"/></svg></section>
+        <section className="universe-ecosystem"><h3><Orbit size={15}/> XFA Ekosistemi <span>CANLI</span></h3><p>◉ &nbsp; Discord Bot <small>{stats.ready ? '● Çevrimiçi' : '● Çevrimdışı'}</small></p><p>◎ &nbsp; Web Platformu <small>● Çevrimiçi</small></p><p>▣ &nbsp; XFA Ajan API <small>{auth.authenticated ? '● Oturum açık' : '● Giriş gerekli'}</small></p></section>
       </aside>
-      <div className="universe-quality"><strong>4K</strong><span>4K ULTRA HD<br/><small>ADAPTİF RENDER</small></span><i/></div>
+      <div className="universe-quality"><strong>HD</strong><span>ADAPTİF YÜKSEK ÇÖZÜNÜRLÜK<br/><small>EKRANINA GÖRE RENDER</small></span><i/></div>
       <div className="universe-scene-switch"><div><strong>{scene === 'black-hole' ? 'Qara Dəlik' : 'Pulsar Ulduzu'}</strong><small>Canlı kosmik simulyasiya</small></div><button className={scene === 'black-hole' ? 'selected' : ''} onClick={() => setScene('black-hole')}>Qara dəlik</button><button className={scene === 'pulsar' ? 'selected' : ''} onClick={() => setScene('pulsar')}>Pulsar</button><button className="universe-fullscreen" onClick={toggleFullscreen} aria-label="Tam ekran"><Maximize2 size={17}/></button></div>
       <div className="universe-live"><Activity size={13}/> CANLI ANİMASİYA</div>
     </main>
