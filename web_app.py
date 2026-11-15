@@ -20,6 +20,11 @@ def dashboard_panel():
     return _serve_dashboard_index()
 
 
+@app.get("/universe")
+def dashboard_universe():
+    return _serve_dashboard_index()
+
+
 @app.get("/assets/<path:filename>")
 def dashboard_assets(filename):
     return send_from_directory(os.path.join(DASHBOARD_DIST, "assets"), filename)
