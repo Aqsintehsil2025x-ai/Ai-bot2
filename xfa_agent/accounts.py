@@ -1,14 +1,12 @@
-"""User-scoped account and encrypted integration storage for public XFA.
+"""User-scoped account storage for public XFA.
 
 This module intentionally contains no HTTP routes. Authentication/session routes
 are added only after the storage primitives and ownership boundaries are tested.
 """
 from __future__ import annotations
 
-import base64
 import hashlib
 import hmac
-import json
 import os
 import secrets
 import sqlite3
@@ -16,8 +14,6 @@ import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
-
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 PASSWORD_N = 2**14
 PASSWORD_R = 8
@@ -74,19 +70,6 @@ def init_db() -> None:
                 UNIQUE(provider, provider_subject)
             );
 
-            CREATE TABLE IF NOT EXISTS xfa_integrations (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL REFERENCES xfa_users(id) ON DELETE CASCADE,
-                provider TEXT NOT NULL,
-                provider_account_id TEXT NOT NULL,
-                display_name TEXT NOT NULL DEFAULT '',
-                scopes_json TEXT NOT NULL DEFAULT '[]',
-                token_ciphertext BLOB NOT NULL,
-                token_nonce BLOB NOT NULL,
-                updated_at INTEGER NOT NULL,
-                UNIQUE(user_id, provider, provider_account_id)
-            );
-
             CREATE TABLE IF NOT EXISTS xfa_resources (
                 id TEXT PRIMARY KEY,
                 user_id TEXT NOT NULL REFERENCES xfa_users(id) ON DELETE CASCADE,
@@ -117,8 +100,6 @@ def init_db() -> None:
                 created_at INTEGER NOT NULL
             );
 
-            CREATE INDEX IF NOT EXISTS idx_xfa_integrations_user
-                ON xfa_integrations(user_id, provider);
             CREATE INDEX IF NOT EXISTS idx_xfa_resources_user
                 ON xfa_resources(user_id, provider);
             CREATE INDEX IF NOT EXISTS idx_xfa_devices_user
@@ -194,121 +175,3 @@ def verify_user(email: str, password: str) -> dict | None:
     return {"id": row["id"], "email": row["email"]}
 
 
-def _encryption_key() -> bytes:
-    encoded = os.getenv("XFA_TOKEN_ENCRYPTION_KEY", "").strip()
-    if not encoded:
-        raise RuntimeError("XFA_TOKEN_ENCRYPTION_KEY is not configured")
-    try:
-        key = base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4))
-    except Exception as exc:
-        raise RuntimeError("XFA_TOKEN_ENCRYPTION_KEY must be URL-safe base64") from exc
-    if len(key) != 32:
-        raise RuntimeError("XFA_TOKEN_ENCRYPTION_KEY must decode to exactly 32 bytes")
-    return key
-
-
-def _aad(user_id: str, provider: str, provider_account_id: str) -> bytes:
-    return json.dumps(
-        [str(user_id), str(provider).lower(), str(provider_account_id)],
-        separators=(",", ":"),
-    ).encode("utf-8")
-
-
-def save_integration(
-    user_id: str,
-    provider: str,
-    provider_account_id: str,
-    access_token: str,
-    refresh_token: str = "",
-    scopes: list[str] | None = None,
-    display_name: str = "",
-) -> dict:
-    """Encrypt provider credentials and upsert them under exactly one user."""
-    provider = str(provider or "").strip().lower()
-    account_id = str(provider_account_id or "").strip()
-    access = str(access_token or "")
-    if not provider or not account_id or not access or len(access) > 20000:
-        raise ValueError("Provider, account ID, and a valid access token are required")
-    if len(str(refresh_token)) > 20000:
-        raise ValueError("Refresh token is too long")
-    import time
-    user_id = str(user_id)
-    payload = json.dumps(
-        {"access_token": access, "refresh_token": str(refresh_token)},
-        separators=(",", ":"),
-    ).encode("utf-8")
-    nonce = secrets.token_bytes(12)
-    ciphertext = AESGCM(_encryption_key()).encrypt(
-        nonce, payload, _aad(user_id, provider, account_id)
-    )
-    integration_id = str(uuid.uuid4())
-    safe_scopes = sorted({str(scope)[:120] for scope in (scopes or []) if str(scope).strip()})[:100]
-    with _connection() as db:
-        owner = db.execute("SELECT 1 FROM xfa_users WHERE id = ?", (user_id,)).fetchone()
-        if owner is None:
-            raise ValueError("Account does not exist")
-        db.execute(
-            """
-            INSERT INTO xfa_integrations
-                (id,user_id,provider,provider_account_id,display_name,scopes_json,
-                 token_ciphertext,token_nonce,updated_at)
-            VALUES(?,?,?,?,?,?,?,?,?)
-            ON CONFLICT(user_id,provider,provider_account_id) DO UPDATE SET
-                display_name=excluded.display_name,
-                scopes_json=excluded.scopes_json,
-                token_ciphertext=excluded.token_ciphertext,
-                token_nonce=excluded.token_nonce,
-                updated_at=excluded.updated_at
-            """,
-            (integration_id, user_id, provider, account_id, str(display_name)[:200],
-             json.dumps(safe_scopes), ciphertext, nonce, int(time.time())),
-        )
-        row = db.execute(
-            "SELECT id FROM xfa_integrations WHERE user_id=? AND provider=? AND provider_account_id=?",
-            (user_id, provider, account_id),
-        ).fetchone()
-    return {"id": row["id"], "provider": provider, "account_id": account_id,
-            "display_name": str(display_name)[:200], "scopes": safe_scopes}
-
-
-def list_integrations(user_id: str) -> list[dict]:
-    """Return connection metadata only; never return credential ciphertext or tokens."""
-    with _connection() as db:
-        rows = db.execute(
-            """SELECT id,provider,provider_account_id,display_name,scopes_json,updated_at
-               FROM xfa_integrations WHERE user_id=? ORDER BY provider,display_name""",
-            (str(user_id),),
-        ).fetchall()
-    return [
-        {"id": row["id"], "provider": row["provider"],
-         "account_id": row["provider_account_id"], "display_name": row["display_name"],
-         "scopes": json.loads(row["scopes_json"]), "updated_at": row["updated_at"]}
-        for row in rows
-    ]
-
-
-def get_integration_tokens(user_id: str, integration_id: str) -> dict | None:
-    """Internal provider adapter helper; ownership is enforced in the SQL query."""
-    with _connection() as db:
-        row = db.execute(
-            """SELECT provider,provider_account_id,token_ciphertext,token_nonce
-               FROM xfa_integrations WHERE user_id=? AND id=?""",
-            (str(user_id), str(integration_id)),
-        ).fetchone()
-    if row is None:
-        return None
-    plaintext = AESGCM(_encryption_key()).decrypt(
-        bytes(row["token_nonce"]), bytes(row["token_ciphertext"]),
-        _aad(str(user_id), row["provider"], row["provider_account_id"]),
-    )
-    return json.loads(plaintext.decode("utf-8"))
-
-
-def disconnect_integration(user_id: str, integration_id: str) -> bool:
-    """Delete only a connection owned by the authenticated user."""
-    with _connection() as db:
-        cursor = db.execute(
-            "DELETE FROM xfa_integrations WHERE user_id=? AND id=?",
-            (str(user_id), str(integration_id)),
-        )
-    return cursor.rowcount == 1
