@@ -17,8 +17,10 @@ class XFAAuthSmokeTests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.old_env = {
             key: os.environ.get(key)
-            for key in ("FLASK_SECRET_KEY", "XFA_DATABASE_PATH", "XFA_COOKIE_SECURE")
+            for key in ("FLASK_SECRET_KEY", "XFA_DATABASE_PATH", "XFA_COOKIE_SECURE", "GEMINI_API_KEY", "GOOGLE_API_KEY")
         }
+        os.environ.pop("GEMINI_API_KEY", None)
+        os.environ.pop("GOOGLE_API_KEY", None)
         os.environ["FLASK_SECRET_KEY"] = "test-secret-key-that-is-long-enough-for-tests"
         os.environ["XFA_DATABASE_PATH"] = str(Path(self.temp_dir.name) / "xfa.sqlite3")
         os.environ["XFA_COOKIE_SECURE"] = "true"
