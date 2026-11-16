@@ -1,12 +1,24 @@
-git add .
-git commit -m "Güvenli yapılandırma ve env eklendi"
-git push -u origin main
+# Local environment variables and credentials (never commit real values)
+.env
+.env.*
+!.env.example
+secrets/
+credentials/
+*.pem
+*.key
 
+# Python
 venv/
+.venv/
 __pycache__/
-*.pyc
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local app data
 economy_data.json
 economy_data.json.bak
 
-# React dashboard dependencies
+# Frontend
 dashboard/node_modules/
