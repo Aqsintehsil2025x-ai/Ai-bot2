@@ -51,7 +51,7 @@ def init_db() -> None:
     """Create the initial schema. Safe to call at every application startup."""
     with _connection() as db:
         db.execute("PRAGMA journal_mode = WAL")
-        # Remove legacy per-user provider credentials during the one-time schema migration.
+        # Remove legacy per-user provider credentials from existing installations.
         db.execute("DROP TABLE IF EXISTS xfa_integrations")
         db.executescript(
             """
