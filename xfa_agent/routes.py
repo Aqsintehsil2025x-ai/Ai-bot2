@@ -83,7 +83,8 @@ def list_ai_providers():
     catalog = public_catalog()
     return jsonify({
         "catalog": catalog,
-        "connected": [{"id": key, "name": value["name"],
+        "connected": [{"id": key, "name": value["name"], "models": value["models"],
+                       "default_model": value["default_model"], "note": value["note"],
                        "model": connected[key]["display_name"] if key in connected else value["default_model"],
                        "connected": key in connected}
                       for key, value in catalog.items()],
