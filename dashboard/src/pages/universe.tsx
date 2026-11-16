@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { ArrowLeft, ArrowRight, Maximize2, Sparkles, Orbit, Activity, MessageCircle, Bot, Grid3X3, Search, Settings, Zap, Send, Plus, Smile, KeyRound, Cpu, X, CheckCircle2, Trash2, BookOpen, Paperclip, FileText, Volume2, Globe } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Maximize2, Sparkles, Orbit, Activity, MessageCircle, Bot, Grid3X3, Search, Settings, Zap, Send, Plus, Smile, KeyRound, Cpu, X, CheckCircle2, Trash2, BookOpen, Paperclip, FileText, Volume2, Globe, Mic, Square } from 'lucide-react';
 import { Link } from 'wouter';
 import './universe.css';
 
@@ -89,6 +89,10 @@ export default function UniversePage() {
   const [memoryError, setMemoryError] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const recordingStreamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -374,6 +378,57 @@ export default function UniversePage() {
     }
   }
 
+  async function startVoiceRecording() {
+    if (!navigator.mediaDevices?.getUserMedia || !('MediaRecorder' in window)) {
+      setError('Bu brauzer səs yazma funksiyasını dəstəkləmir.');
+      return;
+    }
+    try {
+      setError('');
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recordingStreamRef.current = stream;
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/ogg;codecs=opus') ? 'audio/ogg;codecs=opus' : '';
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      audioChunksRef.current = [];
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
+      };
+      recorder.onerror = () => {
+        setError('Səs yazılarkən xəta baş verdi.');
+        stream.getTracks().forEach((track) => track.stop());
+        recordingStreamRef.current = null;
+        setRecording(false);
+      };
+      recorder.onstop = () => {
+        const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
+        const extension = blob.type.includes('ogg') ? '.ogg' : blob.type.includes('mp4') ? '.m4a' : '.webm';
+        if (blob.size > 8 * 1024 * 1024) {
+          setError('Səs yazısı 8 MB limitini keçdi.');
+        } else if (blob.size > 0) {
+          setSelectedFile(new File([blob], 'xfa-voice' + extension, { type: blob.type }));
+        }
+        stream.getTracks().forEach((track) => track.stop());
+        recordingStreamRef.current = null;
+        recorderRef.current = null;
+        setRecording(false);
+      };
+      recorderRef.current = recorder;
+      recorder.start();
+      setRecording(true);
+    } catch {
+      setError('Mikrofon icazəsi alınmadı və ya cihaz əlçatan deyil.');
+      recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+      recordingStreamRef.current = null;
+      setRecording(false);
+    }
+  }
+
+  function stopVoiceRecording() {
+    if (recorderRef.current?.state === 'recording') recorderRef.current.stop();
+  }
+
   function speakMessage(content: string) {
     if (!('speechSynthesis' in window)) {
       setError('Bu brauzer səsli oxuma funksiyasını dəstəkləmir.');
@@ -527,7 +582,7 @@ export default function UniversePage() {
           {selectedFile && <div className="universe-attachment-strip"><FileText size={15}/><span>{selectedFile.name}<small>{(selectedFile.size / 1024).toFixed(0)} KB</small></span><button type="button" aria-label="Faylı sil" onClick={() => setSelectedFile(null)}><X size={14}/></button></div>}
           <form className="universe-input" onSubmit={sendMessage}>
             <input ref={fileInputRef} type="file" hidden accept=".png,.jpg,.jpeg,.webp,.mp3,.wav,.ogg,.webm,.m4a,.pdf,.docx,.pptx,.xlsx,.csv,.txt,.md,.py,.js,.jsx,.ts,.tsx,.css,.json,.yaml,.yml,.toml,.sql,.sh,.java,.c,.cpp,.h,.go,.rs,.rb,.php,.xml,.log" onChange={(event) => { const file = event.target.files?.[0] || null; setSelectedFile(file); if (file) setError(''); event.currentTarget.value = ''; }} />
-            <button type="button" aria-label="Fayl əlavə et" disabled={!auth.authenticated || busy} onClick={() => fileInputRef.current?.click()}><Paperclip size={18}/></button><button type="button" className={webSearchEnabled ? 'universe-web-toggle active' : 'universe-web-toggle'} aria-label="İnternet axtarışını aktivləşdir" aria-pressed={webSearchEnabled} disabled={!auth.authenticated || busy || !!selectedFile} onClick={() => setWebSearchEnabled((value) => !value)}><Globe size={16}/></button><button type="button" aria-label="Nümunə istək əlavə et" onClick={() => setMessage('Lütfən bunu addım-addım izah et: ')}><Smile size={18}/></button><input ref={inputRef} value={message} onChange={(event) => setMessage(event.target.value)} placeholder={auth.authenticated ? 'XFA’ya mesajını yaz...' : 'Önce giriş yapmalısın...'} disabled={!auth.authenticated || busy} /><button className="universe-send" type="submit" disabled={!auth.authenticated || busy || (!message.trim() && !selectedFile)} aria-label="Mesajı göndər"><Send size={19}/></button>
+            <button type="button" aria-label="Fayl əlavə et" disabled={!auth.authenticated || busy || recording} onClick={() => fileInputRef.current?.click()}><Paperclip size={18}/></button>{recording ? <button type="button" className="universe-recording" aria-label="Səs yazısını dayandır" onClick={stopVoiceRecording}><Square size={15}/></button> : <button type="button" aria-label="Səs yazmağa başla" disabled={!auth.authenticated || busy || !!selectedFile} onClick={startVoiceRecording}><Mic size={17}/></button>}<button type="button" className={webSearchEnabled ? 'universe-web-toggle active' : 'universe-web-toggle'} aria-label="İnternet axtarışını aktivləşdir" aria-pressed={webSearchEnabled} disabled={!auth.authenticated || busy || !!selectedFile} onClick={() => setWebSearchEnabled((value) => !value)}><Globe size={16}/></button><button type="button" aria-label="Nümunə istək əlavə et" onClick={() => setMessage('Lütfən bunu addım-addım izah et: ')}><Smile size={18}/></button><input ref={inputRef} value={message} onChange={(event) => setMessage(event.target.value)} placeholder={auth.authenticated ? 'XFA’ya mesajını yaz...' : 'Önce giriş yapmalısın...'} disabled={!auth.authenticated || busy} /><button className="universe-send" type="submit" disabled={!auth.authenticated || busy || (!message.trim() && !selectedFile)} aria-label="Mesajı göndər"><Send size={19}/></button>
           </form>
         </div>
       </section>
