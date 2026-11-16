@@ -385,3 +385,10 @@
 .universe-message-label{display:flex;align-items:center;gap:8px}
 .universe-message-label button{display:inline-grid;place-items:center;width:23px;height:23px;border:1px solid #62347c;border-radius:50%;background:#160b23;color:#d9b5f4;cursor:pointer}
 .universe-message-label button:hover{border-color:#c06aff;color:#fff}
+
+.universe-web-toggle{border:1px solid #573271!important;border-radius:50%!important;width:32px;height:32px;display:grid!important;place-items:center;color:#bca3ce!important}
+.universe-web-toggle.active{border-color:#c06aff!important;background:#512077!important;color:#fff!important;box-shadow:0 0 14px #a34be566}
+.universe-web-toggle:disabled{opacity:.35;cursor:not-allowed}
+.universe-source-list{display:grid;gap:5px;margin-top:10px;padding-top:8px;border-top:1px solid #3b234c}
+.universe-source-list strong{font-size:9px;color:#cfa4f0}
+.universe-source-list a{font-size:9px;color:#c9a5eb;text-decoration:underline;overflow-wrap:anywhere}
