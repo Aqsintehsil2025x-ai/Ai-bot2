@@ -27,7 +27,7 @@ class XFAFileInputTests(unittest.TestCase):
 
     def test_audio_signature_is_checked(self):
         self.assertEqual(
-            validate_upload("voice.wav", b"RIFF" + b"\\x00\\x00\\x00\\x00" + b"WAVEdata")[1],
+            validate_upload("voice.wav", b"RIFF" + b"\x00\x00\x00\x00" + b"WAVEdata")[1],
             "audio/wav",
         )
         with self.assertRaises(ValueError):
