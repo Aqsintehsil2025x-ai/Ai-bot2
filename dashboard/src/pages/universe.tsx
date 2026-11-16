@@ -62,6 +62,7 @@ export default function UniversePage() {
     guilds: 0, members: 0, latency: 0, ready: false,
   });
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [blackHoleEnabled, setBlackHoleEnabled] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authBusy, setAuthBusy] = useState(false);
@@ -198,6 +199,16 @@ export default function UniversePage() {
     <main className="universe-page" ref={rootRef}>
       <SpaceCanvas />
       <div className="universe-vignette" />
+      {blackHoleEnabled && (
+        <div className="universe-blackhole" aria-label="Animasyonlu kara delik manzarası" role="img">
+          <div className="blackhole-nebula" />
+          <div className="blackhole-disk blackhole-disk-back" />
+          <div className="blackhole-lensing" />
+          <div className="blackhole-core"><span /></div>
+          <div className="blackhole-disk blackhole-disk-front" />
+          <div className="blackhole-particles"><i/><i/><i/><i/><i/><i/><i/><i/></div>
+        </div>
+      )}
       <aside className="universe-sidebar">
         <Link href="/" className="universe-brand"><span className="universe-flower">✿</span><strong>XFA</strong><small>XYRIN FLOWER AI</small></Link>
         <div className="universe-nav-label">ÇALIŞMA ALANI</div>
@@ -252,7 +263,7 @@ export default function UniversePage() {
         <section className="universe-ecosystem"><h3><Orbit size={15}/> XFA Ekosistemi <span>CANLI</span></h3><p>◉ &nbsp; Discord Bot <small>{stats.ready ? '● Çevrimiçi' : '● Çevrimdışı'}</small></p><p>◎ &nbsp; Web Platformu <small>● Çevrimiçi</small></p><p>▣ &nbsp; XFA Ajan API <small>{auth.authenticated ? '● Oturum açık' : '● Giriş gerekli'}</small></p></section>
       </aside>
       <div className="universe-quality"><strong>ULTRA</strong><span>ADAPTİF YÜKSEK ÇÖZÜNÜRLÜK<br/><small>RETİNA / YÜKSEK DPI RENDER</small></span><i/></div>
-      <div className="universe-scene-switch"><div><strong>Deep Space</strong><small>Canlı yıldız ve dumanlık animasiyası</small></div><button className="universe-fullscreen" onClick={toggleFullscreen} aria-label="Tam ekran"><Maximize2 size={17}/></button></div>
+      <div className="universe-scene-switch"><div><strong>Deep Space</strong><small>Canlı yıldız ve dumanlık animasiyası</small></div><button className={blackHoleEnabled ? "universe-blackhole-toggle selected" : "universe-blackhole-toggle"} type="button" aria-pressed={blackHoleEnabled} onClick={() => setBlackHoleEnabled((enabled) => !enabled)}>{blackHoleEnabled ? "Kara delik: Açık" : "Kara delik: Kapalı"}</button><button className="universe-fullscreen" onClick={toggleFullscreen} aria-label="Tam ekran"><Maximize2 size={17}/></button></div>
       <div className="universe-live"><Activity size={13}/> CANLI ANİMASİYA</div>
     </main>
   );
