@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { ArrowLeft, ArrowRight, Maximize2, Sparkles, Orbit, Activity, MessageCircle, Bot, Grid3X3, Search, Settings, Zap, Send, Plus, Smile } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Maximize2, Sparkles, Orbit, Activity, MessageCircle, Bot, Grid3X3, Search, Settings, Zap, Send, Plus, Smile, KeyRound, Cpu, X, CheckCircle2, Trash2 } from 'lucide-react';
 import { Link } from 'wouter';
 import './universe.css';
 
@@ -70,6 +70,17 @@ export default function UniversePage() {
   const [password, setPassword] = useState('');
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState('');
+  const [providerOptions, setProviderOptions] = useState<{ id: string; name: string; models: string[]; default_model: string; note: string; connected: boolean; model: string }[]>([]);
+  const [activeProvider, setActiveProvider] = useState('gemini');
+  const [activeModel, setActiveModel] = useState('gemini-2.5-flash');
+  const [providerModal, setProviderModal] = useState(false);
+  const [newProvider, setNewProvider] = useState('gemini');
+  const [newModel, setNewModel] = useState('gemini-2.5-flash');
+  const [newApiKey, setNewApiKey] = useState('');
+  const [providerBusy, setProviderBusy] = useState(false);
+  const [providerStatus, setProviderStatus] = useState('');
+  const [providerError, setProviderError] = useState('');
+  const [serverGeminiAvailable, setServerGeminiAvailable] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -100,6 +111,96 @@ export default function UniversePage() {
     const timer = window.setInterval(loadStats, 30000);
     return () => { active = false; window.clearInterval(timer); };
   }, []);
+
+  async function refreshProviders() {
+    const response = await fetch('/xfa/api/providers', { credentials: 'same-origin' });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'AI sağlayıcıları yüklenemedi.');
+    const options = Array.isArray(data.connected) ? data.connected : [];
+    setProviderOptions(options);
+    setServerGeminiAvailable(data.server_default_available === true);
+    const selected = options.find((item: { id: string }) => item.id === data.active);
+    const provider = selected ? data.active : 'gemini';
+    const model = selected ? data.model : 'gemini-2.5-flash';
+    setActiveProvider(provider);
+    setActiveModel(model);
+    setNewProvider(provider);
+    setNewModel(selected?.models?.includes(model) ? model : selected?.default_model || 'gemini-2.5-flash');
+  }
+
+  async function selectAiProvider(provider: string, model: string) {
+    setProviderError('');
+    const response = await fetch('/xfa/api/providers/select', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': auth.csrf },
+      body: JSON.stringify({ provider, model }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Model seçilemedi.');
+    setActiveProvider(provider);
+    setActiveModel(model);
+  }
+
+  async function testApiProvider() {
+    setProviderBusy(true); setProviderError(''); setProviderStatus('');
+    try {
+      const response = await fetch('/xfa/api/providers/test', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': auth.csrf },
+        body: JSON.stringify({ provider: newProvider, model: newModel, api_key: newApiKey }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Bağlantı testi başarısız.');
+      setProviderStatus('Bağlantı başarılı!');
+    } catch (err) {
+      setProviderError(err instanceof Error ? err.message : 'Bağlantı testi başarısız.');
+    } finally { setProviderBusy(false); }
+  }
+
+  async function saveApiProvider() {
+    setProviderBusy(true); setProviderError(''); setProviderStatus('');
+    try {
+      const response = await fetch('/xfa/api/providers', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': auth.csrf },
+        body: JSON.stringify({ provider: newProvider, model: newModel, api_key: newApiKey }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'API anahtarı kaydedilemedi.');
+      await refreshProviders();
+      await selectAiProvider(newProvider, newModel);
+      setNewApiKey('');
+      setProviderStatus('API anahtarı şifrelenerek kaydedildi ve model seçildi.');
+    } catch (err) {
+      setProviderError(err instanceof Error ? err.message : 'API anahtarı kaydedilemedi.');
+    } finally { setProviderBusy(false); }
+  }
+
+  async function removeApiProvider(provider: string) {
+    if (!window.confirm('Bu AI sağlayıcısının kayıtlı API anahtarını silmek istiyor musun?')) return;
+    setProviderBusy(true); setProviderError('');
+    try {
+      const response = await fetch('/xfa/api/providers/' + encodeURIComponent(provider), {
+        method: 'DELETE', credentials: 'same-origin',
+        headers: { 'X-CSRF-Token': auth.csrf },
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'API anahtarı silinemedi.');
+      await refreshProviders();
+    } catch (err) {
+      setProviderError(err instanceof Error ? err.message : 'API anahtarı silinemedi.');
+    } finally { setProviderBusy(false); }
+  }
+
+  useEffect(() => {
+    if (auth.authenticated) {
+      refreshProviders().catch((err) => setProviderError(err instanceof Error ? err.message : 'AI sağlayıcıları yüklenemedi.'));
+    } else {
+      setProviderOptions([]);
+      setActiveProvider('gemini');
+      setActiveModel('gemini-2.5-flash');
+    }
+  }, [auth.authenticated]);
 
   async function submitAuth(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -183,7 +284,7 @@ export default function UniversePage() {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': auth.csrf },
-        body: JSON.stringify({ messages: next.slice(-20) }),
+        body: JSON.stringify({ messages: next.slice(-20), provider: activeProvider, model: activeModel }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || `Sohbet isteği başarısız (HTTP ${response.status}).`);
