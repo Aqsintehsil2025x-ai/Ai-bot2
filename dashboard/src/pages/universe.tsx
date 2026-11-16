@@ -61,6 +61,11 @@ export default function UniversePage() {
   const [stats, setStats] = useState<{ guilds: number; members: number; latency: number; ready: boolean }>({
     guilds: 0, members: 0, latency: 0, ready: false,
   });
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authError, setAuthError] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -91,6 +96,65 @@ export default function UniversePage() {
     const timer = window.setInterval(loadStats, 30000);
     return () => { active = false; window.clearInterval(timer); };
   }, []);
+
+  async function submitAuth(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (authBusy) return;
+    setAuthBusy(true);
+    setAuthError('');
+    try {
+      const response = await fetch(authMode === 'register' ? '/auth/register' : '/auth/login/password', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': auth.csrf },
+        body: JSON.stringify({ email: email.trim(), password }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `Giriş başarısız (HTTP ${response.status}).`);
+      const sessionResponse = await fetch('/auth/me', { credentials: 'same-origin' });
+      const sessionData = await sessionResponse.json().catch(() => ({}));
+      if (!sessionResponse.ok || sessionData.authenticated !== true) {
+        throw new Error(sessionData.error || 'Oturum doğrulanamadı. Sayfayı yenileyip tekrar dene.');
+      }
+      setAuth({
+        loading: false,
+        authenticated: true,
+        csrf: typeof sessionData.csrf_token === 'string' ? sessionData.csrf_token : '',
+        name: sessionData.user?.name || email.split('@')[0],
+        google: auth.google,
+      });
+      setPassword('');
+      setError('');
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : 'Hesap işlemi başarısız oldu.');
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function logout() {
+    setAuthError('');
+    try {
+      const response = await fetch('/auth/logout', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'X-CSRF-Token': auth.csrf },
+      });
+      if (!response.ok) throw new Error('Oturum kapatılamadı. Sayfayı yenileyip tekrar dene.');
+      const sessionResponse = await fetch('/auth/me', { credentials: 'same-origin' });
+      const data = await sessionResponse.json().catch(() => ({}));
+      setAuth({
+        loading: false,
+        authenticated: false,
+        csrf: typeof data.csrf_token === 'string' ? data.csrf_token : '',
+        name: '',
+        google: auth.google,
+      });
+      setMessages([{ role: 'model', content: 'Merhaba! Ben XFA. Bir fikir, soru veya görev yaz; birlikte başlayalım.' }]);
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : 'Oturum kapatılamadı.');
+    }
+  }
 
   async function toggleFullscreen() {
     if (!document.fullscreenElement) await rootRef.current?.requestFullscreen?.();
@@ -128,7 +192,7 @@ export default function UniversePage() {
     }
   }
 
-  const quickPrompts = ['Kara delikler nasıl oluşur?', 'Bana bir Python örneği yaz', 'Yeni bir proje fikri bul', 'Bugünkü hedeflerimi planla'];
+  const quickPrompts = ['Nebulalar nasıl oluşur?', 'Bana bir Python örneği yaz', 'Yeni bir proje fikri bul', 'Bugünkü hedeflerimi planla'];
 
   return (
     <main className="universe-page" ref={rootRef}>
@@ -147,14 +211,32 @@ export default function UniversePage() {
       </aside>
       <header className="universe-topbar">
         <Link href="/" className="universe-back"><ArrowLeft size={15}/> XFA'ya dön</Link>
-        <button className="universe-search" type="button" onClick={() => inputRef.current?.focus()}><Search size={14}/> Sohbette ara veya mesaj yaz... <kbd>Ctrl + K</kbd></button>
-        <div className="universe-status"><i className={stats.ready ? '' : 'offline'}/> {auth.authenticated ? (auth.name || 'Hesabım') : 'Misafir'} <span>◉</span><b>{auth.name ? auth.name.slice(0,1).toUpperCase() : 'A'}</b></div>
+        <button className="universe-search" type="button" onClick={() => inputRef.current?.focus()}><Search size={14}/> Mesaj yazmak için tıkla...</button>
+        <div className="universe-status"><i className={stats.ready ? '' : 'offline'}/> {auth.authenticated ? (auth.name || 'Hesabım') : 'Misafir'} <span>◉</span><b>{auth.name ? auth.name.slice(0,1).toUpperCase() : 'A'}</b>{auth.authenticated && <button type="button" className="universe-logout" onClick={logout}>Çıkış</button>}</div>
       </header>
       <section className="universe-center">
         <div className="universe-brand-title"><h1>XFA</h1><h2>Xyrin Flower AI</h2><p>Sonsuz imkânlar. Tamamen <em>ücretsiz.</em></p><div className="universe-pills"><span>∞ Ücretsiz erişim</span><span>♢ Güvenli çalışma</span><span>ϟ Canlı AI sohbeti</span></div></div>
         <div className="universe-chat" id="chat">
           <div className="universe-chat-head"><span className="universe-avatar">✿</span><div><strong>{auth.authenticated ? `Merhaba, ${auth.name || 'gezgin'}! 👋` : 'XFA Universe’e hoş geldin! 👋'}</strong><small>{auth.authenticated ? 'XFA hazır. Ne yapmak istersin?' : 'AI sohbetini kullanmak için hesabına giriş yap.'}</small></div></div>
-          {!auth.authenticated && !auth.loading && <div className="universe-login"><span>Giriş yapmadan sohbet başlatılamaz.</span><a href={auth.google ? '/auth/login/google' : '/xfa'}>{auth.google ? 'Google ile giriş yap' : 'XFA giriş sayfasını aç'} <ArrowRight size={14}/></a></div>}
+          {!auth.authenticated && !auth.loading && (
+            <form className="universe-auth" onSubmit={submitAuth}>
+              <div className="universe-auth-heading">
+                <strong>{authMode === 'login' ? 'Hesabına giriş yap' : 'Ücretsiz XFA hesabı oluştur'}</strong>
+                <span>{authMode === 'login' ? 'Sohbeti sürdürmek için giriş yap.' : 'E-posta adresinle XFA’ya katıl.'}</span>
+              </div>
+              <label className="universe-auth-label" htmlFor="xfa-email">E-posta</label>
+              <input id="xfa-email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="ornek@eposta.com" required />
+              <label className="universe-auth-label" htmlFor="xfa-password">Parola</label>
+              <input id="xfa-password" type="password" autoComplete={authMode === 'login' ? 'current-password' : 'new-password'} minLength={12} maxLength={1024} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="En az 12 karakter" required />
+              {authError && <p className="universe-error" role="alert">{authError}</p>}
+              <div className="universe-auth-actions">
+                <button className="universe-auth-submit" type="submit" disabled={authBusy || !auth.csrf}>{authBusy ? 'Bekle…' : authMode === 'login' ? 'Giriş yap' : 'Hesap oluştur'}</button>
+                <button className="universe-auth-toggle" type="button" onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthError(''); }}>{authMode === 'login' ? 'Hesap oluştur' : 'Zaten hesabım var'}</button>
+              </div>
+              {auth.google && <a className="universe-google-login" href="/auth/login/google">Google ile giriş yap <ArrowRight size={14}/></a>}
+              {!auth.csrf && <small className="universe-auth-note">Giriş hizmeti şu anda yapılandırılmamış olabilir.</small>}
+            </form>
+          )}
           <div className="universe-quick">{quickPrompts.map((prompt) => <button key={prompt} type="button" onClick={() => { setMessage(prompt); inputRef.current?.focus(); }}>✦ {prompt}</button>)}</div>
           <div className="universe-transcript" aria-live="polite">
             {messages.map((item, index) => <div className={item.role === 'user' ? 'universe-user-message' : 'universe-message'} key={index}>{item.role === 'model' && <small>XFA</small>}{item.content}</div>)}
