@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { ArrowLeft, ArrowRight, Maximize2, Sparkles, Orbit, Activity, MessageCircle, Bot, Grid3X3, Search, Settings, Zap, Send, Plus, Smile, KeyRound, Cpu, X, CheckCircle2, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Maximize2, Sparkles, Orbit, Activity, MessageCircle, Bot, Grid3X3, Search, Settings, Zap, Send, Plus, Smile, KeyRound, Cpu, X, CheckCircle2, Trash2, BookOpen } from 'lucide-react';
 import { Link } from 'wouter';
 import './universe.css';
 
@@ -81,6 +81,12 @@ export default function UniversePage() {
   const [providerStatus, setProviderStatus] = useState('');
   const [providerError, setProviderError] = useState('');
   const [serverGeminiAvailable, setServerGeminiAvailable] = useState(false);
+  const [memoryOpen, setMemoryOpen] = useState(false);
+  const [memoryItems, setMemoryItems] = useState<{ id: string; title: string; content: string; tags: string[] }[]>([]);
+  const [memoryTitle, setMemoryTitle] = useState('');
+  const [memoryContent, setMemoryContent] = useState('');
+  const [memoryBusy, setMemoryBusy] = useState(false);
+  const [memoryError, setMemoryError] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -202,6 +208,57 @@ export default function UniversePage() {
     }
   }, [auth.authenticated]);
 
+
+  async function refreshMemory() {
+    const response = await fetch('/xfa/api/memory', { credentials: 'same-origin' });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Yaddaş yüklənmədi.');
+    setMemoryItems(Array.isArray(data.items) ? data.items : []);
+  }
+
+  async function saveMemory(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (memoryBusy || !memoryTitle.trim() || !memoryContent.trim()) return;
+    setMemoryBusy(true);
+    setMemoryError('');
+    try {
+      const response = await fetch('/xfa/api/memory', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': auth.csrf },
+        body: JSON.stringify({ title: memoryTitle, content: memoryContent }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Yaddaş saxlanmadı.');
+      setMemoryItems((items) => [data.item, ...items]);
+      setMemoryTitle('');
+      setMemoryContent('');
+    } catch (err) {
+      setMemoryError(err instanceof Error ? err.message : 'Yaddaş saxlanmadı.');
+    } finally { setMemoryBusy(false); }
+  }
+
+  async function removeMemory(itemId: string) {
+    setMemoryBusy(true);
+    setMemoryError('');
+    try {
+      const response = await fetch('/xfa/api/memory/' + encodeURIComponent(itemId), {
+        method: 'DELETE', credentials: 'same-origin',
+        headers: { 'X-CSRF-Token': auth.csrf },
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Yaddaş silinmədi.');
+      setMemoryItems((items) => items.filter((item) => item.id !== itemId));
+    } catch (err) {
+      setMemoryError(err instanceof Error ? err.message : 'Yaddaş silinmədi.');
+    } finally { setMemoryBusy(false); }
+  }
+
+  useEffect(() => {
+    if (memoryOpen && auth.authenticated) {
+      refreshMemory().catch((err) => setMemoryError(err instanceof Error ? err.message : 'Yaddaş yüklənmədi.'));
+    }
+  }, [memoryOpen, auth.authenticated]);
+
   async function submitAuth(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (authBusy) return;
@@ -319,7 +376,7 @@ export default function UniversePage() {
         <Link href="/" className="universe-brand"><span className="universe-flower">✿</span><strong>XFA</strong><small>XYRIN FLOWER AI</small></Link>
         <div className="universe-nav-label">ÇALIŞMA ALANI</div>
         <a className="universe-nav-item active" href="#chat"><MessageCircle size={16}/> Sohbet</a>
-        <a className="universe-nav-item" href="#chat"><Bot size={16}/> Yapay Zekâ Ajanı</a>
+        <button className="universe-nav-item" type="button" onClick={() => { if (!auth.authenticated) { setError("Yaddaş üçün əvvəlcə hesabına daxil ol."); return; } setMemoryOpen(true); setMemoryError(""); }}><BookOpen size={16}/> Yaddaş</button><a className="universe-nav-item" href="#chat"><Bot size={16}/> Yapay Zekâ Ajanı</a>
         <a className="universe-nav-item" href="/panel"><Grid3X3 size={16}/> Çalışma Alanı</a>
         <a className="universe-nav-item" href="/panel"><Settings size={16}/> Ayarlar</a>
         <div className="universe-premium"><strong>👑 XFA</strong><p>Herkes için ücretsiz yapay zekâ deneyimi.</p><a href="/panel">Kontrol paneli →</a></div>
@@ -366,6 +423,29 @@ export default function UniversePage() {
               {(providerOptions.find((item) => item.id === activeProvider)?.models || [activeModel]).map((model) => <option key={model} value={model}>{model}</option>)}
             </select>
             <button type="button" onClick={() => { setProviderModal(true); setProviderError(''); setProviderStatus(''); }}><KeyRound size={14}/> API / Modeller</button>
+          </div>}
+
+          {memoryOpen && auth.authenticated && <div className="universe-provider-overlay" role="dialog" aria-modal="true" aria-label="XFA yaddaşı">
+            <section className="universe-provider-modal universe-memory-modal">
+              <header><div><strong><BookOpen size={17}/> XFA yaddaşı</strong><small>Yalnız sənin əlavə etdiyin qeydlər saxlanılır. Avtomatik yaddaş aktiv deyil.</small></div><button type="button" aria-label="Kapat" onClick={() => setMemoryOpen(false)}><X size={18}/></button></header>
+              <form className="universe-provider-form" onSubmit={saveMemory}>
+                <strong>Yeni yaddaş qeydi</strong>
+                <label>Başlıq</label>
+                <input value={memoryTitle} onChange={(event) => setMemoryTitle(event.target.value)} maxLength={120} placeholder="Məsələn: XFA UI seçimi" />
+                <label>Məlumat</label>
+                <textarea value={memoryContent} onChange={(event) => setMemoryContent(event.target.value)} maxLength={6000} rows={4} placeholder="XFA-nın gələcək söhbətlərdə nəzərə almasını istədiyin məlumat..." />
+                <div className="universe-provider-actions"><button type="submit" disabled={memoryBusy || !memoryTitle.trim() || !memoryContent.trim()}>{memoryBusy ? 'Saxlanır…' : 'Yadda saxla'}</button></div>
+              </form>
+              {memoryError && <p className="universe-error" role="alert">{memoryError}</p>}
+              <div className="universe-memory-list">
+                <strong>Saxlanılan qeydlər ({memoryItems.length}/100)</strong>
+                {memoryItems.map((item) => <article className="universe-memory-item" key={item.id}>
+                  <div><strong>{item.title}</strong><p>{item.content}</p></div>
+                  <button type="button" disabled={memoryBusy} onClick={() => removeMemory(item.id)}>Sil</button>
+                </article>)}
+                {!memoryItems.length && <p className="universe-provider-empty">Hələ yaddaş qeydi yoxdur.</p>}
+              </div>
+            </section>
           </div>}
           {providerModal && auth.authenticated && <div className="universe-provider-overlay" role="dialog" aria-modal="true" aria-label="AI API ayarları">
             <section className="universe-provider-modal">
