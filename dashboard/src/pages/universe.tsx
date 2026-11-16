@@ -353,6 +353,59 @@ export default function UniversePage() {
               {!auth.csrf && <small className="universe-auth-note">Giriş hizmeti şu anda yapılandırılmamış olabilir.</small>}
             </form>
           )}
+          {auth.authenticated && <div className="universe-model-controls">
+            <label><Cpu size={14}/> AI MODELİ</label>
+            <select value={activeProvider} onChange={(event) => {
+              const option = providerOptions.find((item) => item.id === event.target.value);
+              const model = option?.model || option?.default_model || 'gemini-2.5-flash';
+              selectAiProvider(event.target.value, model).catch((err) => setProviderError(err instanceof Error ? err.message : 'Model seçilemedi.'));
+            }}>
+              {providerOptions.map((option) => <option key={option.id} value={option.id}>{option.name}{option.connected ? ' ✓' : option.id === 'gemini' && serverGeminiAvailable ? ' • Sunucu' : ' • API ekle'}</option>)}
+            </select>
+            <select value={activeModel} onChange={(event) => selectAiProvider(activeProvider, event.target.value).catch((err) => setProviderError(err instanceof Error ? err.message : 'Model seçilemedi.'))}>
+              {(providerOptions.find((item) => item.id === activeProvider)?.models || [activeModel]).map((model) => <option key={model} value={model}>{model}</option>)}
+            </select>
+            <button type="button" onClick={() => { setProviderModal(true); setProviderError(''); setProviderStatus(''); }}><KeyRound size={14}/> API / Modeller</button>
+          </div>}
+          {providerModal && auth.authenticated && <div className="universe-provider-overlay" role="dialog" aria-modal="true" aria-label="AI API ayarları">
+            <section className="universe-provider-modal">
+              <header><div><strong><Cpu size={17}/> AI sağlayıcıları</strong><small>API anahtarlarını yönet ve model ekle</small></div><button type="button" aria-label="Kapat" onClick={() => setProviderModal(false)}><X size={18}/></button></header>
+              <div className="universe-provider-list">
+                {providerOptions.filter((option) => option.connected).map((option) => <div className="universe-provider-row" key={option.id}>
+                  <span><strong>{option.name}</strong><small>{option.model || option.default_model}</small></span>
+                  <button type="button" disabled={providerBusy} onClick={() => removeApiProvider(option.id)}><Trash2 size={14}/> Sil</button>
+                </div>)}
+                {!providerOptions.some((option) => option.connected) && <p className="universe-provider-empty">Henüz kişisel API anahtarı eklenmedi.</p>}
+              </div>
+              <div className="universe-provider-form">
+                <strong>Yeni API ekle</strong>
+                <label>Sağlayıcı</label>
+                <select value={newProvider} onChange={(event) => {
+                  const nextProvider = event.target.value;
+                  setNewProvider(nextProvider);
+                  const option = providerOptions.find((item) => item.id === nextProvider);
+                  setNewModel(option?.default_model || 'gemini-2.5-flash');
+                  setProviderStatus(''); setProviderError('');
+                }}>
+                  {providerOptions.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
+                </select>
+                <label>Model</label>
+                <select value={newModel} onChange={(event) => setNewModel(event.target.value)}>
+                  {(providerOptions.find((item) => item.id === newProvider)?.models || []).map((model) => <option key={model} value={model}>{model}</option>)}
+                </select>
+                <label>API key</label>
+                <input type="password" autoComplete="new-password" value={newApiKey} onChange={(event) => setNewApiKey(event.target.value)} placeholder="API anahtarını buraya yapıştır" />
+                <small className="universe-provider-note">{providerOptions.find((item) => item.id === newProvider)?.note || 'Sağlayıcı API anahtarı'} Anahtar şifrelenerek saklanır ve tekrar gösterilmez.</small>
+                {providerError && <p className="universe-error" role="alert">{providerError}</p>}
+                {providerStatus && <p className="universe-provider-success"><CheckCircle2 size={14}/>{providerStatus}</p>}
+                <div className="universe-provider-actions">
+                  <button type="button" disabled={providerBusy || !newApiKey.trim()} onClick={testApiProvider}>{providerBusy ? 'Bekle…' : 'Bağlantıyı test et'}</button>
+                  <button type="button" disabled={providerBusy || !newApiKey.trim()} onClick={saveApiProvider}>Kaydet ve kullan</button>
+                </div>
+                <p className="universe-provider-note">Not: Bağlantı testi sağlayıcıya kısa bir deneme isteği gönderir; kullanım kotası veya ücret uygulanabilir. Ücretsiz limitler sağlayıcıya göre değişir.</p>
+              </div>
+            </section>
+          </div>}
           <div className="universe-quick">{quickPrompts.map((prompt) => <button key={prompt} type="button" onClick={() => { setMessage(prompt); inputRef.current?.focus(); }}>✦ {prompt}</button>)}</div>
           <div className="universe-transcript" aria-live="polite">
             {messages.map((item, index) => <div className={item.role === 'user' ? 'universe-user-message' : 'universe-message'} key={index}>{item.role === 'model' && <small>XFA</small>}{item.content}</div>)}
