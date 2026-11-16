@@ -220,3 +220,94 @@
   .universe-page::before{width:118vw}
   .universe-page::after{width:88vw}
 }
+
+
+/* Optional cinematic black-hole scene */
+.universe-blackhole{
+  position:absolute;z-index:1;inset:0;overflow:hidden;pointer-events:none;
+  background:radial-gradient(ellipse at 68% 43%,rgba(54,13,67,.14),transparent 43%);
+  animation:blackhole-scene-in 1.4s ease both;
+}
+.blackhole-nebula{
+  position:absolute;inset:-18%;
+  background:
+    radial-gradient(ellipse at 70% 43%,rgba(255,105,44,.27),transparent 23%),
+    radial-gradient(ellipse at 63% 38%,rgba(139,45,211,.33),transparent 34%),
+    radial-gradient(ellipse at 83% 62%,rgba(117,33,176,.22),transparent 29%);
+  filter:blur(24px);animation:blackhole-nebula-drift 22s ease-in-out infinite alternate;
+}
+.blackhole-core{
+  position:absolute;left:67%;top:43%;width:clamp(130px,18vw,280px);aspect-ratio:1;
+  transform:translate(-50%,-50%);border-radius:50%;z-index:3;
+  background:radial-gradient(circle,#000 0 57%,#08030a 64%,rgba(0,0,0,.86) 70%,transparent 73%);
+  box-shadow:0 0 34px 13px rgba(255,130,64,.2),0 0 95px 32px rgba(148,55,214,.18);
+}
+.blackhole-core span{
+  position:absolute;inset:-8%;border-radius:50%;
+  border:2px solid rgba(255,189,129,.78);
+  box-shadow:0 0 12px 3px rgba(255,120,52,.82),inset 0 0 16px rgba(255,139,68,.55);
+  animation:blackhole-horizon-pulse 4s ease-in-out infinite;
+}
+.blackhole-lensing{
+  position:absolute;left:67%;top:43%;width:clamp(220px,34vw,540px);height:clamp(80px,12vw,180px);
+  transform:translate(-50%,-50%) rotate(-12deg);border-radius:50%;
+  border-top:7px solid rgba(255,185,132,.92);border-bottom:4px solid rgba(187,88,255,.68);
+  filter:blur(2px) drop-shadow(0 0 16px #ff8b4b);
+  z-index:4;animation:blackhole-lens-warp 8s ease-in-out infinite;
+}
+.blackhole-disk{
+  position:absolute;left:67%;top:45%;width:clamp(340px,58vw,900px);height:clamp(100px,17vw,250px);
+  transform:translate(-50%,-50%) rotate(-12deg);border-radius:50%;
+  background:repeating-radial-gradient(ellipse at 50% 50%,transparent 0 8px,rgba(255,174,103,.18) 9px 11px,rgba(255,104,47,.32) 12px 14px,transparent 16px 22px);
+  filter:blur(1.5px) drop-shadow(0 0 12px rgba(255,114,55,.9));
+  mask-image:linear-gradient(90deg,transparent,black 14%,black 86%,transparent);
+}
+.blackhole-disk-back{z-index:2;opacity:.84;animation:blackhole-disk-rotate 28s linear infinite}
+.blackhole-disk-front{
+  z-index:5;height:clamp(40px,7vw,100px);top:50%;
+  border-top:4px solid rgba(255,220,182,.94);border-bottom:2px solid rgba(255,106,53,.7);
+  background:linear-gradient(180deg,rgba(255,186,119,.42),rgba(89,25,93,.13) 55%,transparent);
+  filter:blur(1px) drop-shadow(0 0 19px #ff9b5b);
+  animation:blackhole-disk-pulse 5s ease-in-out infinite alternate;
+}
+.blackhole-particles{position:absolute;inset:0;z-index:6}
+.blackhole-particles i{
+  position:absolute;left:67%;top:43%;width:3px;height:3px;border-radius:50%;
+  background:#ffe0c2;box-shadow:0 0 9px 3px #ff9b5b;
+  animation:blackhole-particle-orbit 7s linear infinite;
+}
+.blackhole-particles i:nth-child(2){animation-delay:-1s;animation-duration:9s}
+.blackhole-particles i:nth-child(3){animation-delay:-2.5s;animation-duration:11s}
+.blackhole-particles i:nth-child(4){animation-delay:-4s;animation-duration:13s}
+.blackhole-particles i:nth-child(5){animation-delay:-5s;animation-duration:8s}
+.blackhole-particles i:nth-child(6){animation-delay:-3s;animation-duration:10s}
+.blackhole-particles i:nth-child(7){animation-delay:-6s;animation-duration:12s}
+.blackhole-particles i:nth-child(8){animation-delay:-7s;animation-duration:14s}
+@keyframes blackhole-scene-in{from{opacity:0}to{opacity:1}}
+@keyframes blackhole-nebula-drift{from{transform:translate3d(-2%,1%,0) scale(1)}to{transform:translate3d(2%,-2%,0) scale(1.08)}}
+@keyframes blackhole-horizon-pulse{0%,100%{opacity:.7;transform:scale(.98)}50%{opacity:1;transform:scale(1.025)}}
+@keyframes blackhole-lens-warp{0%,100%{transform:translate(-50%,-50%) rotate(-12deg) scaleX(1)}50%{transform:translate(-50%,-50%) rotate(-9deg) scaleX(1.035)}}
+@keyframes blackhole-disk-rotate{from{transform:translate(-50%,-50%) rotate(-12deg) rotate(0)}to{transform:translate(-50%,-50%) rotate(-12deg) rotate(360deg)}}
+@keyframes blackhole-disk-pulse{from{filter:blur(1px) drop-shadow(0 0 12px #ff8d4b);opacity:.72}to{filter:blur(1.5px) drop-shadow(0 0 26px #ffc08b);opacity:1}}
+@keyframes blackhole-particle-orbit{
+  from{transform:rotate(0deg) translateX(clamp(120px,20vw,310px)) rotate(0deg)}
+  to{transform:rotate(360deg) translateX(clamp(120px,20vw,310px)) rotate(-360deg)}
+}
+.universe-blackhole-toggle{
+  border:1px solid #70408f;background:#170b24;color:#dec8ec;border-radius:20px;
+  padding:8px 11px;font-size:9px;white-space:nowrap;cursor:pointer;
+}
+.universe-blackhole-toggle.selected{
+  color:#fff;border-color:#ff9b61;background:linear-gradient(120deg,#8c3a65,#5c247f);
+  box-shadow:0 0 16px rgba(255,132,78,.36);
+}
+@media(max-width:760px){
+  .blackhole-core{left:52%;top:43%;width:clamp(110px,35vw,180px)}
+  .blackhole-lensing{left:52%;top:43%;width:88vw;height:18vw}
+  .blackhole-disk{left:52%;top:45%;width:120vw;height:34vw}
+  .universe-blackhole-toggle{font-size:8px;padding:7px 8px}
+}
+@media(prefers-reduced-motion:reduce){
+  .blackhole-nebula,.blackhole-core span,.blackhole-lensing,.blackhole-disk,
+  .blackhole-particles i{animation:none!important}
+}
