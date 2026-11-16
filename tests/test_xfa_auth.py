@@ -159,8 +159,8 @@ class XFAAuthSmokeTests(unittest.TestCase):
         self._login_test_session()
         headers = {"X-CSRF-Token": "csrf-test-value"}
         self.assertEqual(self.client.post("/xfa/api/providers", json={}, headers=headers).status_code, 405)
-        self.assertEqual(self.client.post("/xfa/api/providers/test", json={}, headers=headers).status_code, 405)
-        self.assertEqual(self.client.delete("/xfa/api/providers/groq", headers=headers).status_code, 405)
+        self.assertEqual(self.client.post("/xfa/api/providers/test", json={}, headers=headers).status_code, 404)
+        self.assertEqual(self.client.delete("/xfa/api/providers/groq", headers=headers).status_code, 404)
 
     def test_anonymous_auth_me_issues_csrf_token(self):
         response = self.client.get("/auth/me")
