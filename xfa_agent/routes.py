@@ -207,6 +207,10 @@ def chat():
         return jsonify({"ok": True, "reply": reply or "Şu anda yanıt oluşturamadım.", "provider": provider, "model": model, "sources": web_sources})
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
+    except RuntimeError as exc:
+        # Provider adapters return sanitized, credential-free diagnostic messages.
+        current_app.logger.warning("XFA chat provider=%s error=%s", provider, type(exc).__name__)
+        return jsonify({"error": str(exc)}), 502
     except Exception as exc:
         current_app.logger.warning("XFA chat failed for provider %s: %s", provider, type(exc).__name__)
         return jsonify({"error": "Sohbet isteği başarısız oldu. XFA model bağlantısını və sağlayıcı limitlərini yoxla."}), 502
