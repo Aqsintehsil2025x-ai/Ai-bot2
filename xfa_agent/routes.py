@@ -314,7 +314,7 @@ def run_task():
     if not task or len(task) > 2000:
         return jsonify({"error": "task must contain 1-2000 characters"}), 400
     try:
-        provider, model, api_key = _resolve_user_provider(g.xfa_user_id)
+        provider, model, api_key = _resolve_server_provider()
         from xfa_agent.providers import generate
         from xfa_agent.web_search import search_public_web
         memory_context = _user_memory_context(g.xfa_user_id)
