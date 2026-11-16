@@ -176,6 +176,7 @@ def chat():
         return jsonify({"error": "messages must be a list containing 1-20 items"}), 400
 
     transcript = []
+    normalized_messages = []
     for item in messages:
         if not isinstance(item, dict) or not isinstance(item.get("role"), str) or item.get("role") not in {"user", "model"}:
             return jsonify({"error": "Each message must have a user or model role"}), 400
@@ -201,9 +202,7 @@ def chat():
             api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
         if not api_key:
             return jsonify({"error": "Bu sağlayıcı için API anahtarı eklenmemiş. Ayarlardan API anahtarı ekle."}), 400
-        reply = generate(provider, api_key, model, [
-            {"role": item["role"], "content": item["content"]} for item in body.get("messages", [])
-        ])
+        reply = generate(provider, api_key, model, normalized_messages)
         return jsonify({"ok": True, "reply": reply or "Şu anda yanıt oluşturamadım.", "provider": provider, "model": model})
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
