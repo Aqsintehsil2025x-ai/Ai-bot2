@@ -25,6 +25,14 @@ class XFAFileInputTests(unittest.TestCase):
             "image/png",
         )
 
+    def test_audio_signature_is_checked(self):
+        self.assertEqual(
+            validate_upload("voice.wav", b"RIFF" + b"\\x00\\x00\\x00\\x00" + b"WAVEdata")[1],
+            "audio/wav",
+        )
+        with self.assertRaises(ValueError):
+            validate_upload("voice.wav", b"not audio")
+
     def test_unknown_extensions_and_oversized_files_are_rejected(self):
         with self.assertRaises(ValueError):
             validate_upload("payload.exe", b"anything")
