@@ -209,7 +209,13 @@ def chat():
             api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
         if not api_key:
             return jsonify({"error": "Bu sağlayıcı için API anahtarı eklenmemiş. Ayarlardan API anahtarı ekle."}), 400
-        reply = generate(provider, api_key, model, normalized_messages)
+        from xfa_agent.memory import list_memories
+        saved_items = list_memories(g.xfa_user_id)[:12]
+        memory_context = "\\n".join(
+            "- " + item["title"] + ": " + item["content"][:700]
+            for item in saved_items
+        )[:10000]
+        reply = generate(provider, api_key, model, normalized_messages, memory_context=memory_context)
         return jsonify({"ok": True, "reply": reply or "Şu anda yanıt oluşturamadım.", "provider": provider, "model": model})
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
