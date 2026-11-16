@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { ArrowLeft, ArrowRight, Maximize2, Sparkles, Orbit, Activity, MessageCircle, Bot, Grid3X3, Search, Settings, Zap, Send, Plus, Smile, KeyRound, Cpu, X, CheckCircle2, Trash2, BookOpen } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Maximize2, Sparkles, Orbit, Activity, MessageCircle, Bot, Grid3X3, Search, Settings, Zap, Send, Plus, Smile, KeyRound, Cpu, X, CheckCircle2, Trash2, BookOpen, Paperclip, FileText } from 'lucide-react';
 import { Link } from 'wouter';
 import './universe.css';
 
@@ -87,8 +87,10 @@ export default function UniversePage() {
   const [memoryContent, setMemoryContent] = useState('');
   const [memoryBusy, setMemoryBusy] = useState(false);
   const [memoryError, setMemoryError] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let active = true;
@@ -326,26 +328,43 @@ export default function UniversePage() {
   async function sendMessage(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
     const content = message.trim();
-    if (!content || busy) return;
+    const attachment = selectedFile;
+    if ((!content && !attachment) || busy) return;
     if (!auth.authenticated) {
       setError('Söhbət üçün əvvəlcə XFA hesabına daxil ol.');
       return;
     }
-    const next = [...messages, { role: 'user' as const, content }];
+    const visibleContent = attachment
+      ? (content ? `📎 ${attachment.name}: ${content}` : `📎 ${attachment.name}`)
+      : content;
+    const next = [...messages, { role: 'user' as const, content: visibleContent }];
     setMessages(next);
     setMessage('');
     setBusy(true);
     setError('');
     try {
-      const response = await fetch('/xfa/api/chat', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': auth.csrf },
-        body: JSON.stringify({ messages: next.slice(-20), provider: activeProvider, model: activeModel }),
-      });
+      const response = attachment
+        ? await (() => {
+            const form = new FormData();
+            form.append('file', attachment);
+            form.append('prompt', content);
+            form.append('provider', activeProvider);
+            form.append('model', activeModel);
+            return fetch('/xfa/api/files/analyze', {
+              method: 'POST', credentials: 'same-origin',
+              headers: { 'X-CSRF-Token': auth.csrf },
+              body: form,
+            });
+          })()
+        : await fetch('/xfa/api/chat', {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': auth.csrf },
+            body: JSON.stringify({ messages: next.slice(-20), provider: activeProvider, model: activeModel }),
+          });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || `Sohbet isteği başarısız (HTTP ${response.status}).`);
+      if (!response.ok) throw new Error(data.error || `XFA sorğusu uğursuz oldu (HTTP ${response.status}).`);
       setMessages((current) => [...current, { role: 'model', content: data.reply || 'Şu anda yanıt oluşturamadım.' }]);
+      if (attachment) setSelectedFile(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'XFA bağlantısı başarısız oldu.');
     } finally {
@@ -492,8 +511,10 @@ export default function UniversePage() {
             {busy && <div className="universe-message universe-thinking"><small>XFA</small><span className="universe-dots">Yanıt hazırlanıyor</span></div>}
           </div>
           {error && <p className="universe-error" role="alert">{error}</p>}
+          {selectedFile && <div className="universe-attachment-strip"><FileText size={15}/><span>{selectedFile.name}<small>{(selectedFile.size / 1024).toFixed(0)} KB</small></span><button type="button" aria-label="Faylı sil" onClick={() => setSelectedFile(null)}><X size={14}/></button></div>}
           <form className="universe-input" onSubmit={sendMessage}>
-            <button type="button" aria-label="Mesaj alanına odaklan" onClick={() => inputRef.current?.focus()}><Plus size={19}/></button><button type="button" aria-label="Örnek istem ekle" onClick={() => setMessage('Lütfen bunu adım adım açıkla: ')}><Smile size={18}/></button><input ref={inputRef} value={message} onChange={(event) => setMessage(event.target.value)} placeholder={auth.authenticated ? 'XFA’ya mesajını yaz...' : 'Önce giriş yapmalısın...'} disabled={!auth.authenticated || busy} /><button className="universe-send" type="submit" disabled={!auth.authenticated || busy || !message.trim()} aria-label="Mesajı gönder"><Send size={19}/></button>
+            <input ref={fileInputRef} type="file" hidden accept=".png,.jpg,.jpeg,.webp,.pdf,.docx,.pptx,.xlsx,.csv,.txt,.md,.py,.js,.jsx,.ts,.tsx,.css,.json,.yaml,.yml,.toml,.sql,.sh,.java,.c,.cpp,.h,.go,.rs,.rb,.php,.xml,.log" onChange={(event) => { const file = event.target.files?.[0] || null; setSelectedFile(file); if (file) setError(''); event.currentTarget.value = ''; }} />
+            <button type="button" aria-label="Fayl əlavə et" disabled={!auth.authenticated || busy} onClick={() => fileInputRef.current?.click()}><Paperclip size={18}/></button><button type="button" aria-label="Nümunə istək əlavə et" onClick={() => setMessage('Lütfən bunu addım-addım izah et: ')}><Smile size={18}/></button><input ref={inputRef} value={message} onChange={(event) => setMessage(event.target.value)} placeholder={auth.authenticated ? 'XFA’ya mesajını yaz...' : 'Önce giriş yapmalısın...'} disabled={!auth.authenticated || busy} /><button className="universe-send" type="submit" disabled={!auth.authenticated || busy || (!message.trim() && !selectedFile)} aria-label="Mesajı göndər"><Send size={19}/></button>
           </form>
         </div>
       </section>
