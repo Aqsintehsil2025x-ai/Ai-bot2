@@ -72,7 +72,7 @@ def health():
     return jsonify({
         "ok": True,
         "agent": "XFA",
-        "planner_ready": bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")),
+        "planner_ready": bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or os.getenv("NVIDIA_API_KEY")),
         "remote_browser_ready": bool(os.getenv("XFA_BROWSER_CDP_URL")),
         "execution_mode": "read_only_public_web",
     })
@@ -81,65 +81,29 @@ def health():
 
 @xfa.get("/providers")
 def list_ai_providers():
-    from xfa_agent.providers import public_catalog
-    from xfa_agent.accounts import list_integrations
-    connected = {item["account_id"]: item for item in list_integrations(g.xfa_user_id)
-                 if item["provider"] == "ai_provider"}
+    from xfa_agent.providers import PROVIDERS, public_catalog, server_api_key
+
     catalog = public_catalog()
+    providers = []
+    for key, value in catalog.items():
+        available = bool(server_api_key(key))
+        providers.append({**value, "connected": available, "available": available,
+                          "model": value["default_model"]})
+    available_ids = [item["id"] for item in providers if item["available"]]
+    active = session.get("xfa_ai_provider", "")
+    if active not in available_ids:
+        active = available_ids[0] if available_ids else "gemini"
+    active_item = next((item for item in providers if item["id"] == active), None)
+    model = session.get("xfa_ai_model", "")
+    if not active_item or model not in active_item["models"]:
+        model = active_item["default_model"] if active_item else "gemini-2.5-flash"
     return jsonify({
         "catalog": catalog,
-        "connected": [{"id": key, "name": value["name"], "models": value["models"],
-                       "default_model": value["default_model"], "note": value["note"],
-                       "model": connected[key]["display_name"] if key in connected else value["default_model"],
-                       "connected": key in connected}
-                      for key, value in catalog.items()],
-        "active": session.get("xfa_ai_provider", "gemini"),
-        "model": session.get("xfa_ai_model", "gemini-2.5-flash"),
-        "server_default_available": bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")),
+        "connected": providers,
+        "active": active,
+        "model": model,
+        "server_default_available": bool(server_api_key("gemini")),
     })
-
-
-@xfa.post("/providers")
-def add_ai_provider():
-    body = request.get_json(silent=True)
-    if not isinstance(body, dict):
-        return jsonify({"error": "Geçerli API sağlayıcı bilgileri gönderilmelidir."}), 400
-    provider = str(body.get("provider", "")).strip().lower()
-    model = str(body.get("model", "")).strip()
-    api_key = body.get("api_key")
-    from xfa_agent.providers import PROVIDERS
-    if provider not in PROVIDERS or model not in PROVIDERS[provider]["models"]:
-        return jsonify({"error": "Desteklenmeyen sağlayıcı veya model."}), 400
-    if not isinstance(api_key, str) or not api_key.strip() or len(api_key) > 20000 or chr(13) in api_key or chr(10) in api_key:
-        return jsonify({"error": "Geçerli bir API anahtarı gir."}), 400
-    try:
-        from xfa_agent.accounts import save_integration
-        save_integration(g.xfa_user_id, "ai_provider", provider, api_key.strip(), display_name=model)
-        return jsonify({"ok": True, "provider": provider, "model": model, "connected": True})
-    except RuntimeError:
-        return jsonify({"error": "API anahtarlarını güvenli saklamak için XFA_TOKEN_ENCRYPTION_KEY sunucuda yapılandırılmalı."}), 503
-    except ValueError as exc:
-        return jsonify({"error": str(exc)}), 400
-
-
-@xfa.post("/providers/test")
-def test_ai_provider():
-    body = request.get_json(silent=True)
-    if not isinstance(body, dict):
-        return jsonify({"error": "Geçerli test bilgileri gönderilmelidir."}), 400
-    provider = str(body.get("provider", "")).strip().lower()
-    model = str(body.get("model", "")).strip()
-    api_key = body.get("api_key")
-    try:
-        from xfa_agent.providers import generate
-        generate(provider, api_key, model, [], test=True)
-        return jsonify({"ok": True, "message": "API bağlantısı başarılı."})
-    except ValueError as exc:
-        return jsonify({"error": str(exc)}), 400
-    except Exception as exc:
-        current_app.logger.warning("XFA provider test failed for %s: %s", provider, type(exc).__name__)
-        message = str(exc) if isinstance(exc, RuntimeError) else "Bağlantı testi başarısız. API anahtarını ve model erişimini kontrol et."
-        return jsonify({"error": message}), 502
 
 
 @xfa.post("/providers/select")
@@ -149,59 +113,29 @@ def select_ai_provider():
         return jsonify({"error": "Geçerli model seçimi gönderilmelidir."}), 400
     provider = str(body.get("provider", "")).strip().lower()
     model = str(body.get("model", "")).strip()
-    from xfa_agent.providers import PROVIDERS
+    from xfa_agent.providers import PROVIDERS, server_api_key
     if provider not in PROVIDERS or model not in PROVIDERS[provider]["models"]:
         return jsonify({"error": "Geçersiz sağlayıcı veya model."}), 400
-    if provider != "gemini":
-        from xfa_agent.accounts import list_integrations
-        connected = any(item["provider"] == "ai_provider" and item["account_id"] == provider
-                        for item in list_integrations(g.xfa_user_id))
-        if not connected:
-            return jsonify({"error": "Önce bu sağlayıcının API anahtarını eklemelisin."}), 400
+    if not server_api_key(provider):
+        return jsonify({"error": "Bu model XFA sunucusunda yapılandırılmamış."}), 503
     session["xfa_ai_provider"] = provider
     session["xfa_ai_model"] = model
     return jsonify({"ok": True, "provider": provider, "model": model})
 
 
-@xfa.delete("/providers/<provider>")
-def remove_ai_provider(provider: str):
-    from xfa_agent.accounts import list_integrations, disconnect_integration
-    matches = [item for item in list_integrations(g.xfa_user_id)
-               if item["provider"] == "ai_provider" and item["account_id"] == provider]
-    if not matches:
-        return jsonify({"error": "Kayıtlı API anahtarı bulunamadı."}), 404
-    for item in matches:
-        disconnect_integration(g.xfa_user_id, item["id"])
-    if session.get("xfa_ai_provider") == provider:
-        session["xfa_ai_provider"] = "gemini"
-        session["xfa_ai_model"] = "gemini-2.5-flash"
-    return jsonify({"ok": True})
-
-
-
 def _resolve_user_provider(user_id: str, provider: str = "", model: str = ""):
-    """Resolve the selected provider and its user-scoped credential."""
-    from xfa_agent.providers import PROVIDERS
-    from xfa_agent.accounts import list_integrations, get_integration_tokens
+    """Resolve a provider using only XFA operator-managed environment credentials."""
+    from xfa_agent.providers import PROVIDERS, server_api_key
     provider = str(provider or session.get("xfa_ai_provider") or "gemini").strip().lower()
     if provider not in PROVIDERS:
         raise ValueError("Dəstəklənməyən AI sağlayıcısı.")
     model = str(model or session.get("xfa_ai_model") or PROVIDERS[provider]["default_model"]).strip()
     if model not in PROVIDERS[provider]["models"]:
         raise ValueError("Bu sağlayıcı üçün model seçimi düzgün deyil.")
-    connection = next(
-        (item for item in list_integrations(user_id)
-         if item["provider"] == "ai_provider" and item["account_id"] == provider),
-        None,
-    )
-    tokens = get_integration_tokens(user_id, connection["id"]) if connection else None
-    api_key = tokens.get("access_token") if tokens else None
-    if not api_key and provider == "gemini":
-        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    api_key = server_api_key(provider)
     if not api_key:
-        raise ValueError("Bu sağlayıcı üçün API açarı əlavə edilməyib. API ayarlarından əlavə et.")
+        raise ValueError("Bu model XFA serverində aktiv deyil. Başqa mövcud modeli seç.")
     return provider, model, api_key
-
 
 def _user_memory_context(user_id: str) -> str:
     from xfa_agent.memory import list_memories
@@ -258,20 +192,8 @@ def chat():
     provider = str(body.get("provider") or session.get("xfa_ai_provider") or "gemini").strip().lower()
     model = str(body.get("model") or session.get("xfa_ai_model") or "").strip()
     try:
-        from xfa_agent.providers import PROVIDERS, generate
-        if provider not in PROVIDERS:
-            return jsonify({"error": "Desteklenmeyen AI sağlayıcısı."}), 400
-        if not model:
-            model = PROVIDERS[provider]["default_model"]
-        from xfa_agent.accounts import list_integrations, get_integration_tokens
-        connection = next((item for item in list_integrations(g.xfa_user_id)
-                           if item["provider"] == "ai_provider" and item["account_id"] == provider), None)
-        tokens = get_integration_tokens(g.xfa_user_id, connection["id"]) if connection else None
-        api_key = tokens.get("access_token") if tokens else None
-        if not api_key and provider == "gemini":
-            api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-        if not api_key:
-            return jsonify({"error": "Bu sağlayıcı için API anahtarı eklenmemiş. Ayarlardan API anahtarı ekle."}), 400
+        from xfa_agent.providers import generate
+        provider, model, api_key = _resolve_user_provider(g.xfa_user_id, provider, model)
         from xfa_agent.memory import list_memories
         saved_items = list_memories(g.xfa_user_id)[:12]
         memory_context = "\n".join(
@@ -284,7 +206,7 @@ def chat():
         return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         current_app.logger.warning("XFA chat failed for provider %s: %s", provider, type(exc).__name__)
-        return jsonify({"error": "Sohbet isteği başarısız oldu. API anahtarını, modelini ve sağlayıcı limitlerini kontrol et."}), 502
+        return jsonify({"error": "Sohbet isteği başarısız oldu. XFA model bağlantısını və sağlayıcı limitlərini yoxla."}), 502
 
 
 @xfa.post("/tasks/plan")
