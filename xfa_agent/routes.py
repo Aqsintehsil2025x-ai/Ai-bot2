@@ -96,14 +96,16 @@ def list_ai_providers():
 
 @xfa.post("/providers")
 def add_ai_provider():
-    body = request.get_json(silent=True) or {}
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "Geçerli API sağlayıcı bilgileri gönderilmelidir."}), 400
     provider = str(body.get("provider", "")).strip().lower()
     model = str(body.get("model", "")).strip()
     api_key = body.get("api_key")
     from xfa_agent.providers import PROVIDERS
     if provider not in PROVIDERS or model not in PROVIDERS[provider]["models"]:
         return jsonify({"error": "Desteklenmeyen sağlayıcı veya model."}), 400
-    if not isinstance(api_key, str) or not api_key.strip() or len(api_key) > 20000:
+    if not isinstance(api_key, str) or not api_key.strip() or len(api_key) > 20000 or "\\r" in api_key or "\\n" in api_key:
         return jsonify({"error": "Geçerli bir API anahtarı gir."}), 400
     try:
         from xfa_agent.accounts import save_integration
@@ -117,7 +119,9 @@ def add_ai_provider():
 
 @xfa.post("/providers/test")
 def test_ai_provider():
-    body = request.get_json(silent=True) or {}
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "Geçerli test bilgileri gönderilmelidir."}), 400
     provider = str(body.get("provider", "")).strip().lower()
     model = str(body.get("model", "")).strip()
     api_key = body.get("api_key")
@@ -135,7 +139,9 @@ def test_ai_provider():
 
 @xfa.post("/providers/select")
 def select_ai_provider():
-    body = request.get_json(silent=True) or {}
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "Geçerli model seçimi gönderilmelidir."}), 400
     provider = str(body.get("provider", "")).strip().lower()
     model = str(body.get("model", "")).strip()
     from xfa_agent.providers import PROVIDERS
