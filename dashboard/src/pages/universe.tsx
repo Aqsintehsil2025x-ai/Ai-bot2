@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { ArrowLeft, ArrowRight, Maximize2, Sparkles, Orbit, Activity, MessageCircle, Bot, Grid3X3, Search, Settings, Zap, Send, Plus, Smile, KeyRound, Cpu, X, CheckCircle2, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Maximize2, Sparkles, Orbit, Activity, MessageCircle, Bot, Grid3X3, Search, Settings, Zap, Send, Plus, Smile, KeyRound, Cpu, X, CheckCircle2, Trash2, BookOpen, Paperclip, FileText, Volume2, Globe, Mic, Square } from 'lucide-react';
 import { Link } from 'wouter';
 import './universe.css';
 
@@ -52,7 +52,7 @@ function SpaceCanvas({ quality }: { quality: 'ultra' | 'balanced' | 'eco' }) {
 }
 export default function UniversePage() {
   const [message, setMessage] = useState('');
-  const [messages, setMessages] = useState<{ role: 'user' | 'model'; content: string }[]>([
+  const [messages, setMessages] = useState<{ role: 'user' | 'model'; content: string; sources?: { title: string; url: string; snippet: string }[] }[]>([
     { role: 'model', content: 'Merhaba! Ben XFA. Bir fikir, soru veya görev yaz; birlikte başlayalım.' },
   ]);
   const [busy, setBusy] = useState(false);
@@ -81,8 +81,27 @@ export default function UniversePage() {
   const [providerStatus, setProviderStatus] = useState('');
   const [providerError, setProviderError] = useState('');
   const [serverGeminiAvailable, setServerGeminiAvailable] = useState(false);
+  const [memoryOpen, setMemoryOpen] = useState(false);
+  const [memoryItems, setMemoryItems] = useState<{ id: string; title: string; content: string; tags: string[] }[]>([]);
+  const [memoryTitle, setMemoryTitle] = useState('');
+  const [memoryContent, setMemoryContent] = useState('');
+  const [memoryBusy, setMemoryBusy] = useState(false);
+  const [memoryError, setMemoryError] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const [agentMode, setAgentMode] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const recordingStreamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => () => {
+    if (recorderRef.current?.state === 'recording') recorderRef.current.stop();
+    recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -202,6 +221,57 @@ export default function UniversePage() {
     }
   }, [auth.authenticated]);
 
+
+  async function refreshMemory() {
+    const response = await fetch('/xfa/api/memory', { credentials: 'same-origin' });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Yaddaş yüklənmədi.');
+    setMemoryItems(Array.isArray(data.items) ? data.items : []);
+  }
+
+  async function saveMemory(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (memoryBusy || !memoryTitle.trim() || !memoryContent.trim()) return;
+    setMemoryBusy(true);
+    setMemoryError('');
+    try {
+      const response = await fetch('/xfa/api/memory', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': auth.csrf },
+        body: JSON.stringify({ title: memoryTitle, content: memoryContent }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Yaddaş saxlanmadı.');
+      setMemoryItems((items) => [data.item, ...items]);
+      setMemoryTitle('');
+      setMemoryContent('');
+    } catch (err) {
+      setMemoryError(err instanceof Error ? err.message : 'Yaddaş saxlanmadı.');
+    } finally { setMemoryBusy(false); }
+  }
+
+  async function removeMemory(itemId: string) {
+    setMemoryBusy(true);
+    setMemoryError('');
+    try {
+      const response = await fetch('/xfa/api/memory/' + encodeURIComponent(itemId), {
+        method: 'DELETE', credentials: 'same-origin',
+        headers: { 'X-CSRF-Token': auth.csrf },
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Yaddaş silinmədi.');
+      setMemoryItems((items) => items.filter((item) => item.id !== itemId));
+    } catch (err) {
+      setMemoryError(err instanceof Error ? err.message : 'Yaddaş silinmədi.');
+    } finally { setMemoryBusy(false); }
+  }
+
+  useEffect(() => {
+    if (memoryOpen && auth.authenticated) {
+      refreshMemory().catch((err) => setMemoryError(err instanceof Error ? err.message : 'Yaddaş yüklənmədi.'));
+    }
+  }, [memoryOpen, auth.authenticated]);
+
   async function submitAuth(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (authBusy) return;
@@ -269,32 +339,118 @@ export default function UniversePage() {
   async function sendMessage(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
     const content = message.trim();
-    if (!content || busy) return;
+    const attachment = selectedFile;
+    if ((!content && !attachment) || busy) return;
     if (!auth.authenticated) {
       setError('Söhbət üçün əvvəlcə XFA hesabına daxil ol.');
       return;
     }
-    const next = [...messages, { role: 'user' as const, content }];
+    const visibleContent = attachment
+      ? (content ? `📎 ${attachment.name}: ${content}` : `📎 ${attachment.name}`)
+      : content;
+    const next = [...messages, { role: 'user' as const, content: visibleContent }];
     setMessages(next);
     setMessage('');
     setBusy(true);
     setError('');
     try {
-      const response = await fetch('/xfa/api/chat', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': auth.csrf },
-        body: JSON.stringify({ messages: next.slice(-20), provider: activeProvider, model: activeModel }),
-      });
+      const response = attachment
+        ? await (() => {
+            const form = new FormData();
+            form.append('file', attachment);
+            form.append('prompt', content);
+            form.append('provider', activeProvider);
+            form.append('model', activeModel);
+            return fetch('/xfa/api/files/analyze', {
+              method: 'POST', credentials: 'same-origin',
+              headers: { 'X-CSRF-Token': auth.csrf },
+              body: form,
+            });
+          })()
+        : agentMode
+          ? await fetch('/xfa/api/tasks/run', {
+              method: 'POST', credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': auth.csrf },
+              body: JSON.stringify({ task: content }),
+            })
+          : await fetch('/xfa/api/chat', {
+              method: 'POST', credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': auth.csrf },
+              body: JSON.stringify({ messages: next.slice(-20), provider: activeProvider, model: activeModel, web_search: webSearchEnabled }),
+            });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || `Sohbet isteği başarısız (HTTP ${response.status}).`);
-      setMessages((current) => [...current, { role: 'model', content: data.reply || 'Şu anda yanıt oluşturamadım.' }]);
+      if (!response.ok) throw new Error(data.error || `XFA sorğusu uğursuz oldu (HTTP ${response.status}).`);
+      setMessages((current) => [...current, { role: 'model', content: data.reply || data.answer || 'Şu anda yanıt oluşturamadım.', sources: Array.isArray(data.sources) ? data.sources : [] }]);
+      if (attachment) setSelectedFile(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'XFA bağlantısı başarısız oldu.');
     } finally {
       setBusy(false);
       inputRef.current?.focus();
     }
+  }
+
+  async function startVoiceRecording() {
+    if (!navigator.mediaDevices?.getUserMedia || !('MediaRecorder' in window)) {
+      setError('Bu brauzer səs yazma funksiyasını dəstəkləmir.');
+      return;
+    }
+    try {
+      setError('');
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recordingStreamRef.current = stream;
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/ogg;codecs=opus') ? 'audio/ogg;codecs=opus' : '';
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      audioChunksRef.current = [];
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
+      };
+      recorder.onerror = () => {
+        setError('Səs yazılarkən xəta baş verdi.');
+        stream.getTracks().forEach((track) => track.stop());
+        recordingStreamRef.current = null;
+        setRecording(false);
+      };
+      recorder.onstop = () => {
+        const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
+        const extension = blob.type.includes('ogg') ? '.ogg' : blob.type.includes('mp4') ? '.m4a' : '.webm';
+        if (blob.size > 8 * 1024 * 1024) {
+          setError('Səs yazısı 8 MB limitini keçdi.');
+        } else if (blob.size > 0) {
+          setSelectedFile(new File([blob], 'xfa-voice' + extension, { type: blob.type }));
+        }
+        stream.getTracks().forEach((track) => track.stop());
+        recordingStreamRef.current = null;
+        recorderRef.current = null;
+        setRecording(false);
+      };
+      recorderRef.current = recorder;
+      recorder.start();
+      setRecording(true);
+    } catch {
+      setError('Mikrofon icazəsi alınmadı və ya cihaz əlçatan deyil.');
+      recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+      recordingStreamRef.current = null;
+      setRecording(false);
+    }
+  }
+
+  function stopVoiceRecording() {
+    if (recorderRef.current?.state === 'recording') recorderRef.current.stop();
+  }
+
+  function speakMessage(content: string) {
+    if (!('speechSynthesis' in window)) {
+      setError('Bu brauzer səsli oxuma funksiyasını dəstəkləmir.');
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(content);
+    utterance.lang = 'tr-TR';
+    utterance.rate = 1;
+    window.speechSynthesis.speak(utterance);
   }
 
   const quickPrompts = ['Nebulalar nasıl oluşur?', 'Bana bir Python örneği yaz', 'Yeni bir proje fikri bul', 'Bugünkü hedeflerimi planla'];
@@ -319,7 +475,7 @@ export default function UniversePage() {
         <Link href="/" className="universe-brand"><span className="universe-flower">✿</span><strong>XFA</strong><small>XYRIN FLOWER AI</small></Link>
         <div className="universe-nav-label">ÇALIŞMA ALANI</div>
         <a className="universe-nav-item active" href="#chat"><MessageCircle size={16}/> Sohbet</a>
-        <a className="universe-nav-item" href="#chat"><Bot size={16}/> Yapay Zekâ Ajanı</a>
+        <button className="universe-nav-item" type="button" onClick={() => { if (!auth.authenticated) { setError("Yaddaş üçün əvvəlcə hesabına daxil ol."); return; } setMemoryOpen(true); setMemoryError(""); }}><BookOpen size={16}/> Yaddaş</button><a className="universe-nav-item" href="#chat"><Bot size={16}/> Yapay Zekâ Ajanı</a>
         <a className="universe-nav-item" href="/panel"><Grid3X3 size={16}/> Çalışma Alanı</a>
         <a className="universe-nav-item" href="/panel"><Settings size={16}/> Ayarlar</a>
         <div className="universe-premium"><strong>👑 XFA</strong><p>Herkes için ücretsiz yapay zekâ deneyimi.</p><a href="/panel">Kontrol paneli →</a></div>
@@ -367,6 +523,29 @@ export default function UniversePage() {
             </select>
             <button type="button" onClick={() => { setProviderModal(true); setProviderError(''); setProviderStatus(''); }}><KeyRound size={14}/> API / Modeller</button>
           </div>}
+
+          {memoryOpen && auth.authenticated && <div className="universe-provider-overlay" role="dialog" aria-modal="true" aria-label="XFA yaddaşı">
+            <section className="universe-provider-modal universe-memory-modal">
+              <header><div><strong><BookOpen size={17}/> XFA yaddaşı</strong><small>Yalnız sənin əlavə etdiyin qeydlər saxlanılır. Avtomatik yaddaş aktiv deyil.</small></div><button type="button" aria-label="Kapat" onClick={() => setMemoryOpen(false)}><X size={18}/></button></header>
+              <form className="universe-provider-form" onSubmit={saveMemory}>
+                <strong>Yeni yaddaş qeydi</strong>
+                <label>Başlıq</label>
+                <input value={memoryTitle} onChange={(event) => setMemoryTitle(event.target.value)} maxLength={120} placeholder="Məsələn: XFA UI seçimi" />
+                <label>Məlumat</label>
+                <textarea value={memoryContent} onChange={(event) => setMemoryContent(event.target.value)} maxLength={6000} rows={4} placeholder="XFA-nın gələcək söhbətlərdə nəzərə almasını istədiyin məlumat..." />
+                <div className="universe-provider-actions"><button type="submit" disabled={memoryBusy || !memoryTitle.trim() || !memoryContent.trim()}>{memoryBusy ? 'Saxlanır…' : 'Yadda saxla'}</button></div>
+              </form>
+              {memoryError && <p className="universe-error" role="alert">{memoryError}</p>}
+              <div className="universe-memory-list">
+                <strong>Saxlanılan qeydlər ({memoryItems.length}/100)</strong>
+                {memoryItems.map((item) => <article className="universe-memory-item" key={item.id}>
+                  <div><strong>{item.title}</strong><p>{item.content}</p></div>
+                  <button type="button" disabled={memoryBusy} onClick={() => removeMemory(item.id)}>Sil</button>
+                </article>)}
+                {!memoryItems.length && <p className="universe-provider-empty">Hələ yaddaş qeydi yoxdur.</p>}
+              </div>
+            </section>
+          </div>}
           {providerModal && auth.authenticated && <div className="universe-provider-overlay" role="dialog" aria-modal="true" aria-label="AI API ayarları">
             <section className="universe-provider-modal">
               <header><div><strong><Cpu size={17}/> AI sağlayıcıları</strong><small>API anahtarlarını yönet ve model ekle</small></div><button type="button" aria-label="Kapat" onClick={() => setProviderModal(false)}><X size={18}/></button></header>
@@ -408,12 +587,14 @@ export default function UniversePage() {
           </div>}
           <div className="universe-quick">{quickPrompts.map((prompt) => <button key={prompt} type="button" onClick={() => { setMessage(prompt); inputRef.current?.focus(); }}>✦ {prompt}</button>)}</div>
           <div className="universe-transcript" aria-live="polite">
-            {messages.map((item, index) => <div className={item.role === 'user' ? 'universe-user-message' : 'universe-message'} key={index}>{item.role === 'model' && <small>XFA</small>}{item.content}</div>)}
+            {messages.map((item, index) => <div className={item.role === 'user' ? 'universe-user-message' : 'universe-message'} key={index}>{item.role === 'model' && <small className="universe-message-label">XFA <button type="button" aria-label="Cavabı səsləndir" onClick={() => speakMessage(item.content)}><Volume2 size={12}/></button></small>}{item.content}{item.role === 'model' && !!item.sources?.length && <div className="universe-source-list"><strong>Mənbələr</strong>{item.sources.map((source, sourceIndex) => <a key={source.url} href={source.url} target="_blank" rel="noopener noreferrer">[{sourceIndex + 1}] {source.title}</a>)}</div>}</div>)}
             {busy && <div className="universe-message universe-thinking"><small>XFA</small><span className="universe-dots">Yanıt hazırlanıyor</span></div>}
           </div>
           {error && <p className="universe-error" role="alert">{error}</p>}
+          {selectedFile && <div className="universe-attachment-strip"><FileText size={15}/><span>{selectedFile.name}<small>{(selectedFile.size / 1024).toFixed(0)} KB</small></span><button type="button" aria-label="Faylı sil" onClick={() => setSelectedFile(null)}><X size={14}/></button></div>}
           <form className="universe-input" onSubmit={sendMessage}>
-            <button type="button" aria-label="Mesaj alanına odaklan" onClick={() => inputRef.current?.focus()}><Plus size={19}/></button><button type="button" aria-label="Örnek istem ekle" onClick={() => setMessage('Lütfen bunu adım adım açıkla: ')}><Smile size={18}/></button><input ref={inputRef} value={message} onChange={(event) => setMessage(event.target.value)} placeholder={auth.authenticated ? 'XFA’ya mesajını yaz...' : 'Önce giriş yapmalısın...'} disabled={!auth.authenticated || busy} /><button className="universe-send" type="submit" disabled={!auth.authenticated || busy || !message.trim()} aria-label="Mesajı gönder"><Send size={19}/></button>
+            <input ref={fileInputRef} type="file" hidden accept=".png,.jpg,.jpeg,.webp,.mp3,.wav,.ogg,.webm,.m4a,.pdf,.docx,.pptx,.xlsx,.csv,.txt,.md,.py,.js,.jsx,.ts,.tsx,.css,.json,.yaml,.yml,.toml,.sql,.sh,.java,.c,.cpp,.h,.go,.rs,.rb,.php,.xml,.log" onChange={(event) => { const file = event.target.files?.[0] || null; setSelectedFile(file); if (file) setError(''); event.currentTarget.value = ''; }} />
+            <button type="button" aria-label="Fayl əlavə et" disabled={!auth.authenticated || busy || recording} onClick={() => fileInputRef.current?.click()}><Paperclip size={18}/></button>{recording ? <button type="button" className="universe-recording" aria-label="Səs yazısını dayandır" onClick={stopVoiceRecording}><Square size={15}/></button> : <button type="button" aria-label="Səs yazmağa başla" disabled={!auth.authenticated || busy || !!selectedFile} onClick={startVoiceRecording}><Mic size={17}/></button>}<button type="button" className={agentMode ? 'universe-agent-toggle active' : 'universe-agent-toggle'} aria-label="Araşdırma agentini aktivləşdir" aria-pressed={agentMode} disabled={!auth.authenticated || busy || !!selectedFile} onClick={() => { setAgentMode((value) => !value); setWebSearchEnabled(false); }}><Bot size={16}/></button><button type="button" className={webSearchEnabled ? 'universe-web-toggle active' : 'universe-web-toggle'} aria-label="İnternet axtarışını aktivləşdir" aria-pressed={webSearchEnabled} disabled={!auth.authenticated || busy || !!selectedFile || agentMode} onClick={() => setWebSearchEnabled((value) => !value)}><Globe size={16}/></button><button type="button" aria-label="Nümunə istək əlavə et" onClick={() => setMessage('Lütfən bunu addım-addım izah et: ')}><Smile size={18}/></button><input ref={inputRef} value={message} onChange={(event) => setMessage(event.target.value)} placeholder={auth.authenticated ? 'XFA’ya mesajını yaz...' : 'Önce giriş yapmalısın...'} disabled={!auth.authenticated || busy} /><button className="universe-send" type="submit" disabled={!auth.authenticated || busy || (!message.trim() && !selectedFile)} aria-label="Mesajı göndər"><Send size={19}/></button>
           </form>
         </div>
       </section>

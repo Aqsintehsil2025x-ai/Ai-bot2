@@ -363,3 +363,39 @@
 .universe-provider-actions button:disabled,.universe-provider-row button:disabled{opacity:.45;cursor:not-allowed}
 .universe-provider-success{display:flex;align-items:center;gap:7px;margin:3px 0;color:#8ff0c3;font-size:10px}
 @media(max-width:760px){.universe-model-controls{gap:5px;padding:7px}.universe-model-controls label{width:100%}.universe-model-controls select{max-width:none;min-width:100px;font-size:9px}.universe-model-controls button{font-size:8px;padding:8px}.universe-provider-modal{padding:14px}.universe-provider-actions{flex-direction:column}}
+
+.universe-memory-modal .universe-provider-form textarea{width:100%;resize:vertical;min-height:90px;border:1px solid #573271;border-radius:10px;background:#0b0612;color:#f0e3fa;padding:11px 12px;font:11px Inter,system-ui,sans-serif;outline:none}
+.universe-memory-modal .universe-provider-form textarea:focus{border-color:#c06aff;box-shadow:0 0 0 3px rgba(177,75,255,.12)}
+.universe-memory-list{display:grid;gap:8px;margin-top:16px}
+.universe-memory-list>strong{font-size:11px;color:#e9d7f7}
+.universe-memory-item{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:10px 11px;border:1px solid #422354;border-radius:11px;background:#100819}
+.universe-memory-item>div{min-width:0}
+.universe-memory-item strong{font-size:10px;color:#f1e5fa}
+.universe-memory-item p{margin:5px 0 0;color:#bba7ca;font-size:10px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}
+.universe-memory-item button{border:1px solid #7b3d54;border-radius:16px;background:#28101d;color:#ffc0ce;padding:7px 10px;font-size:9px;cursor:pointer}
+.universe-memory-item button:disabled{opacity:.45;cursor:not-allowed}
+.universe-nav-item[type=button]{width:100%;text-align:left;cursor:pointer;background:transparent;border:0;color:inherit;font:inherit}
+
+.universe-attachment-strip{display:flex;align-items:center;gap:9px;margin:0 2px 8px;padding:9px 12px;border:1px solid #70409a;border-radius:12px;background:rgba(20,8,32,.92);color:#e8d6f5}
+.universe-attachment-strip>svg{color:#c88aff;flex:0 0 auto}
+.universe-attachment-strip>span{display:flex;flex:1;flex-direction:column;min-width:0;overflow-wrap:anywhere;font-size:10px}
+.universe-attachment-strip small{margin-top:3px;color:#a98cbd;font-size:8px}
+.universe-attachment-strip button{display:grid;place-items:center;width:27px;height:27px;border:1px solid #62347c;border-radius:50%;background:#160b23;color:#ead8f8;cursor:pointer}
+
+.universe-message-label{display:flex;align-items:center;gap:8px}
+.universe-message-label button{display:inline-grid;place-items:center;width:23px;height:23px;border:1px solid #62347c;border-radius:50%;background:#160b23;color:#d9b5f4;cursor:pointer}
+.universe-message-label button:hover{border-color:#c06aff;color:#fff}
+
+.universe-web-toggle{border:1px solid #573271!important;border-radius:50%!important;width:32px;height:32px;display:grid!important;place-items:center;color:#bca3ce!important}
+.universe-web-toggle.active{border-color:#c06aff!important;background:#512077!important;color:#fff!important;box-shadow:0 0 14px #a34be566}
+.universe-web-toggle:disabled{opacity:.35;cursor:not-allowed}
+.universe-source-list{display:grid;gap:5px;margin-top:10px;padding-top:8px;border-top:1px solid #3b234c}
+.universe-source-list strong{font-size:9px;color:#cfa4f0}
+.universe-source-list a{font-size:9px;color:#c9a5eb;text-decoration:underline;overflow-wrap:anywhere}
+
+.universe-input .universe-recording{border:1px solid #ff718b;border-radius:50%;background:#64182a;color:#fff;box-shadow:0 0 14px #ff527766;animation:universe-record-pulse 1.2s ease-in-out infinite}
+@keyframes universe-record-pulse{0%,100%{box-shadow:0 0 7px #ff527744}50%{box-shadow:0 0 18px #ff5277aa}}
+
+.universe-agent-toggle{border:1px solid #573271!important;border-radius:50%!important;width:32px;height:32px;display:grid!important;place-items:center;color:#bca3ce!important}
+.universe-agent-toggle.active{border-color:#ffb86b!important;background:#593319!important;color:#fff!important;box-shadow:0 0 14px #ffad4d66}
+.universe-agent-toggle:disabled{opacity:.35;cursor:not-allowed}
