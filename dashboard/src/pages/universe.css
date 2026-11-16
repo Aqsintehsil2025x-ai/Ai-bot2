@@ -375,3 +375,9 @@
 .universe-memory-item button{border:1px solid #7b3d54;border-radius:16px;background:#28101d;color:#ffc0ce;padding:7px 10px;font-size:9px;cursor:pointer}
 .universe-memory-item button:disabled{opacity:.45;cursor:not-allowed}
 .universe-nav-item[type=button]{width:100%;text-align:left;cursor:pointer;background:transparent;border:0;color:inherit;font:inherit}
+
+.universe-attachment-strip{display:flex;align-items:center;gap:9px;margin:0 2px 8px;padding:9px 12px;border:1px solid #70409a;border-radius:12px;background:rgba(20,8,32,.92);color:#e8d6f5}
+.universe-attachment-strip>svg{color:#c88aff;flex:0 0 auto}
+.universe-attachment-strip>span{display:flex;flex:1;flex-direction:column;min-width:0;overflow-wrap:anywhere;font-size:10px}
+.universe-attachment-strip small{margin-top:3px;color:#a98cbd;font-size:8px}
+.universe-attachment-strip button{display:grid;place-items:center;width:27px;height:27px;border:1px solid #62347c;border-radius:50%;background:#160b23;color:#ead8f8;cursor:pointer}
