@@ -399,3 +399,36 @@
 .universe-agent-toggle{border:1px solid #573271!important;border-radius:50%!important;width:32px;height:32px;display:grid!important;place-items:center;color:#bca3ce!important}
 .universe-agent-toggle.active{border-color:#ffb86b!important;background:#593319!important;color:#fff!important;box-shadow:0 0 14px #ffad4d66}
 .universe-agent-toggle:disabled{opacity:.35;cursor:not-allowed}
+
+
+/* XFA Universe — cinematic motion polish (no black-hole scene) */
+.universe-page{isolation:isolate;overflow:hidden}
+.universe-page::before,.universe-page::after{content:"";position:absolute;z-index:0;pointer-events:none;border-radius:50%;left:50%;top:48%;transform:translate(-50%,-50%)}
+.universe-page::before{width:min(88vw,1120px);aspect-ratio:1;border:1px solid rgba(190,126,255,.14);box-shadow:0 0 70px rgba(145,66,214,.09),inset 0 0 70px rgba(145,66,214,.07);animation:xfa-orbit-slow 95s linear infinite}
+.universe-page::after{width:min(67vw,850px);aspect-ratio:1;border:1px dashed rgba(203,151,255,.13);box-shadow:0 0 46px rgba(165,94,236,.07);animation:xfa-orbit-slow  71s linear infinite reverse}
+@keyframes xfa-orbit-slow{to{transform:translate(-50%,-50%) rotate(360deg)}}
+.universe-brand-title h1{background-size:220% 220%;animation:xfa-title-shimmer 8s ease-in-out infinite,xfa-title-glow 4.8s ease-in-out infinite}
+@keyframes xfa-title-shimmer{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+@keyframes xfa-title-glow{0%,100%{filter:drop-shadow(0 0 10px rgba(170,91,255,.38))}50%{filter:drop-shadow(0 0 25px rgba(213,153,255,.82))}}
+.universe-flower,.universe-logo-flower{transform-origin:50% 52%;animation:xfa-flower-breathe 5s ease-in-out infinite,xfa-flower-turn 42s linear infinite}
+@keyframes xfa-flower-breathe{0%,100%{filter:drop-shadow(0 0 5px rgba(174,87,255,.42));scale:1}50%{filter:drop-shadow(0 0 19px rgba(218,160,255,.9));scale:1.055}}
+@keyframes xfa-flower-turn{to{rotate:360deg}}
+.universe-chat{animation:xfa-panel-breathe 9s ease-in-out infinite}
+@keyframes xfa-panel-breathe{0%,100%{box-shadow:0 0 24px rgba(104,37,160,.18),inset 0 0 16px rgba(168,94,255,.025)}50%{box-shadow:0 0 42px rgba(145,59,205,.32),inset 0 0 24px rgba(168,94,255,.075)}}
+.universe-quick button,.universe-nav-item,.universe-fullscreen,.universe-model-controls select{transition:transform .28s ease,border-color .28s ease,box-shadow .28s ease,background .28s ease}
+.universe-quick button:hover,.universe-nav-item:hover{transform:translateY(-3px);box-shadow:0 8px 24px rgba(164,75,232,.24)}
+.universe-fullscreen:hover{transform:rotate(7deg) scale(1.08);box-shadow:0 0 20px rgba(190,111,255,.42)}
+.universe-status i:not(.offline){animation:xfa-status-pulse 2.4s ease-in-out infinite}
+@keyframes xfa-status-pulse{0%,100%{box-shadow:0 0 4px #23e7a0}50%{box-shadow:0 0 14px #23e7a0,0 0 24px rgba(35,231,160,.38)}}
+.universe-message{animation:xfa-message-arrive .48s cubic-bezier(.2,.8,.2,1) both}
+.universe-user-message{animation:xfa-message-arrive .38s cubic-bezier(.2,.8,.2,1) both}
+@keyframes xfa-message-arrive{from{opacity:0;transform:translateY(12px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
+.universe-input button[type=submit]{transition:transform .2s ease,filter .2s ease,box-shadow .2s ease}
+.universe-input button[type=submit]:hover{transform:translateY(-2px) scale(1.04);filter:brightness(1.15);box-shadow:0 0 22px rgba(187,104,255,.48)}
+.universe-stat-card{transition:transform .35s ease,border-color .35s ease,box-shadow .35s ease}
+.universe-stat-card:hover{transform:translateY(-4px);border-color:rgba(190,119,255,.72);box-shadow:0 12px 34px rgba(111,42,166,.22)}
+@media(max-width:760px){.universe-page::before{width:130vw}.universe-page::after{width:96vw}}
+@media(prefers-reduced-motion:reduce){
+ .universe-page::before,.universe-page::after,.universe-brand-title h1,.universe-flower,.universe-logo-flower,.universe-chat,.universe-status i:not(.offline),.universe-message,.universe-user-message{animation:none!important}
+ .universe-quick button,.universe-nav-item,.universe-fullscreen,.universe-model-controls select,.universe-input button[type=submit],.universe-stat-card{transition:none!important}
+}
