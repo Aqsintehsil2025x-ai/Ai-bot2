@@ -83,7 +83,7 @@ class XFAMemoryTests(unittest.TestCase):
         self.assertEqual(invalid.status_code, 400)
 
     def test_memory_item_cannot_be_updated_or_deleted_by_another_user(self):
-        from xfa_agent.memory import create_memory, update_memory, delete_memory
+        from xfa_agent.memory import create_memory, list_memories, update_memory, delete_memory
         item = create_memory(self.user["id"], "Private", "Only my account")
         self.assertIsNone(update_memory(self.other["id"], item["id"], "Hijack", "No"))
         self.assertFalse(delete_memory(self.other["id"], item["id"]))
