@@ -232,7 +232,7 @@ def _csrf_valid(value: str | None) -> bool:
 
 
 def _redirect_error(code: str):
-    return redirect("/xfa?auth_error=" + urllib.parse.quote(code, safe=""))
+    return redirect("/?auth_error=" + urllib.parse.quote(code, safe=""))
 
 
 def _set_user_session(user_id: str, profile: dict, provider: str) -> None:
@@ -341,7 +341,7 @@ def callback(provider: str):
                     db.execute("DELETE FROM xfa_users WHERE id=?", (user_id,))
                 raise
         _set_user_session(user_id, profile, "google")
-        return redirect("/xfa?auth_success=1")
+        return redirect("/?auth_success=1")
     except Exception:
         current_app.logger.exception("XFA Google OAuth callback failed")
         return _redirect_error("provider_error")

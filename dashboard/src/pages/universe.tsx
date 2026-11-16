@@ -1,188 +1,258 @@
-import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Maximize2, Sparkles, Orbit, Activity, MessageCircle, Bot, Grid3X3, Search, Settings, Zap, Send, Plus, Smile } from 'lucide-react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { ArrowLeft, ArrowRight, Maximize2, Sparkles, Orbit, Activity, MessageCircle, Bot, Grid3X3, Search, Settings, Zap, Send, Plus, Smile } from 'lucide-react';
 import { Link } from 'wouter';
 import './universe.css';
 
-type Scene = 'black-hole' | 'pulsar';
-
-function SpaceCanvas({ scene }: { scene: Scene }) {
+function SpaceCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-
   useEffect(() => {
     const canvas = canvasRef.current;
-    const context = canvas?.getContext('2d');
+    const context = canvas?.getContext('2d', { alpha: true, desynchronized: true });
     if (!canvas || !context) return;
-    let frame = 0;
-    let raf = 0;
-    let width = 0;
-    let height = 0;
-    let dpr = 1;
-    let stars: { x: number; y: number; r: number; a: number; p: number }[] = [];
-
+    let raf = 0, width = 0, height = 0, dpr = 1, time = 0, last = 0;
+    let stars: { x: number; y: number; r: number; alpha: number; phase: number; speed: number; layer: number }[] = [];
+    let dust: { x: number; y: number; r: number; vx: number; vy: number; alpha: number }[] = [];
+    let meteors: { x: number; y: number; vx: number; vy: number; life: number; max: number }[] = [];
     const resize = () => {
-      const rect = canvas.getBoundingClientRect();
-      dpr = Math.min(window.devicePixelRatio || 1, 2);
-      width = rect.width;
-      height = rect.height;
-      canvas.width = Math.round(width * dpr);
-      canvas.height = Math.round(height * dpr);
-      context.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const count = Math.min(520, Math.floor((width * height) / 2100));
-      stars = Array.from({ length: count }, () => ({
-        x: Math.random() * width, y: Math.random() * height,
-        r: Math.random() * 1.35 + .2, a: Math.random() * .75 + .15, p: Math.random() * Math.PI * 2,
-      }));
+      const rect = canvas.getBoundingClientRect(); width = Math.max(1, rect.width); height = Math.max(1, rect.height);
+      const pixelBudget = 6000000; dpr = Math.min(window.devicePixelRatio || 1, 2.25, Math.sqrt(pixelBudget / (width * height)));
+      canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr); context.setTransform(dpr, 0, 0, dpr, 0, 0);
+      stars = Array.from({ length: Math.min(1100, Math.floor(width * height / 1250)) }, () => { const layer = Math.random(); return { x: Math.random() * width, y: Math.random() * height, r: .25 + Math.random() * (layer > .92 ? 1.65 : .8), alpha: .22 + Math.random() * .72, phase: Math.random() * Math.PI * 2, speed: .25 + Math.random() * 1.2, layer }; });
+      dust = Array.from({ length: Math.min(180, Math.floor(width * height / 9000)) }, () => ({ x: Math.random() * width, y: Math.random() * height, r: .5 + Math.random() * 1.8, vx: (Math.random() - .5) * .13, vy: -.08 - Math.random() * .18, alpha: .08 + Math.random() * .22 }));
     };
-
-    const glow = (x: number, y: number, radius: number, color: string) => {
-      const g = context.createRadialGradient(x, y, 0, x, y, radius);
-      g.addColorStop(0, color); g.addColorStop(1, 'rgba(20,5,38,0)');
-      context.fillStyle = g; context.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+    const nebula = (x: number, y: number, radius: number, color: string, drift: number) => {
+      context.save(); context.translate(x + Math.sin(time * drift) * 24, y + Math.cos(time * drift * .7) * 16);
+      const g = context.createRadialGradient(0, 0, 0, 0, 0, radius); g.addColorStop(0, color); g.addColorStop(.45, 'rgba(91,30,150,.10)'); g.addColorStop(1, 'rgba(18,5,35,0)');
+      context.fillStyle = g; context.fillRect(-radius, -radius, radius * 2, radius * 2); context.restore();
     };
-
-    const draw = () => {
-      frame += .008;
+    const draw = (now: number) => {
+      if (document.hidden) { raf = 0; return; }
+      const delta = Math.min(2.2, (now - (last || now)) / 16.67); last = now; time += delta * .008;
       context.clearRect(0, 0, width, height);
-      const bg = context.createLinearGradient(0, 0, width, height);
-      bg.addColorStop(0, '#05030d'); bg.addColorStop(.48, '#10051e'); bg.addColorStop(1, '#070312');
-      context.fillStyle = bg; context.fillRect(0, 0, width, height);
-      glow(width * .48, height * .47, Math.max(width, height) * .58, 'rgba(91,22,160,.28)');
-      glow(width * .12, height * .78, width * .32, 'rgba(87,24,180,.2)');
-      stars.forEach((s) => {
-        const twinkle = .55 + .45 * Math.sin(frame * 2 + s.p);
-        context.fillStyle = `rgba(218,190,255,${s.a * twinkle})`;
-        context.beginPath(); context.arc(s.x, s.y, s.r, 0, Math.PI * 2); context.fill();
-      });
-
-      if (scene === 'black-hole') {
-        const cx = width * .64, cy = height * .43;
-        const scale = Math.min(width, height);
-        glow(cx, cy, scale * .42, 'rgba(130,38,255,.22)');
-        context.save(); context.translate(cx, cy); context.rotate(-.12 + Math.sin(frame * .2) * .018);
-        context.scale(1, .31);
-        for (let i = 0; i < 7; i++) {
-          context.beginPath(); context.ellipse(0, 0, scale * (.17 + i * .026), scale * (.17 + i * .026), 0, 0, Math.PI * 2);
-          context.strokeStyle = `rgba(255,${120 + i * 12},${70 + i * 10},${.12 + (6-i)*.025})`;
-          context.lineWidth = 3 + (6-i)*1.2; context.shadowBlur = 22; context.shadowColor = '#ff7b36'; context.stroke();
-        }
-        context.restore();
-        context.save(); context.translate(cx, cy); context.rotate(-.12);
-        context.scale(1, .34);
-        const disk = context.createRadialGradient(0, 0, scale * .09, 0, 0, scale * .34);
-        disk.addColorStop(0, '#05020a'); disk.addColorStop(.3, '#1b0826'); disk.addColorStop(.58, '#ff6b35'); disk.addColorStop(.7, '#f8c17d'); disk.addColorStop(.78, 'rgba(174,75,255,.65)'); disk.addColorStop(1, 'rgba(50,8,90,0)');
-        context.fillStyle = disk; context.beginPath(); context.ellipse(0, 0, scale * .35, scale * .35, 0, 0, Math.PI * 2); context.fill();
-        context.restore();
-        glow(cx, cy, scale * .09, 'rgba(0,0,0,.96)');
-        context.beginPath(); context.arc(cx, cy, scale * .105, 0, Math.PI * 2); context.fillStyle = '#020106'; context.fill();
-        context.beginPath(); context.arc(cx, cy, scale * .112, 0, Math.PI * 2); context.strokeStyle = 'rgba(255,205,160,.85)'; context.lineWidth = 2; context.shadowBlur = 28; context.shadowColor = '#ff8b45'; context.stroke(); context.shadowBlur = 0;
-        // Bright, gravitationally-lensed upper and lower arcs.
-        context.beginPath(); context.ellipse(cx, cy - scale * .012, scale * .23, scale * .075, -.12, Math.PI * 1.05, Math.PI * 1.92);
-        context.strokeStyle = '#ffd5a2'; context.lineWidth = 5; context.shadowBlur = 25; context.shadowColor = '#ff8a42'; context.stroke(); context.shadowBlur = 0;
-        for (let i = 0; i < 90; i++) {
-          const a = i * 2.399 + frame * (i % 2 ? .25 : -.16);
-          const r = scale * (.15 + (i % 17) / 100);
-          const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r * .32;
-          context.fillStyle = i % 3 ? 'rgba(255,180,130,.65)' : 'rgba(202,130,255,.8)';
-          context.beginPath(); context.arc(x, y, (i % 3) + .5, 0, Math.PI * 2); context.fill();
-        }
-      } else {
-        const cx = width * .48, cy = height * .48;
-        const scale = Math.min(width, height);
-        glow(cx, cy, scale * .3, 'rgba(100,36,255,.35)');
-        // Magnetic field lines
-        context.save(); context.translate(cx, cy);
-        for (let i = 0; i < 12; i++) {
-          const a = (i / 12) * Math.PI + frame * .16;
-          context.save(); context.rotate(a);
-          context.beginPath(); context.moveTo(0, -scale * .075); context.bezierCurveTo(scale * .24, -scale * .3, scale * .24, scale * .3, 0, scale * .075);
-          context.strokeStyle = 'rgba(117,106,255,.36)'; context.lineWidth = 1.3; context.shadowBlur = 12; context.shadowColor = '#795bff'; context.stroke(); context.restore();
-        }
-        context.restore();
-        // Sweeping polar beams
-        for (const direction of [-1, 1]) {
-          context.save(); context.translate(cx, cy); context.rotate(frame * 1.8);
-          const beam = context.createLinearGradient(0, 0, 0, direction * scale * .65);
-          beam.addColorStop(0, 'rgba(255,255,255,.9)'); beam.addColorStop(.12, 'rgba(120,100,255,.42)'); beam.addColorStop(1, 'rgba(112,70,255,0)');
-          context.fillStyle = beam; context.beginPath(); context.moveTo(-scale * .018, 0); context.lineTo(-scale * .12, direction * scale * .65); context.lineTo(scale * .12, direction * scale * .65); context.lineTo(scale * .018, 0); context.closePath(); context.fill(); context.restore();
-        }
-        glow(cx, cy, scale * .105, 'rgba(111,65,255,.85)');
-        const star = context.createRadialGradient(cx - scale * .025, cy - scale * .025, 0, cx, cy, scale * .075);
-        star.addColorStop(0, '#fff'); star.addColorStop(.25, '#d7c9ff'); star.addColorStop(.62, '#8255ff'); star.addColorStop(1, '#1c0b52');
-        context.fillStyle = star; context.beginPath(); context.arc(cx, cy, scale * .067, 0, Math.PI * 2); context.fill();
-        context.strokeStyle = 'rgba(225,210,255,.9)'; context.lineWidth = 2; context.shadowBlur = 25; context.shadowColor = '#a875ff'; context.stroke(); context.shadowBlur = 0;
-        for (let i = 0; i < 50; i++) {
-          const a = i * 2.4 + frame * .6, r = scale * (.09 + (i % 12) * .018);
-          context.fillStyle = 'rgba(175,140,255,.7)'; context.beginPath(); context.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 1 + (i % 2), 0, Math.PI * 2); context.fill();
-        }
-      }
+      const base = context.createLinearGradient(0, 0, width, height); base.addColorStop(0, 'rgba(5,2,13,.18)'); base.addColorStop(.5, 'rgba(20,6,37,.16)'); base.addColorStop(1, 'rgba(4,2,12,.3)'); context.fillStyle = base; context.fillRect(0, 0, width, height);
+      nebula(width * .32, height * .34, Math.max(width, height) * .42, 'rgba(102,34,171,.19)', .12);
+      nebula(width * .77, height * .7, Math.max(width, height) * .34, 'rgba(77,31,145,.17)', -.1);
+      nebula(width * .56, height * .12, Math.max(width, height) * .25, 'rgba(151,55,190,.1)', .08);
+      for (const star of stars) { const twinkle = .62 + .38 * Math.sin(time * star.speed * 12 + star.phase); const x = (star.x + time * 9 * (star.layer - .5) * .12 + width) % width; const y = (star.y - time * 5 * (star.layer - .5) * .12 + height) % height; context.globalAlpha = star.alpha * twinkle; context.fillStyle = star.layer > .93 ? '#f0d9ff' : '#d8c5ff'; context.beginPath(); context.arc(x, y, star.r, 0, Math.PI * 2); context.fill(); if (star.layer > .985) { context.globalAlpha = .16 * twinkle; context.strokeStyle = '#d9a5ff'; context.lineWidth = .7; context.beginPath(); context.moveTo(x - 5, y); context.lineTo(x + 5, y); context.moveTo(x, y - 5); context.lineTo(x, y + 5); context.stroke(); } }
+      context.globalAlpha = 1;
+      for (const p of dust) { p.x += p.vx * delta; p.y += p.vy * delta; if (p.y < -5) { p.y = height + 5; p.x = Math.random() * width; } context.globalAlpha = p.alpha; context.fillStyle = '#c58aff'; context.beginPath(); context.arc(p.x, p.y, p.r, 0, Math.PI * 2); context.fill(); } context.globalAlpha = 1;
+      if (Math.random() < .012 && meteors.length < 3) meteors.push({ x: Math.random() * width * .8 + width * .1, y: Math.random() * height * .55, vx: 7 + Math.random() * 5, vy: 2.5 + Math.random() * 2.5, life: 0, max: 38 });
+      meteors = meteors.filter((m) => m.life < m.max);
+      for (const m of meteors) { m.x += m.vx * delta; m.y += m.vy * delta; m.life += delta; const fade = Math.sin((m.life / m.max) * Math.PI); context.strokeStyle = 'rgba(238,218,255,' + (fade * .8) + ')'; context.lineWidth = 1.2; context.beginPath(); context.moveTo(m.x - m.vx * 12, m.y - m.vy * 12); context.lineTo(m.x, m.y); context.stroke(); }
       raf = window.requestAnimationFrame(draw);
     };
-    resize();
-    const observer = new ResizeObserver(resize);
-    observer.observe(canvas);
-    raf = window.requestAnimationFrame(draw);
-    return () => { window.cancelAnimationFrame(raf); observer.disconnect(); };
-  }, [scene]);
-
-  return <canvas ref={canvasRef} className="universe-canvas" aria-label={scene === 'black-hole' ? 'Animasyonlu qara dəlik' : 'Animasyonlu pulsar ulduzu'} />;
+    resize(); const observer = new ResizeObserver(resize); observer.observe(canvas);
+    const onVisibility = () => { if (!document.hidden && !raf) { last = 0; raf = window.requestAnimationFrame(draw); } };
+    document.addEventListener('visibilitychange', onVisibility); raf = window.requestAnimationFrame(draw);
+    return () => { window.cancelAnimationFrame(raf); observer.disconnect(); document.removeEventListener('visibilitychange', onVisibility); };
+  }, []);
+  return <canvas ref={canvasRef} className="universe-canvas" aria-label="Animasyonlu derin uzay yıldız alanı" />;
 }
-
 export default function UniversePage() {
-  const [scene, setScene] = useState<Scene>('black-hole');
-
   const [message, setMessage] = useState('');
-  const [sent, setSent] = useState('Merhaba! Ben XFA. Bir fikir, soru veya görev yaz; birlikte başlayalım.');
+  const [messages, setMessages] = useState<{ role: 'user' | 'model'; content: string }[]>([
+    { role: 'model', content: 'Merhaba! Ben XFA. Bir fikir, soru veya görev yaz; birlikte başlayalım.' },
+  ]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [auth, setAuth] = useState<{ loading: boolean; authenticated: boolean; csrf: string; name: string; google: boolean }>({
+    loading: true, authenticated: false, csrf: '', name: '', google: false,
+  });
+  const [stats, setStats] = useState<{ guilds: number; members: number; latency: number; ready: boolean }>({
+    guilds: 0, members: 0, latency: 0, ready: false,
+  });
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authError, setAuthError] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  async function toggleFullscreen() {
-    if (!document.fullscreenElement) {
-      await rootRef.current?.requestFullscreen?.();
+  useEffect(() => {
+    let active = true;
+    fetch('/auth/me', { credentials: 'same-origin' })
+      .then(async (response) => ({ response, data: await response.json() }))
+      .then(({ response, data }) => {
+        if (!active) return;
+        setAuth({
+          loading: false,
+          authenticated: response.ok && data.authenticated === true,
+          csrf: typeof data.csrf_token === 'string' ? data.csrf_token : '',
+          name: data.user?.name || '',
+          google: false,
+        });
+      })
+      .catch(() => { if (active) setAuth((current) => ({ ...current, loading: false })); });
+    fetch('/auth/providers', { credentials: 'same-origin' })
+      .then((response) => response.json())
+      .then((data) => { if (active) setAuth((current) => ({ ...current, google: data.google === true })); })
+      .catch(() => undefined);
+    const loadStats = () => fetch('/api/stats', { credentials: 'same-origin' })
+      .then((response) => response.json())
+      .then((data) => { if (active) setStats({ guilds: Number(data.guilds) || 0, members: Number(data.members) || 0, latency: Number(data.latency) || 0, ready: data.ready === true }); })
+      .catch(() => undefined);
+    void loadStats();
+    const timer = window.setInterval(loadStats, 30000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
 
-    } else {
-      await document.exitFullscreen();
-
+  async function submitAuth(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (authBusy) return;
+    setAuthBusy(true);
+    setAuthError('');
+    try {
+      const response = await fetch(authMode === 'register' ? '/auth/register' : '/auth/login/password', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': auth.csrf },
+        body: JSON.stringify({ email: email.trim(), password }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `Giriş başarısız (HTTP ${response.status}).`);
+      const sessionResponse = await fetch('/auth/me', { credentials: 'same-origin' });
+      const sessionData = await sessionResponse.json().catch(() => ({}));
+      if (!sessionResponse.ok || sessionData.authenticated !== true) {
+        throw new Error(sessionData.error || 'Oturum doğrulanamadı. Sayfayı yenileyip tekrar dene.');
+      }
+      setAuth({
+        loading: false,
+        authenticated: true,
+        csrf: typeof sessionData.csrf_token === 'string' ? sessionData.csrf_token : '',
+        name: sessionData.user?.name || email.split('@')[0],
+        google: auth.google,
+      });
+      setPassword('');
+      setError('');
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : 'Hesap işlemi başarısız oldu.');
+    } finally {
+      setAuthBusy(false);
     }
   }
 
+  async function logout() {
+    setAuthError('');
+    try {
+      const response = await fetch('/auth/logout', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'X-CSRF-Token': auth.csrf },
+      });
+      if (!response.ok) throw new Error('Oturum kapatılamadı. Sayfayı yenileyip tekrar dene.');
+      const sessionResponse = await fetch('/auth/me', { credentials: 'same-origin' });
+      const data = await sessionResponse.json().catch(() => ({}));
+      setAuth({
+        loading: false,
+        authenticated: false,
+        csrf: typeof data.csrf_token === 'string' ? data.csrf_token : '',
+        name: '',
+        google: auth.google,
+      });
+      setMessages([{ role: 'model', content: 'Merhaba! Ben XFA. Bir fikir, soru veya görev yaz; birlikte başlayalım.' }]);
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : 'Oturum kapatılamadı.');
+    }
+  }
+
+  async function toggleFullscreen() {
+    if (!document.fullscreenElement) await rootRef.current?.requestFullscreen?.();
+    else await document.exitFullscreen();
+  }
+
+  async function sendMessage(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
+    const content = message.trim();
+    if (!content || busy) return;
+    if (!auth.authenticated) {
+      setError('Söhbət üçün əvvəlcə XFA hesabına daxil ol.');
+      return;
+    }
+    const next = [...messages, { role: 'user' as const, content }];
+    setMessages(next);
+    setMessage('');
+    setBusy(true);
+    setError('');
+    try {
+      const response = await fetch('/xfa/api/chat', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': auth.csrf },
+        body: JSON.stringify({ messages: next.slice(-20) }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `Sohbet isteği başarısız (HTTP ${response.status}).`);
+      setMessages((current) => [...current, { role: 'model', content: data.reply || 'Şu anda yanıt oluşturamadım.' }]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'XFA bağlantısı başarısız oldu.');
+    } finally {
+      setBusy(false);
+      inputRef.current?.focus();
+    }
+  }
+
+  const quickPrompts = ['Nebulalar nasıl oluşur?', 'Bana bir Python örneği yaz', 'Yeni bir proje fikri bul', 'Bugünkü hedeflerimi planla'];
 
   return (
     <main className="universe-page" ref={rootRef}>
-      <SpaceCanvas scene={scene} />
+      <SpaceCanvas />
       <div className="universe-vignette" />
       <aside className="universe-sidebar">
         <Link href="/" className="universe-brand"><span className="universe-flower">✿</span><strong>XFA</strong><small>XYRIN FLOWER AI</small></Link>
         <div className="universe-nav-label">ÇALIŞMA ALANI</div>
-        <a className="universe-nav-item active" href="/"><MessageCircle size={16}/> Sohbet</a>
-        <a className="universe-nav-item" href="/"><Bot size={16}/> Yapay Zekâ Ajanı</a>
-        <a className="universe-nav-item" href="/"><Grid3X3 size={16}/> Çalışma Alanı</a>
-        <a className="universe-nav-item" href="/"><Search size={16}/> Web İnceleme</a>
-        <a className="universe-nav-item" href="/"><Settings size={16}/> Ayarlar</a>
-        <div className="universe-premium"><strong>👑 XFA Premium</strong><p>Gelecekte de herkes için ücretsiz kalma hedefiyle geliştiriliyor.</p><button type="button">Destek Ol ♡</button></div>
+        <a className="universe-nav-item active" href="#chat"><MessageCircle size={16}/> Sohbet</a>
+        <a className="universe-nav-item" href="#chat"><Bot size={16}/> Yapay Zekâ Ajanı</a>
+        <a className="universe-nav-item" href="/panel"><Grid3X3 size={16}/> Çalışma Alanı</a>
+        <a className="universe-nav-item" href="/panel"><Settings size={16}/> Ayarlar</a>
+        <div className="universe-premium"><strong>👑 XFA</strong><p>Herkes için ücretsiz yapay zekâ deneyimi.</p><a href="/panel">Kontrol paneli →</a></div>
         <div className="universe-sidebar-foot">© 2026 XFA.<br/>Herkes için geliştirildi. ♡</div>
       </aside>
       <header className="universe-topbar">
-        <Link href="/" className="universe-back"><ArrowLeft size={15}/> XFA'ya dön</Link>
-        <div className="universe-search"><Search size={14}/> XFA'da her şeyi ara... <kbd>Ctrl + K</kbd></div>
-        <div className="universe-status"><i/> Bağlı <span>◉</span><b>A</b> aqsin.ehsil2025x</div>
+        <Link href="/welcome" className="universe-back"><ArrowLeft size={15}/> Tanıtım sayfası</Link>
+        <button className="universe-search" type="button" onClick={() => inputRef.current?.focus()}><Search size={14}/> Mesaj yazmak için tıkla...</button>
+        <div className="universe-status"><i className={stats.ready ? '' : 'offline'}/> {auth.authenticated ? (auth.name || 'Hesabım') : 'Misafir'} <span>◉</span><b>{auth.name ? auth.name.slice(0,1).toUpperCase() : 'A'}</b>{auth.authenticated && <button type="button" className="universe-logout" onClick={logout}>Çıkış</button>}</div>
       </header>
       <section className="universe-center">
-        <div className="universe-brand-title"><h1>XFA</h1><h2>Xyrin Flower AI</h2><p>Sonsuz imkânlar. Tamamen <em>ücretsiz.</em></p><div className="universe-pills"><span>∞ Ücretsiz erişim</span><span>♢ Güvenli çalışma</span><span>ϟ Hızlı yanıt</span></div></div>
-        <div className="universe-chat">
-          <div className="universe-chat-head"><span className="universe-avatar">✿</span><div><strong>Merhaba! 👋</strong><small>XFA burada. Sana nasıl yardımcı olabilirim?</small></div></div>
-          <div className="universe-quick"><button>✦ Metin Yaz</button><button>‹/› Kod Yaz</button><button>♧ Fikir AI</button><button>⌕ Araştırma Yap</button><button>ϟ Yapay Zekâ Ajanı</button></div>
-          <div className="universe-message"><small>XFA</small>{sent}</div>
-          <div className="universe-user-message">Selam</div>
-          <form className="universe-input" onSubmit={(event) => { event.preventDefault(); if (message.trim()) { setSent(message.trim()); setMessage(''); } }}>
-            <button type="button" aria-label="Əlavə et"><Plus size={19}/></button><button type="button" aria-label="Emoji"><Smile size={18}/></button><input value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Mesajınızı yazın..." /><button className="universe-send" type="submit"><Send size={19}/></button>
+        <div className="universe-brand-title"><h1>XFA</h1><h2>Xyrin Flower AI</h2><p>Sonsuz imkânlar. Tamamen <em>ücretsiz.</em></p><div className="universe-pills"><span>∞ Ücretsiz erişim</span><span>♢ Güvenli çalışma</span><span>ϟ Canlı AI sohbeti</span></div></div>
+        <div className="universe-chat" id="chat">
+          <div className="universe-chat-head"><span className="universe-avatar">✿</span><div><strong>{auth.authenticated ? `Merhaba, ${auth.name || 'gezgin'}! 👋` : 'XFA Universe’e hoş geldin! 👋'}</strong><small>{auth.authenticated ? 'XFA hazır. Ne yapmak istersin?' : 'AI sohbetini kullanmak için hesabına giriş yap.'}</small></div></div>
+          {!auth.authenticated && !auth.loading && (
+            <form className="universe-auth" onSubmit={submitAuth}>
+              <div className="universe-auth-heading">
+                <strong>{authMode === 'login' ? 'Hesabına giriş yap' : 'Ücretsiz XFA hesabı oluştur'}</strong>
+                <span>{authMode === 'login' ? 'Sohbeti sürdürmek için giriş yap.' : 'E-posta adresinle XFA’ya katıl.'}</span>
+              </div>
+              <label className="universe-auth-label" htmlFor="xfa-email">E-posta</label>
+              <input id="xfa-email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="ornek@eposta.com" required />
+              <label className="universe-auth-label" htmlFor="xfa-password">Parola</label>
+              <input id="xfa-password" type="password" autoComplete={authMode === 'login' ? 'current-password' : 'new-password'} minLength={12} maxLength={1024} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="En az 12 karakter" required />
+              {authError && <p className="universe-error" role="alert">{authError}</p>}
+              <div className="universe-auth-actions">
+                <button className="universe-auth-submit" type="submit" disabled={authBusy || !auth.csrf}>{authBusy ? 'Bekle…' : authMode === 'login' ? 'Giriş yap' : 'Hesap oluştur'}</button>
+                <button className="universe-auth-toggle" type="button" onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthError(''); }}>{authMode === 'login' ? 'Hesap oluştur' : 'Zaten hesabım var'}</button>
+              </div>
+              {auth.google && <a className="universe-google-login" href="/auth/login/google">Google ile giriş yap <ArrowRight size={14}/></a>}
+              {!auth.csrf && <small className="universe-auth-note">Giriş hizmeti şu anda yapılandırılmamış olabilir.</small>}
+            </form>
+          )}
+          <div className="universe-quick">{quickPrompts.map((prompt) => <button key={prompt} type="button" onClick={() => { setMessage(prompt); inputRef.current?.focus(); }}>✦ {prompt}</button>)}</div>
+          <div className="universe-transcript" aria-live="polite">
+            {messages.map((item, index) => <div className={item.role === 'user' ? 'universe-user-message' : 'universe-message'} key={index}>{item.role === 'model' && <small>XFA</small>}{item.content}</div>)}
+            {busy && <div className="universe-message universe-thinking"><small>XFA</small><span className="universe-dots">Yanıt hazırlanıyor</span></div>}
+          </div>
+          {error && <p className="universe-error" role="alert">{error}</p>}
+          <form className="universe-input" onSubmit={sendMessage}>
+            <button type="button" aria-label="Mesaj alanına odaklan" onClick={() => inputRef.current?.focus()}><Plus size={19}/></button><button type="button" aria-label="Örnek istem ekle" onClick={() => setMessage('Lütfen bunu adım adım açıkla: ')}><Smile size={18}/></button><input ref={inputRef} value={message} onChange={(event) => setMessage(event.target.value)} placeholder={auth.authenticated ? 'XFA’ya mesajını yaz...' : 'Önce giriş yapmalısın...'} disabled={!auth.authenticated || busy} /><button className="universe-send" type="submit" disabled={!auth.authenticated || busy || !message.trim()} aria-label="Mesajı gönder"><Send size={19}/></button>
           </form>
         </div>
       </section>
-      <aside className="universe-right">
-        <section className="universe-stat-card"><h3>▥ &nbsp; XFA İstatistikleri</h3><div><Sparkles/><strong>1.343+<small>Discord Üyesi</small></strong></div><div><Grid3X3/><strong>3<small>Sunucu</small></strong></div><div><Zap/><strong>∞<small>Potansiyel</small></strong></div><svg viewBox="0 0 260 75" preserveAspectRatio="none"><path d="M0 65 C30 61 35 59 55 51 S82 49 100 42 S126 49 148 32 S177 35 193 22 S221 18 260 2" fill="none" stroke="#b34dff" strokeWidth="2.5"/></svg></section>
-        <section className="universe-ecosystem"><h3><Orbit size={15}/> XFA Ekosistemi <span>Beta</span></h3><p>◉ &nbsp; Discord Bot <small>● Çevrimiçi</small></p><p>◎ &nbsp; Web Platformu <small>Yakında</small></p><p>▣ &nbsp; XFA Masaüstü <small>Yakında</small></p></section>
+      <aside className="universe-right" id="status">
+        <section className="universe-stat-card"><h3>▥ &nbsp; XFA Canlı İstatistikleri</h3><div><Sparkles/><strong>{stats.members.toLocaleString('tr-TR')}<small>Discord Üyesi</small></strong></div><div><Grid3X3/><strong>{stats.guilds}<small>Sunucu</small></strong></div><div><Zap/><strong>{stats.ready ? `${stats.latency} ms` : 'Çevrimdışı'}<small>Bot gecikmesi</small></strong></div><svg viewBox="0 0 260 75" preserveAspectRatio="none"><path d="M0 65 C30 61 35 59 55 51 S82 49 100 42 S126 49 148 32 S177 35 193 22 S221 18 260 2" fill="none" stroke="#b34dff" strokeWidth="2.5"/></svg></section>
+        <section className="universe-ecosystem"><h3><Orbit size={15}/> XFA Ekosistemi <span>CANLI</span></h3><p>◉ &nbsp; Discord Bot <small>{stats.ready ? '● Çevrimiçi' : '● Çevrimdışı'}</small></p><p>◎ &nbsp; Web Platformu <small>● Çevrimiçi</small></p><p>▣ &nbsp; XFA Ajan API <small>{auth.authenticated ? '● Oturum açık' : '● Giriş gerekli'}</small></p></section>
       </aside>
-      <div className="universe-quality"><strong>4K</strong><span>4K ULTRA HD<br/><small>ADAPTİF RENDER</small></span><i/></div>
-      <div className="universe-scene-switch"><div><strong>{scene === 'black-hole' ? 'Qara Dəlik' : 'Pulsar Ulduzu'}</strong><small>Canlı kosmik simulyasiya</small></div><button className={scene === 'black-hole' ? 'selected' : ''} onClick={() => setScene('black-hole')}>Qara dəlik</button><button className={scene === 'pulsar' ? 'selected' : ''} onClick={() => setScene('pulsar')}>Pulsar</button><button className="universe-fullscreen" onClick={toggleFullscreen} aria-label="Tam ekran"><Maximize2 size={17}/></button></div>
+      <div className="universe-quality"><strong>ULTRA</strong><span>ADAPTİF YÜKSEK ÇÖZÜNÜRLÜK<br/><small>RETİNA / YÜKSEK DPI RENDER</small></span><i/></div>
+      <div className="universe-scene-switch"><div><strong>Deep Space</strong><small>Canlı yıldız ve dumanlık animasiyası</small></div><button className="universe-fullscreen" onClick={toggleFullscreen} aria-label="Tam ekran"><Maximize2 size={17}/></button></div>
       <div className="universe-live"><Activity size={13}/> CANLI ANİMASİYA</div>
     </main>
   );
