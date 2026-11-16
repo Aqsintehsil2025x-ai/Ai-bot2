@@ -24,21 +24,21 @@ PROVIDERS = {
         "base_url": "https://api.groq.com/openai/v1/chat/completions",
         "models": ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"],
         "default_model": "openai/gpt-oss-120b",
-        "note": "GroqCloud API key; free limits may apply",
+        "note": "GroqCloud API key; current models and pricing may change",
     },
     "openrouter": {
         "name": "OpenRouter", "kind": "openai",
         "base_url": "https://openrouter.ai/api/v1/chat/completions",
         "models": ["openrouter/free", "nvidia/nemotron-3-ultra:free", "nvidia/nemotron-3.5-super-vl:free"],
         "default_model": "openrouter/free",
-        "note": "One key for multiple model providers",
+        "note": "One key for multiple models; free routes are rate-limited",
     },
     "cerebras": {
         "name": "Cerebras", "kind": "openai",
         "base_url": "https://api.cerebras.ai/v1/chat/completions",
         "models": ["gpt-oss-120b", "qwen3.8-27b"],
         "default_model": "gpt-oss-120b",
-        "note": "Cerebras API key",
+        "note": "Cerebras API key; check current usage pricing and access limits",
     },
     "deepseek": {
         "name": "DeepSeek", "kind": "openai",
@@ -135,7 +135,7 @@ def generate(provider: str, api_key: str, model: str, messages: list[dict], *, t
     config = PROVIDERS[provider]
     if model not in config["models"]:
         raise ValueError("Bu sağlayıcı için desteklenmeyen model seçildi.")
-    if not isinstance(api_key, str) or not api_key.strip() or len(api_key) > 20000:
+    if not isinstance(api_key, str) or not api_key.strip() or len(api_key) > 20000 or "\\r" in api_key or "\\n" in api_key:
         raise ValueError("Geçerli bir API anahtarı gir.")
     if config["kind"] == "gemini":
         from google import genai
