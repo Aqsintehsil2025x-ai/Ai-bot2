@@ -64,7 +64,7 @@ PROVIDERS = {
     "openai": {
         "name": "OpenAI", "kind": "openai",
         "base_url": "https://api.openai.com/v1/chat/completions",
-        "models": ["gpt-4.1-mini", "gpt-4.1", "o4-mini"],
+        "models": ["gpt-4.1-mini", "gpt-4.1"],
         "default_model": "gpt-4.1-mini",
         "note": "OpenAI API key; paid usage may apply",
     },
