@@ -30,8 +30,12 @@ PROVIDERS = {
 
 def server_api_key(provider: str) -> str:
     """Return only the operator-configured credential for a supported provider."""
-    env_name = API_ENV_VARS.get(str(provider or "").strip().lower())
-    return os.getenv(env_name, "").strip() if env_name else ""
+    provider = str(provider or "").strip().lower()
+    env_name = API_ENV_VARS.get(provider)
+    value = os.getenv(env_name, "").strip() if env_name else ""
+    if provider == "gemini" and not value:
+        value = os.getenv("GOOGLE_API_KEY", "").strip()
+    return value
 
 
 def public_catalog():
