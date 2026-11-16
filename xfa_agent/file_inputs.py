@@ -22,6 +22,13 @@ IMAGE_TYPES = {
     ".jpg": ("image/jpeg", b"\xff\xd8\xff"),
     ".jpeg": ("image/jpeg", b"\xff\xd8\xff"),
 }
+AUDIO_TYPES = {
+    ".wav": ("audio/wav", lambda data: len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WAVE"),
+    ".ogg": ("audio/ogg", lambda data: data.startswith(b"OggS")),
+    ".webm": ("audio/webm", lambda data: data.startswith(b"\x1aE\xdf\xa3")),
+    ".m4a": ("audio/mp4", lambda data: len(data) >= 12 and data[4:8] == b"ftyp"),
+    ".mp3": ("audio/mpeg", lambda data: data.startswith(b"ID3") or (len(data) > 1 and data[0] == 0xFF and (data[1] & 0xE0) == 0xE0)),
+}
 OFFICE_CONTENT = {
     ".docx": "word/document.xml",
     ".pptx": "ppt/presentation.xml",
@@ -69,6 +76,11 @@ def validate_upload(filename: str, raw: bytes) -> tuple[str, str]:
         if len(raw) < 12 or raw[:4] != b"RIFF" or raw[8:12] != b"WEBP":
             raise ValueError("WebP faylının məzmunu formatı ilə uyğun gəlmir.")
         return safe_name, "image/webp"
+    if extension in AUDIO_TYPES:
+        mime, checker = AUDIO_TYPES[extension]
+        if not checker(raw):
+            raise ValueError("Audio faylının məzmunu formatı ilə uyğun gəlmir.")
+        return safe_name, mime
     if extension == ".pdf":
         if not raw.startswith(b"%PDF-"):
             raise ValueError("PDF faylının imzası düzgün deyil.")
