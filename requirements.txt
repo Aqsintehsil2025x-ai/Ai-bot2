@@ -5,3 +5,7 @@ PyNaCl>=1.5
 davey
 flask
 cryptography>=42.0
+pypdf>=5.0
+python-docx>=1.1
+python-pptx>=1.0
+openpyxl>=3.1
