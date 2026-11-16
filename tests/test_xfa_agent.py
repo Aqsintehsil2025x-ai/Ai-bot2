@@ -1,6 +1,4 @@
-import base64
 import os
-import secrets
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,7 +6,7 @@ from unittest.mock import patch
 
 from flask import Flask
 
-from xfa_agent.accounts import create_user, save_integration
+from xfa_agent.accounts import create_user
 from xfa_agent.auth import register_auth
 from xfa_agent.routes import register_xfa
 
@@ -18,27 +16,23 @@ class XFAAgentRouteTests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.old_env = {
             key: os.environ.get(key)
-            for key in ("FLASK_SECRET_KEY", "XFA_DATABASE_PATH", "XFA_COOKIE_SECURE", "XFA_TOKEN_ENCRYPTION_KEY")
+            for key in ("FLASK_SECRET_KEY", "XFA_DATABASE_PATH", "XFA_COOKIE_SECURE", "NVIDIA_API_KEY")
         }
         os.environ["FLASK_SECRET_KEY"] = "test-secret-key-for-agent-tests"
         os.environ["XFA_DATABASE_PATH"] = str(Path(self.temp_dir.name) / "xfa.sqlite3")
         os.environ["XFA_COOKIE_SECURE"] = "false"
-        os.environ["XFA_TOKEN_ENCRYPTION_KEY"] = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode("ascii")
+        os.environ["NVIDIA_API_KEY"] = "test-provider-secret"
         app = Flask(__name__)
         app.testing = True
         register_auth(app)
         register_xfa(app)
         self.client = app.test_client()
         self.user = create_user("agent@example.invalid", "agent-test-password-123")
-        save_integration(
-            self.user["id"], "ai_provider", "groq", "test-provider-secret",
-            display_name="openai/gpt-oss-120b",
-        )
         with self.client.session_transaction() as sess:
             sess["xfa_user_id"] = self.user["id"]
             sess["xfa_csrf"] = "agent-csrf"
-            sess["xfa_ai_provider"] = "groq"
-            sess["xfa_ai_model"] = "openai/gpt-oss-120b"
+            sess["xfa_ai_provider"] = "nvidia"
+            sess["xfa_ai_model"] = "meta/llama-3.3-70b-instruct"
             sess.permanent = True
 
     def tearDown(self):
@@ -71,7 +65,7 @@ class XFAAgentRouteTests(unittest.TestCase):
                 headers={"X-CSRF-Token": "agent-csrf"},
             )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json["provider"], "groq")
+        self.assertEqual(response.json["provider"], "nvidia")
         self.assertEqual(response.json["sources"][0]["url"], "https://example.com/article")
         self.assertIn("[1]", response.json["answer"])
         self.assertEqual(generate.call_count, 2)
