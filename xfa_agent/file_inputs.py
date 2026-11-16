@@ -47,7 +47,7 @@ def _safe_zip(raw: bytes, expected_member: str) -> zipfile.ZipFile:
         raise ValueError("Office faylının açılmış ölçüsü təhlükəsizlik limitini keçir.")
     for item in infos:
         path = PurePosixPath(item.filename)
-        if path.is_absolute() or ".." in path.parts or item.file_size > 8 * 1024 * 1024:
+        if path.is_absolute() or ".." in path.parts or "\\" in item.filename or ":" in item.filename or item.file_size > 8 * 1024 * 1024:
             archive.close()
             raise ValueError("Office faylında təhlükəli və ya həddindən artıq böyük arxiv elementi var.")
     names = {item.filename for item in infos}
