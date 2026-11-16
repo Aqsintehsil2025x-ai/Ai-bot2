@@ -97,6 +97,9 @@ def list_ai_providers():
     model = session.get("xfa_ai_model", "")
     if not active_item or model not in active_item["models"]:
         model = active_item["default_model"] if active_item else "gemini-2.5-flash"
+    if active_item and active in available_ids:
+        session["xfa_ai_provider"] = active
+        session["xfa_ai_model"] = model
     return jsonify({
         "catalog": catalog,
         "connected": providers,
