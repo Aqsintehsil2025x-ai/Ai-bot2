@@ -30,7 +30,10 @@ OFFICE_CONTENT = {
 
 
 def _safe_zip(raw: bytes, expected_member: str) -> zipfile.ZipFile:
-    archive = zipfile.ZipFile(io.BytesIO(raw))
+    try:
+        archive = zipfile.ZipFile(io.BytesIO(raw))
+    except zipfile.BadZipFile as exc:
+        raise ValueError("Office faylının arxiv strukturu düzgün deyil.") from exc
     infos = archive.infolist()
     if len(infos) > 300 or sum(item.file_size for item in infos) > 30 * 1024 * 1024:
         archive.close()
