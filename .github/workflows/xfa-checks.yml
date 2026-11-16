@@ -28,7 +28,7 @@ jobs:
       - name: Run unit tests
         env:
           FLASK_SECRET_KEY: ci-test-secret-key
-          XFA_TOKEN_ENCRYPTION_KEY: dGVzdC1rZXktbXVzdC1iZS0zMi1ieXRlcy1sb25nISEhISE=
+          XFA_TOKEN_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
           XFA_COOKIE_SECURE: "false"
         run: python -m unittest discover -s tests -v
 
