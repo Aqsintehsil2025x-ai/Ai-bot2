@@ -191,14 +191,13 @@ def chat():
             return jsonify({"error": "Desteklenmeyen AI sağlayıcısı."}), 400
         if not model:
             model = PROVIDERS[provider]["default_model"]
-        if provider == "gemini":
+        from xfa_agent.accounts import list_integrations, get_integration_tokens
+        connection = next((item for item in list_integrations(g.xfa_user_id)
+                           if item["provider"] == "ai_provider" and item["account_id"] == provider), None)
+        tokens = get_integration_tokens(g.xfa_user_id, connection["id"]) if connection else None
+        api_key = tokens.get("access_token") if tokens else None
+        if not api_key and provider == "gemini":
             api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-        else:
-            from xfa_agent.accounts import list_integrations, get_integration_tokens
-            connection = next((item for item in list_integrations(g.xfa_user_id)
-                               if item["provider"] == "ai_provider" and item["account_id"] == provider), None)
-            tokens = get_integration_tokens(g.xfa_user_id, connection["id"]) if connection else None
-            api_key = tokens.get("access_token") if tokens else None
         if not api_key:
             return jsonify({"error": "Bu sağlayıcı için API anahtarı eklenmemiş. Ayarlardan API anahtarı ekle."}), 400
         reply = generate(provider, api_key, model, [
