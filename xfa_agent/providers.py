@@ -135,7 +135,7 @@ def generate(provider: str, api_key: str, model: str, messages: list[dict], *, t
     config = PROVIDERS[provider]
     if model not in config["models"]:
         raise ValueError("Bu sağlayıcı için desteklenmeyen model seçildi.")
-    if not isinstance(api_key, str) or not api_key.strip() or len(api_key) > 20000 or "\\r" in api_key or "\\n" in api_key:
+    if not isinstance(api_key, str) or not api_key.strip() or len(api_key) > 20000 or chr(13) in api_key or chr(10) in api_key:
         raise ValueError("Geçerli bir API anahtarı gir.")
     if config["kind"] == "gemini":
         from google import genai
