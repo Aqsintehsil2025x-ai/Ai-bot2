@@ -111,6 +111,16 @@ class XFAAuthSmokeTests(unittest.TestCase):
         self.assertNotIn("server-nvidia-secret", body)
         self.assertNotIn("groq", body)
 
+    def test_provider_catalog_selects_nvidia_when_it_is_the_only_server_key(self):
+        self._login_test_session()
+        os.environ["NVIDIA_API_KEY"] = "server-nvidia-secret"
+        response = self.client.get("/xfa/api/providers")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json["active"], "nvidia")
+        with self.client.session_transaction() as sess:
+            self.assertEqual(sess["xfa_ai_provider"], "nvidia")
+            self.assertEqual(sess["xfa_ai_model"], "meta/llama-3.3-70b-instruct")
+
     def test_provider_selection_requires_server_secret(self):
         self._login_test_session()
         headers = {"X-CSRF-Token": "csrf-test-value"}
