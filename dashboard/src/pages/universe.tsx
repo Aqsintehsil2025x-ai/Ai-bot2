@@ -3,7 +3,7 @@ import { ArrowLeft, ArrowRight, Maximize2, Sparkles, Orbit, Activity, MessageCir
 import { Link } from 'wouter';
 import './universe.css';
 
-function SpaceCanvas() {
+function SpaceCanvas({ quality }: { quality: 'ultra' | 'balanced' | 'eco' }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -17,8 +17,10 @@ function SpaceCanvas() {
       const rect = canvas.getBoundingClientRect(); width = Math.max(1, rect.width); height = Math.max(1, rect.height);
       const pixelBudget = 6000000; dpr = Math.min(window.devicePixelRatio || 1, 2.25, Math.sqrt(pixelBudget / (width * height)));
       canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr); context.setTransform(dpr, 0, 0, dpr, 0, 0);
-      stars = Array.from({ length: Math.min(1100, Math.floor(width * height / 1250)) }, () => { const layer = Math.random(); return { x: Math.random() * width, y: Math.random() * height, r: .25 + Math.random() * (layer > .92 ? 1.65 : .8), alpha: .22 + Math.random() * .72, phase: Math.random() * Math.PI * 2, speed: .25 + Math.random() * 1.2, layer }; });
-      dust = Array.from({ length: Math.min(180, Math.floor(width * height / 9000)) }, () => ({ x: Math.random() * width, y: Math.random() * height, r: .5 + Math.random() * 1.8, vx: (Math.random() - .5) * .13, vy: -.08 - Math.random() * .18, alpha: .08 + Math.random() * .22 }));
+      const starLimit = quality === 'ultra' ? 1100 : quality === 'balanced' ? 650 : 300;
+      const density = quality === 'ultra' ? 1250 : quality === 'balanced' ? 2100 : 3800;
+      stars = Array.from({ length: Math.min(starLimit, Math.floor(width * height / density)) }, () => { const layer = Math.random(); return { x: Math.random() * width, y: Math.random() * height, r: .25 + Math.random() * (layer > .92 ? 1.65 : .8), alpha: .22 + Math.random() * .72, phase: Math.random() * Math.PI * 2, speed: .25 + Math.random() * 1.2, layer }; });
+      dust = Array.from({ length: Math.min(quality === 'ultra' ? 180 : quality === 'balanced' ? 90 : 35, Math.floor(width * height / (quality === 'ultra' ? 9000 : quality === 'balanced' ? 18000 : 36000))) }, () => ({ x: Math.random() * width, y: Math.random() * height, r: .5 + Math.random() * 1.8, vx: (Math.random() - .5) * .13, vy: -.08 - Math.random() * .18, alpha: .08 + Math.random() * .22 }));
     };
     const nebula = (x: number, y: number, radius: number, color: string, drift: number) => {
       context.save(); context.translate(x + Math.sin(time * drift) * 24, y + Math.cos(time * drift * .7) * 16);
@@ -45,7 +47,7 @@ function SpaceCanvas() {
     const onVisibility = () => { if (!document.hidden && !raf) { last = 0; raf = window.requestAnimationFrame(draw); } };
     document.addEventListener('visibilitychange', onVisibility); raf = window.requestAnimationFrame(draw);
     return () => { window.cancelAnimationFrame(raf); observer.disconnect(); document.removeEventListener('visibilitychange', onVisibility); };
-  }, []);
+  }, [quality]);
   return <canvas ref={canvasRef} className="universe-canvas" aria-label="Animasyonlu derin uzay yıldız alanı" />;
 }
 export default function UniversePage() {
@@ -62,7 +64,8 @@ export default function UniversePage() {
     guilds: 0, members: 0, latency: 0, ready: false,
   });
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
-  const [blackHoleEnabled, setBlackHoleEnabled] = useState(false);
+  const [scene, setScene] = useState<'deep-space' | 'black-hole' | 'pulsar' | 'nebula'>('deep-space');
+  const [quality, setQuality] = useState<'ultra' | 'balanced' | 'eco'>('ultra');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authBusy, setAuthBusy] = useState(false);
@@ -197,9 +200,9 @@ export default function UniversePage() {
 
   return (
     <main className="universe-page" ref={rootRef}>
-      <SpaceCanvas />
+      <SpaceCanvas quality={quality} />
       <div className="universe-vignette" />
-      {blackHoleEnabled && (
+      {scene === 'black-hole' && (
         <div className="universe-blackhole" aria-label="Animasyonlu kara delik manzarası" role="img">
           <div className="blackhole-nebula" />
           <div className="blackhole-disk blackhole-disk-back" />
@@ -209,6 +212,8 @@ export default function UniversePage() {
           <div className="blackhole-particles"><i/><i/><i/><i/><i/><i/><i/><i/></div>
         </div>
       )}
+      {scene === 'pulsar' && <div className="universe-pulsar" role="img" aria-label="Fırlanan pulsar ulduzu animasiyası"><div className="pulsar-beam pulsar-beam-a"/><div className="pulsar-beam pulsar-beam-b"/><div className="pulsar-halo"/><div className="pulsar-star"><i/><i/><i/><i/></div><div className="pulsar-rings"/></div>}
+      {scene === 'nebula' && <div className="universe-nebula-scene" aria-hidden="true"><i/><i/><i/><i/><span/></div>}
       <aside className="universe-sidebar">
         <Link href="/" className="universe-brand"><span className="universe-flower">✿</span><strong>XFA</strong><small>XYRIN FLOWER AI</small></Link>
         <div className="universe-nav-label">ÇALIŞMA ALANI</div>
@@ -262,8 +267,8 @@ export default function UniversePage() {
         <section className="universe-stat-card"><h3>▥ &nbsp; XFA Canlı İstatistikleri</h3><div><Sparkles/><strong>{stats.members.toLocaleString('tr-TR')}<small>Discord Üyesi</small></strong></div><div><Grid3X3/><strong>{stats.guilds}<small>Sunucu</small></strong></div><div><Zap/><strong>{stats.ready ? `${stats.latency} ms` : 'Çevrimdışı'}<small>Bot gecikmesi</small></strong></div><svg viewBox="0 0 260 75" preserveAspectRatio="none"><path d="M0 65 C30 61 35 59 55 51 S82 49 100 42 S126 49 148 32 S177 35 193 22 S221 18 260 2" fill="none" stroke="#b34dff" strokeWidth="2.5"/></svg></section>
         <section className="universe-ecosystem"><h3><Orbit size={15}/> XFA Ekosistemi <span>CANLI</span></h3><p>◉ &nbsp; Discord Bot <small>{stats.ready ? '● Çevrimiçi' : '● Çevrimdışı'}</small></p><p>◎ &nbsp; Web Platformu <small>● Çevrimiçi</small></p><p>▣ &nbsp; XFA Ajan API <small>{auth.authenticated ? '● Oturum açık' : '● Giriş gerekli'}</small></p></section>
       </aside>
-      <div className="universe-quality"><strong>ULTRA</strong><span>ADAPTİF YÜKSEK ÇÖZÜNÜRLÜK<br/><small>RETİNA / YÜKSEK DPI RENDER</small></span><i/></div>
-      <div className="universe-scene-switch"><div><strong>Deep Space</strong><small>Canlı yıldız ve dumanlık animasiyası</small></div><button className={blackHoleEnabled ? "universe-blackhole-toggle selected" : "universe-blackhole-toggle"} type="button" aria-pressed={blackHoleEnabled} onClick={() => setBlackHoleEnabled((enabled) => !enabled)}>{blackHoleEnabled ? "Kara delik: Açık" : "Kara delik: Kapalı"}</button><button className="universe-fullscreen" onClick={toggleFullscreen} aria-label="Tam ekran"><Maximize2 size={17}/></button></div>
+      <div className="universe-quality"><label htmlFor="universe-quality-select">GRAFİK</label><select id="universe-quality-select" value={quality} onChange={(event) => setQuality(event.target.value as 'ultra' | 'balanced' | 'eco')}><option value="ultra">Ultra</option><option value="balanced">Balanced</option><option value="eco">Eco</option></select></div>
+      <div className="universe-scene-switch"><div><strong>{scene === 'deep-space' ? 'Deep Space' : scene === 'black-hole' ? 'Black Hole' : scene === 'pulsar' ? 'Pulsar' : 'Nebula'}</strong><small>Kosmik səhnəni seç</small></div><div className="universe-scene-buttons"><button type="button" className={scene === 'deep-space' ? 'selected' : ''} aria-pressed={scene === 'deep-space'} onClick={() => setScene('deep-space')}>Deep Space</button><button type="button" className={scene === 'black-hole' ? 'selected' : ''} aria-pressed={scene === 'black-hole'} onClick={() => setScene(scene === 'black-hole' ? 'deep-space' : 'black-hole')}>Kara delik</button><button type="button" className={scene === 'pulsar' ? 'selected' : ''} aria-pressed={scene === 'pulsar'} onClick={() => setScene('pulsar')}>Pulsar</button><button type="button" className={scene === 'nebula' ? 'selected' : ''} aria-pressed={scene === 'nebula'} onClick={() => setScene('nebula')}>Nebula</button></div><button className="universe-fullscreen" onClick={toggleFullscreen} aria-label="Tam ekran"><Maximize2 size={17}/></button></div>
       <div className="universe-live"><Activity size={13}/> CANLI ANİMASİYA</div>
     </main>
   );
