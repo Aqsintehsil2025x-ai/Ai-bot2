@@ -184,6 +184,7 @@ def chat():
         if not content or len(content) > 4000:
             return jsonify({"error": "Each message must contain 1-4000 characters"}), 400
         transcript.append(("Kullanıcı" if item["role"] == "user" else "XFA") + ": " + content)
+        normalized_messages.append({"role": item["role"], "content": content})
 
     provider = str(body.get("provider") or session.get("xfa_ai_provider") or "gemini").strip().lower()
     model = str(body.get("model") or session.get("xfa_ai_model") or "").strip()
