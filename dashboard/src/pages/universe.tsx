@@ -97,6 +97,11 @@ export default function UniversePage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => () => {
+    if (recorderRef.current?.state === 'recording') recorderRef.current.stop();
+    recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+  }, []);
+
   useEffect(() => {
     let active = true;
     fetch('/auth/me', { credentials: 'same-origin' })
