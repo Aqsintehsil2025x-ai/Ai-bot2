@@ -1,5 +1,4 @@
 """Security and ownership tests for XFA account storage."""
-import base64
 import os
 import sqlite3
 import tempfile
@@ -14,10 +13,8 @@ class AccountStorageTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.db_path = str(Path(self.temp.name) / "xfa.sqlite3")
-        self.key = base64.urlsafe_b64encode(os.urandom(32)).decode("ascii")
         self.env = patch.dict(os.environ, {
             "XFA_DATABASE_PATH": self.db_path,
-            "XFA_TOKEN_ENCRYPTION_KEY": self.key,
         })
         self.env.start()
         accounts.init_db()
@@ -39,32 +36,14 @@ class AccountStorageTests(unittest.TestCase):
                              (self.alice["id"],)).fetchone()
         self.assertNotIn(b"a-long-test-password", row[0] + row[1])
 
-    def test_integrations_are_encrypted_and_user_scoped(self):
-        saved = accounts.save_integration(
-            self.alice["id"], "github", "gh-user-1", "ghp-secret-access",
-            "ghr-secret-refresh", ["repo"], "Alice GitHub",
-        )
-        self.assertEqual(accounts.get_integration_tokens(self.alice["id"], saved["id"]), {
-            "access_token": "ghp-secret-access",
-            "refresh_token": "ghr-secret-refresh",
-        })
-        self.assertIsNone(accounts.get_integration_tokens(self.bob["id"], saved["id"]))
-        self.assertEqual(accounts.list_integrations(self.bob["id"]), [])
-        self.assertNotIn("access_token", accounts.list_integrations(self.alice["id"])[0])
+    def test_legacy_personal_api_key_storage_is_removed(self):
         with sqlite3.connect(self.db_path) as db:
-            encrypted = db.execute(
-                "SELECT token_ciphertext FROM xfa_integrations WHERE id=?", (saved["id"],)
-            ).fetchone()[0]
-        self.assertNotIn(b"ghp-secret-access", encrypted)
-        self.assertNotIn(b"ghr-secret-refresh", encrypted)
-
-    def test_disconnect_cannot_delete_another_users_connection(self):
-        saved = accounts.save_integration(
-            self.alice["id"], "github", "gh-user-2", "access-token"
-        )
-        self.assertFalse(accounts.disconnect_integration(self.bob["id"], saved["id"]))
-        self.assertTrue(accounts.disconnect_integration(self.alice["id"], saved["id"]))
-        self.assertEqual(accounts.list_integrations(self.alice["id"]), [])
+            tables = {
+                row[0] for row in db.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                )
+            }
+        self.assertNotIn("xfa_integrations", tables)
 
     def test_password_length_is_enforced(self):
         with self.assertRaises(ValueError):

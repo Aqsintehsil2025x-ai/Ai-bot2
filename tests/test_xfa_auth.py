@@ -2,8 +2,6 @@ import os
 import sqlite3
 import tempfile
 import unittest
-import base64
-import secrets
 from pathlib import Path
 
 from flask import Flask
@@ -19,14 +17,14 @@ class XFAAuthSmokeTests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.old_env = {
             key: os.environ.get(key)
-            for key in ("FLASK_SECRET_KEY", "XFA_DATABASE_PATH", "XFA_COOKIE_SECURE", "XFA_TOKEN_ENCRYPTION_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY")
+            for key in ("FLASK_SECRET_KEY", "XFA_DATABASE_PATH", "XFA_COOKIE_SECURE", "GEMINI_API_KEY", "GOOGLE_API_KEY", "NVIDIA_API_KEY")
         }
         os.environ.pop("GEMINI_API_KEY", None)
         os.environ.pop("GOOGLE_API_KEY", None)
+        os.environ.pop("NVIDIA_API_KEY", None)
         os.environ["FLASK_SECRET_KEY"] = "test-secret-key-that-is-long-enough-for-tests"
         os.environ["XFA_DATABASE_PATH"] = str(Path(self.temp_dir.name) / "xfa.sqlite3")
         os.environ["XFA_COOKIE_SECURE"] = "true"
-        os.environ["XFA_TOKEN_ENCRYPTION_KEY"] = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode("ascii")
 
         app = Flask(__name__)
         app.testing = True
@@ -99,54 +97,79 @@ class XFAAuthSmokeTests(unittest.TestCase):
         # succeeds and the endpoint then reports that the planner is unavailable.
         self.assertEqual(allowed_through_csrf.status_code, 400)
 
-    def test_ai_provider_keys_are_encrypted_and_user_scoped(self):
+    def test_provider_catalog_uses_only_server_managed_gemini_and_nvidia(self):
         self._login_test_session()
-        response = self.client.post(
-            "/xfa/api/providers",
-            json={"provider": "groq", "model": "openai/gpt-oss-120b", "api_key": "secret-provider-key"},
-            headers={"X-CSRF-Token": "csrf-test-value"},
-        )
+        os.environ["GEMINI_API_KEY"] = "server-gemini-secret"
+        os.environ["NVIDIA_API_KEY"] = "server-nvidia-secret"
+        response = self.client.get("/xfa/api/providers")
         self.assertEqual(response.status_code, 200)
-        self.assertNotIn("secret-provider-key", response.get_data(as_text=True))
-        from xfa_agent.accounts import list_integrations, get_integration_tokens
-        saved = next(item for item in list_integrations(self.user["id"]) if item["provider"] == "ai_provider")
-        self.assertEqual(get_integration_tokens(self.user["id"], saved["id"])["access_token"], "secret-provider-key")
-        self.assertIsNone(get_integration_tokens("another-user-id", saved["id"]))
-        listing = self.client.get("/xfa/api/providers")
-        self.assertTrue(next(item for item in listing.json["connected"] if item["id"] == "groq")["connected"])
-        self.assertNotIn("secret-provider-key", listing.get_data(as_text=True))
+        providers = response.json["connected"]
+        self.assertEqual({item["id"] for item in providers}, {"gemini", "nvidia"})
+        self.assertTrue(all(item["connected"] for item in providers))
+        body = response.get_data(as_text=True)
+        self.assertNotIn("server-gemini-secret", body)
+        self.assertNotIn("server-nvidia-secret", body)
+        self.assertNotIn("groq", body)
 
-    def test_ai_provider_requires_csrf_and_rejects_unknown_models(self):
+    def test_google_api_key_is_supported_as_gemini_fallback(self):
         self._login_test_session()
-        denied = self.client.post(
-            "/xfa/api/providers",
-            json={"provider": "groq", "model": "openai/gpt-oss-120b", "api_key": "secret"},
-        )
-        self.assertEqual(denied.status_code, 403)
-        invalid = self.client.post(
-            "/xfa/api/providers",
-            json={"provider": "groq", "model": "not-a-real-model", "api_key": "secret"},
-            headers={"X-CSRF-Token": "csrf-test-value"},
-        )
-        self.assertEqual(invalid.status_code, 400)
+        os.environ["GOOGLE_API_KEY"] = "google-fallback-secret"
+        response = self.client.get("/xfa/api/providers")
+        self.assertEqual(response.status_code, 200)
+        gemini = next(item for item in response.json["connected"] if item["id"] == "gemini")
+        self.assertTrue(gemini["connected"])
+        self.assertNotIn("google-fallback-secret", response.get_data(as_text=True))
 
-    def test_ai_provider_can_be_selected_and_removed(self):
+    def test_provider_catalog_selects_nvidia_when_it_is_the_only_server_key(self):
+        self._login_test_session()
+        os.environ["NVIDIA_API_KEY"] = "server-nvidia-secret"
+        response = self.client.get("/xfa/api/providers")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json["active"], "nvidia")
+        with self.client.session_transaction() as sess:
+            self.assertEqual(sess["xfa_ai_provider"], "nvidia")
+            self.assertEqual(sess["xfa_ai_model"], "meta/llama-3.3-70b-instruct")
+
+    def test_provider_selection_requires_server_secret(self):
         self._login_test_session()
         headers = {"X-CSRF-Token": "csrf-test-value"}
-        self.client.post(
-            "/xfa/api/providers",
-            json={"provider": "groq", "model": "openai/gpt-oss-120b", "api_key": "secret"},
+        missing = self.client.post(
+            "/xfa/api/providers/select",
+            json={"provider": "nvidia", "model": "meta/llama-3.3-70b-instruct"},
             headers=headers,
         )
+        self.assertEqual(missing.status_code, 503)
+        os.environ["NVIDIA_API_KEY"] = "server-nvidia-secret"
         selected = self.client.post(
             "/xfa/api/providers/select",
-            json={"provider": "groq", "model": "openai/gpt-oss-120b"},
+            json={"provider": "nvidia", "model": "meta/llama-3.3-70b-instruct"},
             headers=headers,
         )
         self.assertEqual(selected.status_code, 200)
-        removed = self.client.delete("/xfa/api/providers/groq", headers=headers)
-        self.assertEqual(removed.status_code, 200)
-        self.assertFalse(next(item for item in self.client.get("/xfa/api/providers").json["connected"] if item["id"] == "groq")["connected"])
+        self.assertEqual(selected.json["provider"], "nvidia")
+
+    def test_chat_uses_server_managed_api_key(self):
+        self._login_test_session()
+        os.environ["GEMINI_API_KEY"] = "server-gemini-secret"
+        from unittest.mock import patch
+        with patch("xfa_agent.providers.generate", return_value="Hello from XFA") as generate:
+            response = self.client.post(
+                "/xfa/api/chat",
+                json={"messages": [{"role": "user", "content": "Hello"}],
+                      "provider": "gemini", "model": "gemini-2.5-flash"},
+                headers={"X-CSRF-Token": "csrf-test-value"},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json["reply"], "Hello from XFA")
+        self.assertEqual(generate.call_args.args[0:3],
+                         ("gemini", "server-gemini-secret", "gemini-2.5-flash"))
+
+    def test_personal_api_key_management_routes_are_removed(self):
+        self._login_test_session()
+        headers = {"X-CSRF-Token": "csrf-test-value"}
+        self.assertEqual(self.client.post("/xfa/api/providers", json={}, headers=headers).status_code, 405)
+        self.assertEqual(self.client.post("/xfa/api/providers/test", json={}, headers=headers).status_code, 404)
+        self.assertEqual(self.client.delete("/xfa/api/providers/groq", headers=headers).status_code, 404)
 
     def test_anonymous_auth_me_issues_csrf_token(self):
         response = self.client.get("/auth/me")

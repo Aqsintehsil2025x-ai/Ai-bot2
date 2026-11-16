@@ -66,7 +66,7 @@ This document is the implementation contract for a multi-user desktop/mobile age
 - GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET
 - DISCORD_CLIENT_ID and DISCORD_CLIENT_SECRET
 - XFA_PUBLIC_BASE_URL
-- Existing server-side GEMINI_API_KEY and DISCORD_TOKEN
-- XFA_TOKEN_ENCRYPTION_KEY only when encrypted third-party integration credentials are enabled
+- Server-managed GEMINI_API_KEY (or GOOGLE_API_KEY fallback) and NVIDIA_API_KEY for the built-in AI providers
+- Users do not enter, store, or manage personal AI provider API keys
 
 OAuth credentials must be created by the application owner in the provider consoles. Until configured, the relevant sign-in button must be shown as unavailable rather than pretending the integration works.

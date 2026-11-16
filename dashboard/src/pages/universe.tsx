@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { ArrowLeft, ArrowRight, Maximize2, Sparkles, Orbit, Activity, MessageCircle, Bot, Grid3X3, Search, Settings, Zap, Send, Plus, Smile, KeyRound, Cpu, X, CheckCircle2, Trash2, BookOpen, Paperclip, FileText, Volume2, Globe, Mic, Square } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Maximize2, Sparkles, Orbit, Activity, MessageCircle, Bot, Grid3X3, Search, Settings, Zap, Send, Plus, Smile, Cpu, X, BookOpen, Paperclip, FileText, Volume2, Globe, Mic, Square } from 'lucide-react';
 import { Link } from 'wouter';
 import './universe.css';
 
@@ -73,14 +73,7 @@ export default function UniversePage() {
   const [providerOptions, setProviderOptions] = useState<{ id: string; name: string; models: string[]; default_model: string; note: string; connected: boolean; model: string }[]>([]);
   const [activeProvider, setActiveProvider] = useState('gemini');
   const [activeModel, setActiveModel] = useState('gemini-2.5-flash');
-  const [providerModal, setProviderModal] = useState(false);
-  const [newProvider, setNewProvider] = useState('gemini');
-  const [newModel, setNewModel] = useState('gemini-2.5-flash');
-  const [newApiKey, setNewApiKey] = useState('');
-  const [providerBusy, setProviderBusy] = useState(false);
-  const [providerStatus, setProviderStatus] = useState('');
   const [providerError, setProviderError] = useState('');
-  const [serverGeminiAvailable, setServerGeminiAvailable] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [memoryItems, setMemoryItems] = useState<{ id: string; title: string; content: string; tags: string[] }[]>([]);
   const [memoryTitle, setMemoryTitle] = useState('');
@@ -134,17 +127,20 @@ export default function UniversePage() {
   async function refreshProviders() {
     const response = await fetch('/xfa/api/providers', { credentials: 'same-origin' });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error || 'AI sağlayıcıları yüklenemedi.');
+    if (!response.ok) throw new Error(data.error || 'AI modelleri yüklənə bilmədi.');
     const options = Array.isArray(data.connected) ? data.connected : [];
     setProviderOptions(options);
-    setServerGeminiAvailable(data.server_default_available === true);
-    const selected = options.find((item: { id: string }) => item.id === data.active);
-    const provider = selected ? data.active : 'gemini';
-    const model = selected ? data.model : 'gemini-2.5-flash';
-    setActiveProvider(provider);
+    const selected = options.find((item: { id: string; connected: boolean }) => item.id === data.active && item.connected)
+      || options.find((item: { connected: boolean }) => item.connected);
+    if (!selected) {
+      setProviderError('XFA serverində aktiv Gemini və ya NVIDIA modeli yoxdur.');
+      return;
+    }
+    const model = selected.id === data.active && selected.models.includes(data.model)
+      ? data.model : selected.default_model;
+    setActiveProvider(selected.id);
     setActiveModel(model);
-    setNewProvider(provider);
-    setNewModel(selected?.models?.includes(model) ? model : selected?.default_model || 'gemini-2.5-flash');
+    setProviderError('');
   }
 
   async function selectAiProvider(provider: string, model: string) {
@@ -160,56 +156,6 @@ export default function UniversePage() {
     setActiveModel(model);
   }
 
-  async function testApiProvider() {
-    setProviderBusy(true); setProviderError(''); setProviderStatus('');
-    try {
-      const response = await fetch('/xfa/api/providers/test', {
-        method: 'POST', credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': auth.csrf },
-        body: JSON.stringify({ provider: newProvider, model: newModel, api_key: newApiKey }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || 'Bağlantı testi başarısız.');
-      setProviderStatus('Bağlantı başarılı!');
-    } catch (err) {
-      setProviderError(err instanceof Error ? err.message : 'Bağlantı testi başarısız.');
-    } finally { setProviderBusy(false); }
-  }
-
-  async function saveApiProvider() {
-    setProviderBusy(true); setProviderError(''); setProviderStatus('');
-    try {
-      const response = await fetch('/xfa/api/providers', {
-        method: 'POST', credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': auth.csrf },
-        body: JSON.stringify({ provider: newProvider, model: newModel, api_key: newApiKey }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || 'API anahtarı kaydedilemedi.');
-      await refreshProviders();
-      await selectAiProvider(newProvider, newModel);
-      setNewApiKey('');
-      setProviderStatus('API anahtarı şifrelenerek kaydedildi ve model seçildi.');
-    } catch (err) {
-      setProviderError(err instanceof Error ? err.message : 'API anahtarı kaydedilemedi.');
-    } finally { setProviderBusy(false); }
-  }
-
-  async function removeApiProvider(provider: string) {
-    if (!window.confirm('Bu AI sağlayıcısının kayıtlı API anahtarını silmek istiyor musun?')) return;
-    setProviderBusy(true); setProviderError('');
-    try {
-      const response = await fetch('/xfa/api/providers/' + encodeURIComponent(provider), {
-        method: 'DELETE', credentials: 'same-origin',
-        headers: { 'X-CSRF-Token': auth.csrf },
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || 'API anahtarı silinemedi.');
-      await refreshProviders();
-    } catch (err) {
-      setProviderError(err instanceof Error ? err.message : 'API anahtarı silinemedi.');
-    } finally { setProviderBusy(false); }
-  }
 
   useEffect(() => {
     if (auth.authenticated) {
@@ -510,18 +456,19 @@ export default function UniversePage() {
             </form>
           )}
           {auth.authenticated && <div className="universe-model-controls">
-            <label><Cpu size={14}/> AI MODELİ</label>
+            <label><Cpu size={14}/> XFA MODELLERİ</label>
             <select value={activeProvider} onChange={(event) => {
               const option = providerOptions.find((item) => item.id === event.target.value);
-              const model = option?.model || option?.default_model || 'gemini-2.5-flash';
-              selectAiProvider(event.target.value, model).catch((err) => setProviderError(err instanceof Error ? err.message : 'Model seçilemedi.'));
+              if (!option?.connected) return;
+              selectAiProvider(event.target.value, option.default_model).catch((err) => setProviderError(err instanceof Error ? err.message : 'Model seçilemedi.'));
             }}>
-              {providerOptions.map((option) => <option key={option.id} value={option.id}>{option.name}{option.connected ? ' ✓' : option.id === 'gemini' && serverGeminiAvailable ? ' • Sunucu' : ' • API ekle'}</option>)}
+              {providerOptions.map((option) => <option key={option.id} value={option.id} disabled={!option.connected}>{option.name}{option.connected ? ' ✓' : ' • Sunucuda aktiv deyil'}</option>)}
             </select>
             <select value={activeModel} onChange={(event) => selectAiProvider(activeProvider, event.target.value).catch((err) => setProviderError(err instanceof Error ? err.message : 'Model seçilemedi.'))}>
               {(providerOptions.find((item) => item.id === activeProvider)?.models || [activeModel]).map((model) => <option key={model} value={model}>{model}</option>)}
             </select>
-            <button type="button" onClick={() => { setProviderModal(true); setProviderError(''); setProviderStatus(''); }}><KeyRound size={14}/> API / Modeller</button>
+            <small>XFA serverinin Gemini və NVIDIA bağlantıları</small>
+            {providerError && <p className="universe-error" role="alert">{providerError}</p>}
           </div>}
 
           {memoryOpen && auth.authenticated && <div className="universe-provider-overlay" role="dialog" aria-modal="true" aria-label="XFA yaddaşı">
@@ -543,45 +490,6 @@ export default function UniversePage() {
                   <button type="button" disabled={memoryBusy} onClick={() => removeMemory(item.id)}>Sil</button>
                 </article>)}
                 {!memoryItems.length && <p className="universe-provider-empty">Hələ yaddaş qeydi yoxdur.</p>}
-              </div>
-            </section>
-          </div>}
-          {providerModal && auth.authenticated && <div className="universe-provider-overlay" role="dialog" aria-modal="true" aria-label="AI API ayarları">
-            <section className="universe-provider-modal">
-              <header><div><strong><Cpu size={17}/> AI sağlayıcıları</strong><small>API anahtarlarını yönet ve model ekle</small></div><button type="button" aria-label="Kapat" onClick={() => setProviderModal(false)}><X size={18}/></button></header>
-              <div className="universe-provider-list">
-                {providerOptions.filter((option) => option.connected).map((option) => <div className="universe-provider-row" key={option.id}>
-                  <span><strong>{option.name}</strong><small>{option.model || option.default_model}</small></span>
-                  <button type="button" disabled={providerBusy} onClick={() => removeApiProvider(option.id)}><Trash2 size={14}/> Sil</button>
-                </div>)}
-                {!providerOptions.some((option) => option.connected) && <p className="universe-provider-empty">Henüz kişisel API anahtarı eklenmedi.</p>}
-              </div>
-              <div className="universe-provider-form">
-                <strong>Yeni API ekle</strong>
-                <label>Sağlayıcı</label>
-                <select value={newProvider} onChange={(event) => {
-                  const nextProvider = event.target.value;
-                  setNewProvider(nextProvider);
-                  const option = providerOptions.find((item) => item.id === nextProvider);
-                  setNewModel(option?.default_model || 'gemini-2.5-flash');
-                  setProviderStatus(''); setProviderError('');
-                }}>
-                  {providerOptions.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
-                </select>
-                <label>Model</label>
-                <select value={newModel} onChange={(event) => setNewModel(event.target.value)}>
-                  {(providerOptions.find((item) => item.id === newProvider)?.models || []).map((model) => <option key={model} value={model}>{model}</option>)}
-                </select>
-                <label>API key</label>
-                <input type="password" autoComplete="new-password" value={newApiKey} onChange={(event) => setNewApiKey(event.target.value)} placeholder="API anahtarını buraya yapıştır" />
-                <small className="universe-provider-note">{providerOptions.find((item) => item.id === newProvider)?.note || 'Sağlayıcı API anahtarı'} Anahtar şifrelenerek saklanır ve tekrar gösterilmez.</small>
-                {providerError && <p className="universe-error" role="alert">{providerError}</p>}
-                {providerStatus && <p className="universe-provider-success"><CheckCircle2 size={14}/>{providerStatus}</p>}
-                <div className="universe-provider-actions">
-                  <button type="button" disabled={providerBusy || !newApiKey.trim()} onClick={testApiProvider}>{providerBusy ? 'Bekle…' : 'Bağlantıyı test et'}</button>
-                  <button type="button" disabled={providerBusy || !newApiKey.trim()} onClick={saveApiProvider}>Kaydet ve kullan</button>
-                </div>
-                <p className="universe-provider-note">Not: Bağlantı testi sağlayıcıya kısa bir deneme isteği gönderir; kullanım kotası veya ücret uygulanabilir. Ücretsiz limitler sağlayıcıya göre değişir.</p>
               </div>
             </section>
           </div>}

@@ -1,74 +1,41 @@
-"""Per-user AI provider catalogue and safe API adapters for XFA."""
+"""Server-managed Gemini and NVIDIA provider adapters for XFA."""
 from __future__ import annotations
 
 import json
+import os
 import urllib.error
 import urllib.request
+
+API_ENV_VARS = {
+    "gemini": "GEMINI_API_KEY",
+    "nvidia": "NVIDIA_API_KEY",
+}
 
 PROVIDERS = {
     "gemini": {
         "name": "Google Gemini", "kind": "gemini",
         "models": ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"],
         "default_model": "gemini-2.5-flash",
-        "note": "Google AI Studio API key",
+        "note": "XFA server-managed provider",
     },
     "nvidia": {
         "name": "NVIDIA NIM", "kind": "openai",
         "base_url": "https://integrate.api.nvidia.com/v1/chat/completions",
         "models": ["meta/llama-3.3-70b-instruct", "deepseek-ai/deepseek-v4-flash", "qwen/qwen3-next-80b-a3b-instruct", "openai/gpt-oss-120b"],
         "default_model": "meta/llama-3.3-70b-instruct",
-        "note": "NVIDIA NIM API key",
-    },
-    "groq": {
-        "name": "Groq", "kind": "openai",
-        "base_url": "https://api.groq.com/openai/v1/chat/completions",
-        "models": ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"],
-        "default_model": "openai/gpt-oss-120b",
-        "note": "GroqCloud API key; current models and pricing may change",
-    },
-    "openrouter": {
-        "name": "OpenRouter", "kind": "openai",
-        "base_url": "https://openrouter.ai/api/v1/chat/completions",
-        "models": ["openrouter/free", "nvidia/nemotron-3-ultra:free", "nvidia/nemotron-3.5-super-vl:free"],
-        "default_model": "openrouter/free",
-        "note": "One key for multiple models; free routes are rate-limited",
-    },
-    "cerebras": {
-        "name": "Cerebras", "kind": "openai",
-        "base_url": "https://api.cerebras.ai/v1/chat/completions",
-        "models": ["gpt-oss-120b", "qwen3.8-27b"],
-        "default_model": "gpt-oss-120b",
-        "note": "Cerebras API key; check current usage pricing and access limits",
-    },
-    "deepseek": {
-        "name": "DeepSeek", "kind": "openai",
-        "base_url": "https://api.deepseek.com/chat/completions",
-        "models": ["deepseek-chat", "deepseek-reasoner"],
-        "default_model": "deepseek-chat",
-        "note": "DeepSeek API key",
-    },
-    "mistral": {
-        "name": "Mistral AI", "kind": "openai",
-        "base_url": "https://api.mistral.ai/v1/chat/completions",
-        "models": ["mistral-small-latest", "mistral-large-latest", "codestral-latest"],
-        "default_model": "mistral-small-latest",
-        "note": "Mistral API key",
-    },
-    "together": {
-        "name": "Together AI", "kind": "openai",
-        "base_url": "https://api.together.xyz/v1/chat/completions",
-        "models": ["meta-llama/Llama-3.3-70B-Instruct-Turbo", "Qwen/Qwen3-Next-80B-A3B-Instruct"],
-        "default_model": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
-        "note": "Together AI API key",
-    },
-    "openai": {
-        "name": "OpenAI", "kind": "openai",
-        "base_url": "https://api.openai.com/v1/chat/completions",
-        "models": ["gpt-4.1-mini", "gpt-4.1"],
-        "default_model": "gpt-4.1-mini",
-        "note": "OpenAI API key; paid usage may apply",
+        "note": "XFA server-managed provider",
     },
 }
+
+
+def server_api_key(provider: str) -> str:
+    """Return only the operator-configured credential for a supported provider."""
+    provider = str(provider or "").strip().lower()
+    env_name = API_ENV_VARS.get(provider)
+    value = os.getenv(env_name, "").strip() if env_name else ""
+    if provider == "gemini" and not value:
+        value = os.getenv("GOOGLE_API_KEY", "").strip()
+    return value
 
 
 def public_catalog():
