@@ -111,6 +111,15 @@ class XFAAuthSmokeTests(unittest.TestCase):
         self.assertNotIn("server-nvidia-secret", body)
         self.assertNotIn("groq", body)
 
+    def test_google_api_key_is_supported_as_gemini_fallback(self):
+        self._login_test_session()
+        os.environ["GOOGLE_API_KEY"] = "google-fallback-secret"
+        response = self.client.get("/xfa/api/providers")
+        self.assertEqual(response.status_code, 200)
+        gemini = next(item for item in response.json["connected"] if item["id"] == "gemini")
+        self.assertTrue(gemini["connected"])
+        self.assertNotIn("google-fallback-secret", response.get_data(as_text=True))
+
     def test_provider_catalog_selects_nvidia_when_it_is_the_only_server_key(self):
         self._login_test_session()
         os.environ["NVIDIA_API_KEY"] = "server-nvidia-secret"
