@@ -105,7 +105,7 @@ def add_ai_provider():
     from xfa_agent.providers import PROVIDERS
     if provider not in PROVIDERS or model not in PROVIDERS[provider]["models"]:
         return jsonify({"error": "Desteklenmeyen sağlayıcı veya model."}), 400
-    if not isinstance(api_key, str) or not api_key.strip() or len(api_key) > 20000 or "\\r" in api_key or "\\n" in api_key:
+    if not isinstance(api_key, str) or not api_key.strip() or len(api_key) > 20000 or chr(13) in api_key or chr(10) in api_key:
         return jsonify({"error": "Geçerli bir API anahtarı gir."}), 400
     try:
         from xfa_agent.accounts import save_integration
