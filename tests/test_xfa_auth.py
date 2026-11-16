@@ -103,7 +103,7 @@ class XFAAuthSmokeTests(unittest.TestCase):
         self._login_test_session()
         response = self.client.post(
             "/xfa/api/providers",
-            json={"provider": "groq", "model": "llama-3.3-70b-versatile", "api_key": "secret-provider-key"},
+            json={"provider": "groq", "model": "openai/gpt-oss-120b", "api_key": "secret-provider-key"},
             headers={"X-CSRF-Token": "csrf-test-value"},
         )
         self.assertEqual(response.status_code, 200)
@@ -120,7 +120,7 @@ class XFAAuthSmokeTests(unittest.TestCase):
         self._login_test_session()
         denied = self.client.post(
             "/xfa/api/providers",
-            json={"provider": "groq", "model": "llama-3.3-70b-versatile", "api_key": "secret"},
+            json={"provider": "groq", "model": "openai/gpt-oss-120b", "api_key": "secret"},
         )
         self.assertEqual(denied.status_code, 403)
         invalid = self.client.post(
@@ -135,12 +135,12 @@ class XFAAuthSmokeTests(unittest.TestCase):
         headers = {"X-CSRF-Token": "csrf-test-value"}
         self.client.post(
             "/xfa/api/providers",
-            json={"provider": "groq", "model": "llama-3.3-70b-versatile", "api_key": "secret"},
+            json={"provider": "groq", "model": "openai/gpt-oss-120b", "api_key": "secret"},
             headers=headers,
         )
         selected = self.client.post(
             "/xfa/api/providers/select",
-            json={"provider": "groq", "model": "llama-3.3-70b-versatile"},
+            json={"provider": "groq", "model": "openai/gpt-oss-120b"},
             headers=headers,
         )
         self.assertEqual(selected.status_code, 200)
