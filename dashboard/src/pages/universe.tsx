@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { ArrowLeft, ArrowRight, Maximize2, Sparkles, Orbit, Activity, MessageCircle, Bot, Grid3X3, Search, Settings, Zap, Send, Plus, Smile, KeyRound, Cpu, X, CheckCircle2, Trash2, BookOpen, Paperclip, FileText } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Maximize2, Sparkles, Orbit, Activity, MessageCircle, Bot, Grid3X3, Search, Settings, Zap, Send, Plus, Smile, KeyRound, Cpu, X, CheckCircle2, Trash2, BookOpen, Paperclip, FileText, Volume2 } from 'lucide-react';
 import { Link } from 'wouter';
 import './universe.css';
 
@@ -373,6 +373,18 @@ export default function UniversePage() {
     }
   }
 
+  function speakMessage(content: string) {
+    if (!('speechSynthesis' in window)) {
+      setError('Bu brauzer səsli oxuma funksiyasını dəstəkləmir.');
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(content);
+    utterance.lang = 'tr-TR';
+    utterance.rate = 1;
+    window.speechSynthesis.speak(utterance);
+  }
+
   const quickPrompts = ['Nebulalar nasıl oluşur?', 'Bana bir Python örneği yaz', 'Yeni bir proje fikri bul', 'Bugünkü hedeflerimi planla'];
 
   return (
@@ -507,7 +519,7 @@ export default function UniversePage() {
           </div>}
           <div className="universe-quick">{quickPrompts.map((prompt) => <button key={prompt} type="button" onClick={() => { setMessage(prompt); inputRef.current?.focus(); }}>✦ {prompt}</button>)}</div>
           <div className="universe-transcript" aria-live="polite">
-            {messages.map((item, index) => <div className={item.role === 'user' ? 'universe-user-message' : 'universe-message'} key={index}>{item.role === 'model' && <small>XFA</small>}{item.content}</div>)}
+            {messages.map((item, index) => <div className={item.role === 'user' ? 'universe-user-message' : 'universe-message'} key={index}>{item.role === 'model' && <small className="universe-message-label">XFA <button type="button" aria-label="Cavabı səsləndir" onClick={() => speakMessage(item.content)}><Volume2 size={12}/></button></small>}{item.content}</div>)}
             {busy && <div className="universe-message universe-thinking"><small>XFA</small><span className="universe-dots">Yanıt hazırlanıyor</span></div>}
           </div>
           {error && <p className="universe-error" role="alert">{error}</p>}
