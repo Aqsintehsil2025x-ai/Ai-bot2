@@ -85,7 +85,14 @@ def _openai_compatible(provider: str, api_key: str, model: str, messages: list[d
     config = PROVIDERS[provider]
     payload = {
         "model": model,
-        "messages": ([{"role": "user", "content": "Reply with OK."}] if test else messages),
+        "messages": (
+            [{"role": "user", "content": "Reply with OK."}]
+            if test else [
+                {"role": "system", "content": "You are XFA, a careful and helpful AI assistant. Reply in the user's language. Never claim actions were completed when they were not. Never ask for passwords or API keys."},
+                *[{"role": "assistant" if item["role"] == "model" else "user", "content": item["content"]}
+                  for item in messages],
+            ]
+        ),
         "max_tokens": 8 if test else 1200,
         "temperature": 0.2 if test else 0.55,
     }
