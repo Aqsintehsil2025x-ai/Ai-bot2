@@ -73,6 +73,106 @@ def health():
     })
 
 
+
+@xfa.get("/providers")
+def list_ai_providers():
+    from xfa_agent.providers import public_catalog
+    from xfa_agent.accounts import list_integrations
+    connected = {item["account_id"]: item for item in list_integrations(g.xfa_user_id)
+                 if item["provider"] == "ai_provider"}
+    catalog = public_catalog()
+    return jsonify({
+        "catalog": catalog,
+        "connected": [{"id": key, "name": value["name"], "models": value["models"],
+                       "default_model": value["default_model"], "note": value["note"],
+                       "model": connected[key]["display_name"] if key in connected else value["default_model"],
+                       "connected": key in connected}
+                      for key, value in catalog.items()],
+        "active": session.get("xfa_ai_provider", "gemini"),
+        "model": session.get("xfa_ai_model", "gemini-2.5-flash"),
+        "server_default_available": bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")),
+    })
+
+
+@xfa.post("/providers")
+def add_ai_provider():
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "Geçerli API sağlayıcı bilgileri gönderilmelidir."}), 400
+    provider = str(body.get("provider", "")).strip().lower()
+    model = str(body.get("model", "")).strip()
+    api_key = body.get("api_key")
+    from xfa_agent.providers import PROVIDERS
+    if provider not in PROVIDERS or model not in PROVIDERS[provider]["models"]:
+        return jsonify({"error": "Desteklenmeyen sağlayıcı veya model."}), 400
+    if not isinstance(api_key, str) or not api_key.strip() or len(api_key) > 20000 or chr(13) in api_key or chr(10) in api_key:
+        return jsonify({"error": "Geçerli bir API anahtarı gir."}), 400
+    try:
+        from xfa_agent.accounts import save_integration
+        save_integration(g.xfa_user_id, "ai_provider", provider, api_key.strip(), display_name=model)
+        return jsonify({"ok": True, "provider": provider, "model": model, "connected": True})
+    except RuntimeError:
+        return jsonify({"error": "API anahtarlarını güvenli saklamak için XFA_TOKEN_ENCRYPTION_KEY sunucuda yapılandırılmalı."}), 503
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@xfa.post("/providers/test")
+def test_ai_provider():
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "Geçerli test bilgileri gönderilmelidir."}), 400
+    provider = str(body.get("provider", "")).strip().lower()
+    model = str(body.get("model", "")).strip()
+    api_key = body.get("api_key")
+    try:
+        from xfa_agent.providers import generate
+        generate(provider, api_key, model, [], test=True)
+        return jsonify({"ok": True, "message": "API bağlantısı başarılı."})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        current_app.logger.warning("XFA provider test failed for %s: %s", provider, type(exc).__name__)
+        message = str(exc) if isinstance(exc, RuntimeError) else "Bağlantı testi başarısız. API anahtarını ve model erişimini kontrol et."
+        return jsonify({"error": message}), 502
+
+
+@xfa.post("/providers/select")
+def select_ai_provider():
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "Geçerli model seçimi gönderilmelidir."}), 400
+    provider = str(body.get("provider", "")).strip().lower()
+    model = str(body.get("model", "")).strip()
+    from xfa_agent.providers import PROVIDERS
+    if provider not in PROVIDERS or model not in PROVIDERS[provider]["models"]:
+        return jsonify({"error": "Geçersiz sağlayıcı veya model."}), 400
+    if provider != "gemini":
+        from xfa_agent.accounts import list_integrations
+        connected = any(item["provider"] == "ai_provider" and item["account_id"] == provider
+                        for item in list_integrations(g.xfa_user_id))
+        if not connected:
+            return jsonify({"error": "Önce bu sağlayıcının API anahtarını eklemelisin."}), 400
+    session["xfa_ai_provider"] = provider
+    session["xfa_ai_model"] = model
+    return jsonify({"ok": True, "provider": provider, "model": model})
+
+
+@xfa.delete("/providers/<provider>")
+def remove_ai_provider(provider: str):
+    from xfa_agent.accounts import list_integrations, disconnect_integration
+    matches = [item for item in list_integrations(g.xfa_user_id)
+               if item["provider"] == "ai_provider" and item["account_id"] == provider]
+    if not matches:
+        return jsonify({"error": "Kayıtlı API anahtarı bulunamadı."}), 404
+    for item in matches:
+        disconnect_integration(g.xfa_user_id, item["id"])
+    if session.get("xfa_ai_provider") == provider:
+        session["xfa_ai_provider"] = "gemini"
+        session["xfa_ai_model"] = "gemini-2.5-flash"
+    return jsonify({"ok": True})
+
+
 @xfa.post("/chat")
 def chat():
     """Short-lived multi-turn chat; conversation history is supplied by the current browser tab."""
@@ -82,6 +182,7 @@ def chat():
         return jsonify({"error": "messages must be a list containing 1-20 items"}), 400
 
     transcript = []
+    normalized_messages = []
     for item in messages:
         if not isinstance(item, dict) or not isinstance(item.get("role"), str) or item.get("role") not in {"user", "model"}:
             return jsonify({"error": "Each message must have a user or model role"}), 400
@@ -89,35 +190,32 @@ def chat():
         if not content or len(content) > 4000:
             return jsonify({"error": "Each message must contain 1-4000 characters"}), 400
         transcript.append(("Kullanıcı" if item["role"] == "user" else "XFA") + ": " + content)
+        normalized_messages.append({"role": item["role"], "content": content})
 
-    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-    if not api_key:
-        return jsonify({"error": "GEMINI_API_KEY is not configured"}), 503
-
+    provider = str(body.get("provider") or session.get("xfa_ai_provider") or "gemini").strip().lower()
+    model = str(body.get("model") or session.get("xfa_ai_model") or "").strip()
     try:
-        from google import genai
-        from google.genai import types
-        client = genai.Client(api_key=api_key)
-        model = os.getenv("XFA_MODEL", os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite"))
-        response = client.models.generate_content(
-            model=model,
-            contents="\n\n".join(transcript),
-            config=types.GenerateContentConfig(
-                system_instruction=(
-                    "Sen XFA'sın: Türkçe konuşan, yardımsever ve dikkatli bir yapay zekâ asistanısın. "
-                    "Kullanıcının dilini takip et; varsayılan dil Türkçedir. Açık, doğal ve uygulanabilir "
-                    "yanıtlar ver. Kod istendiğinde çalıştırılabilir örnekler ve kısa açıklamalar sun. "
-                    "Gerçekleştirmediğin işlemleri yapılmış gibi gösterme. Web, hesap, dosya veya dış "
-                    "dünya üzerinde etkisi olan işlemler için kullanıcı onayı gerektiğini açıkça belirt. "
-                    "Şifre, API anahtarı veya doğrulama kodu isteme."
-                ),
-                max_output_tokens=1200,
-                temperature=0.55,
-            ),
-        )
-        return jsonify({"ok": True, "reply": response.text or "Şu anda yanıt oluşturamadım."})
-    except Exception:
-        return jsonify({"error": "Sohbet isteği başarısız oldu. Sunucu günlüklerini kontrol edin."}), 502
+        from xfa_agent.providers import PROVIDERS, generate
+        if provider not in PROVIDERS:
+            return jsonify({"error": "Desteklenmeyen AI sağlayıcısı."}), 400
+        if not model:
+            model = PROVIDERS[provider]["default_model"]
+        from xfa_agent.accounts import list_integrations, get_integration_tokens
+        connection = next((item for item in list_integrations(g.xfa_user_id)
+                           if item["provider"] == "ai_provider" and item["account_id"] == provider), None)
+        tokens = get_integration_tokens(g.xfa_user_id, connection["id"]) if connection else None
+        api_key = tokens.get("access_token") if tokens else None
+        if not api_key and provider == "gemini":
+            api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        if not api_key:
+            return jsonify({"error": "Bu sağlayıcı için API anahtarı eklenmemiş. Ayarlardan API anahtarı ekle."}), 400
+        reply = generate(provider, api_key, model, normalized_messages)
+        return jsonify({"ok": True, "reply": reply or "Şu anda yanıt oluşturamadım.", "provider": provider, "model": model})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        current_app.logger.warning("XFA chat failed for provider %s: %s", provider, type(exc).__name__)
+        return jsonify({"error": "Sohbet isteği başarısız oldu. API anahtarını, modelini ve sağlayıcı limitlerini kontrol et."}), 502
 
 
 @xfa.post("/tasks/plan")

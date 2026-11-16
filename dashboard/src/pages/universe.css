@@ -330,3 +330,36 @@
 @keyframes pulsar-beam-sweep{from{transform:translateY(-50%) rotate(0deg)}to{transform:translateY(-50%) rotate(360deg)}}
 @keyframes pulsar-beam-sweep-reverse{from{transform:translateY(-50%) rotate(180deg)}to{transform:translateY(-50%) rotate(540deg)}}
 @media(max-width:760px){.pulsar-beam{left:52%;top:40%;width:46vw}}
+
+
+/* AI provider selector and encrypted API-key manager */
+.universe-model-controls{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:10px 0;padding:9px 10px;border:1px solid rgba(139,67,185,.55);border-radius:13px;background:rgba(15,7,25,.78)}
+.universe-model-controls label{display:flex;align-items:center;gap:5px;color:#d6a5ff;font-size:8px;font-weight:800;letter-spacing:.1em}
+.universe-model-controls select,.universe-provider-form select,.universe-provider-form input{min-width:0;border:1px solid #573271;border-radius:9px;background:#0b0612;color:#f0e3fa;padding:8px 10px;font:10px Inter,system-ui,sans-serif;outline:none}
+.universe-model-controls select{max-width:170px;flex:1}
+.universe-model-controls button{display:flex;align-items:center;gap:6px;border:1px solid #9b4ad0;border-radius:18px;background:linear-gradient(120deg,#67239a,#32114f);color:white;padding:8px 11px;font-size:9px;cursor:pointer}
+.universe-provider-overlay{position:fixed;inset:0;z-index:10020;display:grid;place-items:center;padding:18px;background:rgba(2,1,8,.82);backdrop-filter:blur(12px)}
+.universe-provider-modal{width:min(540px,100%);max-height:min(88vh,760px);overflow:auto;border:1px solid #9145c5;border-radius:20px;background:linear-gradient(155deg,#1b0c2b,#090510 78%);box-shadow:0 20px 90px rgba(0,0,0,.65),0 0 38px rgba(157,60,220,.2);padding:18px;color:#f4e8ff}
+.universe-provider-modal>header{display:flex;align-items:center;justify-content:space-between;margin-bottom:15px}
+.universe-provider-modal>header>div{display:flex;flex-direction:column;gap:5px}
+.universe-provider-modal>header strong{display:flex;align-items:center;gap:8px;font-size:15px}
+.universe-provider-modal>header strong svg{color:#d58aff}
+.universe-provider-modal>header small,.universe-provider-note{font-size:9px;color:#b9a3ca;line-height:1.6}
+.universe-provider-modal>header button{display:grid;place-items:center;width:34px;height:34px;border:1px solid #62347c;border-radius:50%;background:#160b23;color:#ead8f8;cursor:pointer}
+.universe-provider-list{display:grid;gap:7px;margin-bottom:17px}
+.universe-provider-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border:1px solid #422354;border-radius:11px;background:#100819}
+.universe-provider-row span{display:flex;flex-direction:column;gap:4px;min-width:0}
+.universe-provider-row strong{font-size:10px}.universe-provider-row small{font-size:9px;color:#ae91c2;overflow-wrap:anywhere}
+.universe-provider-row button{display:flex;align-items:center;gap:5px;border:1px solid #7b3d54;border-radius:16px;background:#28101d;color:#ffc0ce;padding:7px 10px;font-size:9px;cursor:pointer}
+.universe-provider-empty{font-size:10px;color:#b9a3ca;padding:10px}
+.universe-provider-form{display:grid;gap:8px;padding-top:14px;border-top:1px solid #392047}
+.universe-provider-form>strong{font-size:12px;margin-bottom:3px}
+.universe-provider-form label{font-size:9px;color:#d7b8ea;margin-top:3px}
+.universe-provider-form select,.universe-provider-form input{width:100%;padding:11px 12px;font-size:11px}
+.universe-provider-form input:focus,.universe-provider-form select:focus{border-color:#c06aff;box-shadow:0 0 0 3px rgba(177,75,255,.12)}
+.universe-provider-actions{display:flex;gap:8px;flex-wrap:wrap;margin:5px 0}
+.universe-provider-actions button{flex:1;border:1px solid #8e42c1;border-radius:20px;background:#1a0b29;color:#ead8f8;padding:10px 12px;font-size:10px;cursor:pointer}
+.universe-provider-actions button:last-child{background:linear-gradient(120deg,#a43fe4,#6516aa);color:#fff;font-weight:700}
+.universe-provider-actions button:disabled,.universe-provider-row button:disabled{opacity:.45;cursor:not-allowed}
+.universe-provider-success{display:flex;align-items:center;gap:7px;margin:3px 0;color:#8ff0c3;font-size:10px}
+@media(max-width:760px){.universe-model-controls{gap:5px;padding:7px}.universe-model-controls label{width:100%}.universe-model-controls select{max-width:none;min-width:100px;font-size:9px}.universe-model-controls button{font-size:8px;padding:8px}.universe-provider-modal{padding:14px}.universe-provider-actions{flex-direction:column}}
