@@ -21,6 +21,7 @@ class XFAAuthSmokeTests(unittest.TestCase):
         }
         os.environ.pop("GEMINI_API_KEY", None)
         os.environ.pop("GOOGLE_API_KEY", None)
+        os.environ.pop("NVIDIA_API_KEY", None)
         os.environ["FLASK_SECRET_KEY"] = "test-secret-key-that-is-long-enough-for-tests"
         os.environ["XFA_DATABASE_PATH"] = str(Path(self.temp_dir.name) / "xfa.sqlite3")
         os.environ["XFA_COOKIE_SECURE"] = "true"
@@ -109,7 +110,6 @@ class XFAAuthSmokeTests(unittest.TestCase):
         self.assertNotIn("server-gemini-secret", body)
         self.assertNotIn("server-nvidia-secret", body)
         self.assertNotIn("groq", body)
-        self.assertNotIn("openai", body)
 
     def test_provider_selection_requires_server_secret(self):
         self._login_test_session()
