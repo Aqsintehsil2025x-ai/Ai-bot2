@@ -53,7 +53,7 @@ def require_user_session():
         return jsonify({"error": "FLASK_SECRET_KEY is not configured on the server."}), 503
     user_id = session.get("xfa_user_id")
     if not user_id:
-        return jsonify({"error": "Giriş gerekli. Google hesabınla oturum aç."}), 401
+        return jsonify({"error": "Giriş gerekli. E-posta ve parolanla hesabına daxil ol."}), 401
     g.xfa_user_id = user_id
     if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
         expected = session.get("xfa_csrf")
@@ -394,6 +394,61 @@ def run_task():
         return jsonify({"error": str(exc)}), 400
     except Exception:
         return jsonify({"error": "Agent run failed. Check the server logs for details."}), 502
+
+
+@xfa.get("/memory")
+def list_user_memory():
+    from xfa_agent.memory import list_memories
+    query = request.args.get("q", "")
+    return jsonify({"ok": True, "items": list_memories(g.xfa_user_id, query)})
+
+
+@xfa.post("/memory")
+def create_user_memory():
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "Yaddaş məlumatı göndərilməlidir."}), 400
+    try:
+        from xfa_agent.memory import create_memory
+        item = create_memory(
+            g.xfa_user_id,
+            body.get("title", ""),
+            body.get("content", ""),
+            body.get("tags", []),
+        )
+        return jsonify({"ok": True, "item": item}), 201
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@xfa.put("/memory/<item_id>")
+def update_user_memory(item_id: str):
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "Yaddaş məlumatı göndərilməlidir."}), 400
+    try:
+        from xfa_agent.memory import update_memory
+        item = update_memory(
+            g.xfa_user_id,
+            item_id,
+            body.get("title", ""),
+            body.get("content", ""),
+            body.get("tags", []),
+        )
+        if item is None:
+            return jsonify({"error": "Yaddaş qeydi tapılmadı."}), 404
+        return jsonify({"ok": True, "item": item})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@xfa.delete("/memory/<item_id>")
+def delete_user_memory(item_id: str):
+    from xfa_agent.memory import delete_memory
+    if not delete_memory(g.xfa_user_id, item_id):
+        return jsonify({"error": "Yaddaş qeydi tapılmadı."}), 404
+    return jsonify({"ok": True})
+
 
 def register_xfa(app):
     if "xfa" not in app.blueprints:
