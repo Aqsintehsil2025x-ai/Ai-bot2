@@ -2,6 +2,8 @@ import os
 import sqlite3
 import tempfile
 import unittest
+import base64
+import secrets
 from pathlib import Path
 
 from flask import Flask
@@ -17,13 +19,14 @@ class XFAAuthSmokeTests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.old_env = {
             key: os.environ.get(key)
-            for key in ("FLASK_SECRET_KEY", "XFA_DATABASE_PATH", "XFA_COOKIE_SECURE", "GEMINI_API_KEY", "GOOGLE_API_KEY")
+            for key in ("FLASK_SECRET_KEY", "XFA_DATABASE_PATH", "XFA_COOKIE_SECURE", "XFA_TOKEN_ENCRYPTION_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY")
         }
         os.environ.pop("GEMINI_API_KEY", None)
         os.environ.pop("GOOGLE_API_KEY", None)
         os.environ["FLASK_SECRET_KEY"] = "test-secret-key-that-is-long-enough-for-tests"
         os.environ["XFA_DATABASE_PATH"] = str(Path(self.temp_dir.name) / "xfa.sqlite3")
         os.environ["XFA_COOKIE_SECURE"] = "true"
+        os.environ["XFA_TOKEN_ENCRYPTION_KEY"] = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode("ascii")
 
         app = Flask(__name__)
         app.testing = True
@@ -95,6 +98,55 @@ class XFAAuthSmokeTests(unittest.TestCase):
         # No model API key is configured in this test, so authentication/CSRF
         # succeeds and the endpoint then reports that the planner is unavailable.
         self.assertEqual(allowed_through_csrf.status_code, 503)
+
+    def test_ai_provider_keys_are_encrypted_and_user_scoped(self):
+        self._login_test_session()
+        response = self.client.post(
+            "/xfa/api/providers",
+            json={"provider": "groq", "model": "llama-3.3-70b-versatile", "api_key": "secret-provider-key"},
+            headers={"X-CSRF-Token": "csrf-test-value"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("secret-provider-key", response.get_data(as_text=True))
+        from xfa_agent.accounts import list_integrations, get_integration_tokens
+        saved = next(item for item in list_integrations(self.user["id"]) if item["provider"] == "ai_provider")
+        self.assertEqual(get_integration_tokens(self.user["id"], saved["id"])["access_token"], "secret-provider-key")
+        self.assertIsNone(get_integration_tokens("another-user-id", saved["id"]))
+        listing = self.client.get("/xfa/api/providers")
+        self.assertTrue(next(item for item in listing.json["connected"] if item["id"] == "groq")["connected"])
+        self.assertNotIn("secret-provider-key", listing.get_data(as_text=True))
+
+    def test_ai_provider_requires_csrf_and_rejects_unknown_models(self):
+        self._login_test_session()
+        denied = self.client.post(
+            "/xfa/api/providers",
+            json={"provider": "groq", "model": "llama-3.3-70b-versatile", "api_key": "secret"},
+        )
+        self.assertEqual(denied.status_code, 403)
+        invalid = self.client.post(
+            "/xfa/api/providers",
+            json={"provider": "groq", "model": "not-a-real-model", "api_key": "secret"},
+            headers={"X-CSRF-Token": "csrf-test-value"},
+        )
+        self.assertEqual(invalid.status_code, 400)
+
+    def test_ai_provider_can_be_selected_and_removed(self):
+        self._login_test_session()
+        headers = {"X-CSRF-Token": "csrf-test-value"}
+        self.client.post(
+            "/xfa/api/providers",
+            json={"provider": "groq", "model": "llama-3.3-70b-versatile", "api_key": "secret"},
+            headers=headers,
+        )
+        selected = self.client.post(
+            "/xfa/api/providers/select",
+            json={"provider": "groq", "model": "llama-3.3-70b-versatile"},
+            headers=headers,
+        )
+        self.assertEqual(selected.status_code, 200)
+        removed = self.client.delete("/xfa/api/providers/groq", headers=headers)
+        self.assertEqual(removed.status_code, 200)
+        self.assertFalse(next(item for item in self.client.get("/xfa/api/providers").json["connected"] if item["id"] == "groq")["connected"])
 
     def test_anonymous_auth_me_issues_csrf_token(self):
         response = self.client.get("/auth/me")
