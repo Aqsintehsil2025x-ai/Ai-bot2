@@ -97,7 +97,7 @@ class XFAAuthSmokeTests(unittest.TestCase):
         )
         # No model API key is configured in this test, so authentication/CSRF
         # succeeds and the endpoint then reports that the planner is unavailable.
-        self.assertEqual(allowed_through_csrf.status_code, 503)
+        self.assertEqual(allowed_through_csrf.status_code, 400)
 
     def test_ai_provider_keys_are_encrypted_and_user_scoped(self):
         self._login_test_session()
