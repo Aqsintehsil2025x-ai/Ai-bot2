@@ -205,7 +205,9 @@ def chat():
         try:
             from xfa_agent.web_search import search_public_web
             web_sources = search_public_web(last_user["content"], limit=5)
-        except (ValueError, RuntimeError) as exc:
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
+        except RuntimeError as exc:
             return jsonify({"error": str(exc)}), 502
         if web_sources:
             reference_text = "\\n\\n".join(
