@@ -78,7 +78,8 @@ def create_memory(user_id: str, title: str, content: str, tags=None) -> dict:
         raise ValueError("Başlıq 1-120 simvol olmalıdır.")
     if not content or len(content) > MAX_CONTENT:
         raise ValueError("Yaddaş mətni 1-6000 simvol olmalıdır.")
-    safe_tags = sorted({str(tag).strip()[:32] for tag in (tags or [])
+    tags = tags if isinstance(tags, (list, tuple)) else []
+    safe_tags = sorted({str(tag).strip()[:32] for tag in tags
                         if str(tag).strip()})[:MAX_TAGS]
     now = int(time.time())
     item_id = str(uuid.uuid4())
