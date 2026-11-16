@@ -81,7 +81,7 @@ def health():
 
 @xfa.get("/providers")
 def list_ai_providers():
-    from xfa_agent.providers import PROVIDERS, public_catalog, server_api_key
+    from xfa_agent.providers import public_catalog, server_api_key
 
     catalog = public_catalog()
     providers = []
@@ -123,7 +123,7 @@ def select_ai_provider():
     return jsonify({"ok": True, "provider": provider, "model": model})
 
 
-def _resolve_user_provider(user_id: str, provider: str = "", model: str = ""):
+def _resolve_server_provider(provider: str = "", model: str = ""):
     """Resolve a provider using only XFA operator-managed environment credentials."""
     from xfa_agent.providers import PROVIDERS, server_api_key
     provider = str(provider or session.get("xfa_ai_provider") or "gemini").strip().lower()
@@ -193,7 +193,7 @@ def chat():
     model = str(body.get("model") or session.get("xfa_ai_model") or "").strip()
     try:
         from xfa_agent.providers import generate
-        provider, model, api_key = _resolve_user_provider(g.xfa_user_id, provider, model)
+        provider, model, api_key = _resolve_server_provider(provider, model)
         from xfa_agent.memory import list_memories
         saved_items = list_memories(g.xfa_user_id)[:12]
         memory_context = "\n".join(
@@ -217,7 +217,7 @@ def plan_task():
         return jsonify({"error": "task must contain 1-2000 characters"}), 400
 
     try:
-        provider, model, api_key = _resolve_user_provider(g.xfa_user_id)
+        provider, model, api_key = _resolve_server_provider()
         from xfa_agent.providers import generate
         plan_prompt = (
             "Create a concise practical plan for this task: " + task + "\n"
@@ -410,8 +410,7 @@ def analyze_uploaded_file():
         from xfa_agent.file_inputs import MAX_UPLOAD_BYTES, extract_text, validate_upload
         raw = uploaded.stream.read(MAX_UPLOAD_BYTES + 1)
         filename, mime = validate_upload(uploaded.filename, raw)
-        provider, model, api_key = _resolve_user_provider(
-            g.xfa_user_id,
+        provider, model, api_key = _resolve_server_provider(
             request.form.get("provider", ""),
             request.form.get("model", ""),
         )
