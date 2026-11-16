@@ -89,6 +89,7 @@ export default function UniversePage() {
   const [memoryError, setMemoryError] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const [agentMode, setAgentMode] = useState(false);
   const [recording, setRecording] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const recordingStreamRef = useRef<MediaStream | null>(null);
@@ -366,14 +367,20 @@ export default function UniversePage() {
               body: form,
             });
           })()
-        : await fetch('/xfa/api/chat', {
-            method: 'POST', credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': auth.csrf },
-            body: JSON.stringify({ messages: next.slice(-20), provider: activeProvider, model: activeModel, web_search: webSearchEnabled }),
-          });
+        : agentMode
+          ? await fetch('/xfa/api/tasks/run', {
+              method: 'POST', credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': auth.csrf },
+              body: JSON.stringify({ task: content }),
+            })
+          : await fetch('/xfa/api/chat', {
+              method: 'POST', credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': auth.csrf },
+              body: JSON.stringify({ messages: next.slice(-20), provider: activeProvider, model: activeModel, web_search: webSearchEnabled }),
+            });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || `XFA sorğusu uğursuz oldu (HTTP ${response.status}).`);
-      setMessages((current) => [...current, { role: 'model', content: data.reply || 'Şu anda yanıt oluşturamadım.', sources: Array.isArray(data.sources) ? data.sources : [] }]);
+      setMessages((current) => [...current, { role: 'model', content: data.reply || data.answer || 'Şu anda yanıt oluşturamadım.', sources: Array.isArray(data.sources) ? data.sources : [] }]);
       if (attachment) setSelectedFile(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'XFA bağlantısı başarısız oldu.');
@@ -587,7 +594,7 @@ export default function UniversePage() {
           {selectedFile && <div className="universe-attachment-strip"><FileText size={15}/><span>{selectedFile.name}<small>{(selectedFile.size / 1024).toFixed(0)} KB</small></span><button type="button" aria-label="Faylı sil" onClick={() => setSelectedFile(null)}><X size={14}/></button></div>}
           <form className="universe-input" onSubmit={sendMessage}>
             <input ref={fileInputRef} type="file" hidden accept=".png,.jpg,.jpeg,.webp,.mp3,.wav,.ogg,.webm,.m4a,.pdf,.docx,.pptx,.xlsx,.csv,.txt,.md,.py,.js,.jsx,.ts,.tsx,.css,.json,.yaml,.yml,.toml,.sql,.sh,.java,.c,.cpp,.h,.go,.rs,.rb,.php,.xml,.log" onChange={(event) => { const file = event.target.files?.[0] || null; setSelectedFile(file); if (file) setError(''); event.currentTarget.value = ''; }} />
-            <button type="button" aria-label="Fayl əlavə et" disabled={!auth.authenticated || busy || recording} onClick={() => fileInputRef.current?.click()}><Paperclip size={18}/></button>{recording ? <button type="button" className="universe-recording" aria-label="Səs yazısını dayandır" onClick={stopVoiceRecording}><Square size={15}/></button> : <button type="button" aria-label="Səs yazmağa başla" disabled={!auth.authenticated || busy || !!selectedFile} onClick={startVoiceRecording}><Mic size={17}/></button>}<button type="button" className={webSearchEnabled ? 'universe-web-toggle active' : 'universe-web-toggle'} aria-label="İnternet axtarışını aktivləşdir" aria-pressed={webSearchEnabled} disabled={!auth.authenticated || busy || !!selectedFile} onClick={() => setWebSearchEnabled((value) => !value)}><Globe size={16}/></button><button type="button" aria-label="Nümunə istək əlavə et" onClick={() => setMessage('Lütfən bunu addım-addım izah et: ')}><Smile size={18}/></button><input ref={inputRef} value={message} onChange={(event) => setMessage(event.target.value)} placeholder={auth.authenticated ? 'XFA’ya mesajını yaz...' : 'Önce giriş yapmalısın...'} disabled={!auth.authenticated || busy} /><button className="universe-send" type="submit" disabled={!auth.authenticated || busy || (!message.trim() && !selectedFile)} aria-label="Mesajı göndər"><Send size={19}/></button>
+            <button type="button" aria-label="Fayl əlavə et" disabled={!auth.authenticated || busy || recording} onClick={() => fileInputRef.current?.click()}><Paperclip size={18}/></button>{recording ? <button type="button" className="universe-recording" aria-label="Səs yazısını dayandır" onClick={stopVoiceRecording}><Square size={15}/></button> : <button type="button" aria-label="Səs yazmağa başla" disabled={!auth.authenticated || busy || !!selectedFile} onClick={startVoiceRecording}><Mic size={17}/></button>}<button type="button" className={agentMode ? 'universe-agent-toggle active' : 'universe-agent-toggle'} aria-label="Araşdırma agentini aktivləşdir" aria-pressed={agentMode} disabled={!auth.authenticated || busy || !!selectedFile} onClick={() => { setAgentMode((value) => !value); setWebSearchEnabled(false); }}><Bot size={16}/></button><button type="button" className={webSearchEnabled ? 'universe-web-toggle active' : 'universe-web-toggle'} aria-label="İnternet axtarışını aktivləşdir" aria-pressed={webSearchEnabled} disabled={!auth.authenticated || busy || !!selectedFile || agentMode} onClick={() => setWebSearchEnabled((value) => !value)}><Globe size={16}/></button><button type="button" aria-label="Nümunə istək əlavə et" onClick={() => setMessage('Lütfən bunu addım-addım izah et: ')}><Smile size={18}/></button><input ref={inputRef} value={message} onChange={(event) => setMessage(event.target.value)} placeholder={auth.authenticated ? 'XFA’ya mesajını yaz...' : 'Önce giriş yapmalısın...'} disabled={!auth.authenticated || busy} /><button className="universe-send" type="submit" disabled={!auth.authenticated || busy || (!message.trim() && !selectedFile)} aria-label="Mesajı göndər"><Send size={19}/></button>
           </form>
         </div>
       </section>
