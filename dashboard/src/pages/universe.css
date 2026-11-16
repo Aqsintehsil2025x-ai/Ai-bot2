@@ -392,3 +392,6 @@
 .universe-source-list{display:grid;gap:5px;margin-top:10px;padding-top:8px;border-top:1px solid #3b234c}
 .universe-source-list strong{font-size:9px;color:#cfa4f0}
 .universe-source-list a{font-size:9px;color:#c9a5eb;text-decoration:underline;overflow-wrap:anywhere}
+
+.universe-input .universe-recording{border:1px solid #ff718b;border-radius:50%;background:#64182a;color:#fff;box-shadow:0 0 14px #ff527766;animation:universe-record-pulse 1.2s ease-in-out infinite}
+@keyframes universe-record-pulse{0%,100%{box-shadow:0 0 7px #ff527744}50%{box-shadow:0 0 18px #ff5277aa}}
