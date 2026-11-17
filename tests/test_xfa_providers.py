@@ -52,7 +52,7 @@ class XFAProviderConfigTests(unittest.TestCase):
             {"role": "user", "content": "İkinci hissə"},
             {"role": "model", "content": "Cavab"},
         ])
-        self.assertEqual(messages, [{"role": "user", "content": "Birinci hissə\\n\\nİkinci hissə"}])
+        self.assertEqual(messages, [{"role": "user", "content": "Birinci hissə\n\nİkinci hissə"}])
 
     def test_nvidia_history_requires_a_user_message(self):
         with self.assertRaises(ValueError):
