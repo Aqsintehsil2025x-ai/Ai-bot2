@@ -5,7 +5,6 @@ import unittest
 from pathlib import Path
 
 from flask import Flask
-from itsdangerous import URLSafeTimedSerializer
 
 from xfa_agent.auth import register_auth
 from xfa_agent.routes import register_xfa
@@ -50,7 +49,7 @@ class XFAAuthSmokeTests(unittest.TestCase):
             sess["xfa_csrf"] = "csrf-test-value"
             sess.permanent = True
 
-    def test_oauth_provider_readiness_does_not_expose_secrets(self):
+    def test_auth_provider_readiness_does_not_expose_secrets(self):
         response = self.client.get("/auth/providers")
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json["session_ready"])
@@ -66,22 +65,20 @@ class XFAAuthSmokeTests(unittest.TestCase):
         response = self.client.get("/auth/login/discord")
         self.assertEqual(response.status_code, 404)
 
-    def test_session_cookie_is_opaque_and_server_side(self):
+    def test_session_uses_flask_signed_secure_cookie_without_session_database(self):
         self._login_test_session()
         cookie = self.client.get_cookie("xfa_session")
         self.assertIsNotNone(cookie)
         self.assertTrue(cookie.http_only)
         self.assertTrue(cookie.secure)
         self.assertEqual(cookie.same_site, "Lax")
-        sid = URLSafeTimedSerializer(
-            self.app.secret_key, salt="xfa-server-session-v1"
-        ).loads(cookie.value)
+        serializer = self.app.session_interface.get_signing_serializer(self.app)
+        payload = serializer.loads(cookie.value)
+        self.assertEqual(payload["xfa_user_id"], self.user["id"])
         db_path = Path(self.temp_dir.name) / "xfa.sqlite3"
         with sqlite3.connect(db_path) as db:
-            row = db.execute("SELECT data FROM xfa_sessions WHERE sid=?", (sid,)).fetchone()
-        self.assertIsNotNone(row)
-        self.assertIn(self.user["id"], row[0])
-        self.assertNotIn(self.user["id"], cookie.value)
+            tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        self.assertNotIn("xfa_sessions", tables)
         self.assertEqual(self.client.get("/xfa/api/health").status_code, 200)
 
     def test_api_post_requires_csrf_header(self):
