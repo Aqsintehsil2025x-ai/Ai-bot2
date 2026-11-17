@@ -432,3 +432,60 @@
  .universe-page::before,.universe-page::after,.universe-brand-title h1,.universe-flower,.universe-logo-flower,.universe-chat,.universe-status i:not(.offline),.universe-message,.universe-user-message{animation:none!important}
  .universe-quick button,.universe-nav-item,.universe-fullscreen,.universe-model-controls select,.universe-input button[type=submit],.universe-stat-card{transition:none!important}
 }
+
+
+/* XFA dashboard refinement: clearer hierarchy, accessible focus, calmer motion */
+.universe-page{isolation:isolate}
+.universe-sidebar,.universe-chat,.universe-stat-card,.universe-ecosystem{border-color:rgba(183,111,235,.42)}
+.universe-nav-item:focus-visible,.universe-quick button:focus-visible,.universe-scene-switch button:focus-visible,
+.universe-input button:focus-visible,.universe-input input:focus-visible,.universe-auth button:focus-visible,
+.universe-auth input:focus-visible,.universe-logout:focus-visible{outline:2px solid #e4b6ff;outline-offset:3px}
+.universe-transcript{overscroll-behavior:contain;scroll-behavior:smooth;padding-right:5px}
+.universe-transcript::-webkit-scrollbar{width:6px}
+.universe-transcript::-webkit-scrollbar-thumb{background:rgba(180,102,226,.55);border-radius:9px}
+.universe-message,.universe-user-message{animation:universe-message-in .28s ease both}
+@keyframes universe-message-in{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
+.universe-input{transition:border-color .2s ease,box-shadow .2s ease}
+.universe-input:focus-within{border-color:#c477ff;box-shadow:0 0 0 3px rgba(174,82,239,.13),0 0 24px rgba(146,56,211,.15)}
+.universe-input .universe-send{transition:transform .2s ease,filter .2s ease}
+.universe-input .universe-send:not(:disabled):hover{transform:translateY(-2px) scale(1.04);filter:brightness(1.12)}
+.universe-auth-submit:not(:disabled):hover,.universe-auth-toggle:hover{filter:brightness(1.15);transform:translateY(-1px)}
+.universe-auth-submit,.universe-auth-toggle{transition:transform .2s ease,filter .2s ease}
+.universe-scene-switch{max-width:min(680px,calc(100vw - 36px))}
+.universe-scene-buttons{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.universe-quality select{max-width:100px}
+.universe-status{min-width:0}
+.universe-status button{flex:0 0 auto}
+@media(max-width:1050px){
+  .universe-center{gap:16px}
+  .universe-right{gap:10px}
+  .universe-stat-card,.universe-ecosystem{padding:13px}
+  .universe-scene-switch{right:10px}
+}
+@media(max-width:760px){
+  .universe-topbar{height:40px}
+  .universe-center{top:62px;bottom:78px;gap:10px}
+  .universe-brand-title h1{font-size:clamp(42px,13vw,58px)}
+  .universe-brand-title h2{margin:6px 0 8px}
+  .universe-chat{min-height:0}
+  .universe-chat-head{gap:9px}
+  .universe-avatar{width:39px;height:39px;font-size:23px}
+  .universe-quick{max-height:68px;overflow:auto;padding:2px 1px}
+  .universe-quick button{white-space:nowrap}
+  .universe-scene-switch{left:10px;right:10px;bottom:9px;justify-content:space-between}
+  .universe-scene-buttons{flex:1;justify-content:flex-end}
+  .universe-scene-switch button{padding:7px 9px}
+  .universe-quality{bottom:58px;left:10px}
+}
+@media(max-width:420px){
+  .universe-scene-switch{gap:3px;padding:5px}
+  .universe-scene-switch button{font-size:7px;padding:7px}
+  .universe-fullscreen{width:29px;height:29px}
+  .universe-quality{padding:6px 8px}
+  .universe-quality strong{font-size:14px}
+}
+@media(prefers-reduced-motion:reduce){
+  .universe-message,.universe-user-message{animation:none!important}
+  .universe-transcript{scroll-behavior:auto}
+  .universe-input,.universe-input .universe-send,.universe-auth-submit,.universe-auth-toggle{transition:none}
+}
