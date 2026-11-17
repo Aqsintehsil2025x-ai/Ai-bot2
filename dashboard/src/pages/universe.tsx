@@ -427,7 +427,7 @@ export default function UniversePage() {
       <header className="universe-topbar">
         <Link href="/welcome" className="universe-back"><ArrowLeft size={15}/> Tanıtım sayfası</Link>
         <button className="universe-search" type="button" onClick={() => inputRef.current?.focus()}><Search size={14}/> Mesaj yazmak için tıkla...</button>
-        <div className="universe-status"><i className={stats.ready ? '' : 'offline'}/> {auth.authenticated ? (auth.name || 'Hesabım') : 'Misafir'} <span>◉</span><b>{auth.name ? auth.name.slice(0,1).toUpperCase() : 'A'}</b>{auth.authenticated && <button type="button" className="universe-logout" onClick={logout}>Çıkış Yap Yap</button>}</div>
+        <div className="universe-status"><i className={stats.ready ? '' : 'offline'}/> {auth.authenticated ? (auth.name || 'Hesabım') : 'Misafir'} <span>◉</span><b>{auth.name ? auth.name.slice(0,1).toUpperCase() : 'A'}</b>{auth.authenticated && <button type="button" className="universe-logout" onClick={logout}>Çıkış Yap</button>}</div>
       </header>
       <section className="universe-center">
         <div className="universe-brand-title"><h1>XFA</h1><h2>Xyrin Flower AI</h2><p>Sonsuz olanaklar. Tamamen <em>ücretsiz.</em></p><div className="universe-pills"><span>∞ Ücretsiz erişim</span><span>♢ Güvenli çalışma</span><span>ϟ Canlı yapay zekâ sohbeti</span></div></div>
@@ -437,7 +437,7 @@ export default function UniversePage() {
             <form className="universe-auth" onSubmit={submitAuth}>
               <div className="universe-auth-heading">
                 <strong>{authMode === 'login' ? 'Hesabına giriş yap' : 'Ücretsiz XFA hesabı oluştur'}</strong>
-                <span>{authMode === 'login' ? 'Sohbete devam etmek için giriş yap.' : 'E-posta adresinle XFA'ya katıl.'}</span>
+                <span>{authMode === 'login' ? 'Sohbete devam etmek için giriş yap.' : 'E-posta adresinle XFA’ya katıl.'}</span>
               </div>
               <label className="universe-auth-label" htmlFor="xfa-email">E-posta</label>
               <input id="xfa-email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="ornek@eposta.com" required />
@@ -445,7 +445,7 @@ export default function UniversePage() {
               <input id="xfa-password" type="password" autoComplete={authMode === 'login' ? 'current-password' : 'new-password'} minLength={12} maxLength={1024} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="En az 12 karakter" required />
               {authError && <p className="universe-error" role="alert">{authError}</p>}
               <div className="universe-auth-actions">
-                <button className="universe-auth-submit" type="submit" disabled={authBusy || !auth.csrf}>{authBusy ? 'Bekleyin…' : authMode === 'login' ? 'Giriş Yap yap' : 'Hesap oluştur'}</button>
+                <button className="universe-auth-submit" type="submit" disabled={authBusy || !auth.csrf}>{authBusy ? 'Bekleyin…' : authMode === 'login' ? 'Giriş Yap' : 'Hesap oluştur'}</button>
                 <button className="universe-auth-toggle" type="button" onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthError(''); }}>{authMode === 'login' ? 'Hesap oluştur' : 'Zaten hesabım var'}</button>
               </div>
               {auth.google && <a className="universe-google-login" href="/auth/login/google">Google ile giriş yap <ArrowRight size={14}/></a>}
