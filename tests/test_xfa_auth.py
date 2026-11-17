@@ -153,13 +153,13 @@ class XFAAuthSmokeTests(unittest.TestCase):
             response = self.client.post(
                 "/xfa/api/chat",
                 json={"messages": [{"role": "user", "content": "Hello"}],
-                      "provider": "gemini", "model": "gemini-2.5-flash"},
+                      "provider": "gemini", "model": "gemini-3.8-flash"},
                 headers={"X-CSRF-Token": "csrf-test-value"},
             )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json["reply"], "Hello from XFA")
         self.assertEqual(generate.call_args.args[0:3],
-                         ("gemini", "server-gemini-secret", "gemini-2.5-flash"))
+                         ("gemini", "server-gemini-secret", "gemini-3.8-flash"))
 
     def test_personal_api_key_management_routes_are_removed(self):
         self._login_test_session()
