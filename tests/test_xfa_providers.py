@@ -8,6 +8,7 @@ from xfa_agent.providers import (
     _status_code,
     public_catalog,
     server_api_key,
+    _normalize_openai_messages,
 )
 
 
@@ -27,6 +28,37 @@ class XFAProviderConfigTests(unittest.TestCase):
             PROVIDERS["nvidia"]["default_model"],
             PROVIDERS["nvidia"]["models"],
         )
+
+    def test_nvidia_history_drops_display_only_leading_greeting(self):
+        messages = _normalize_openai_messages([
+            {"role": "model", "content": "Merhaba! Ben XFA."},
+            {"role": "user", "content": "Salam"},
+            {"role": "model", "content": "Salam!"},
+            {"role": "user", "content": "Necəsən?"},
+        ])
+        self.assertEqual(
+            messages,
+            [
+                {"role": "user", "content": "Salam"},
+                {"role": "assistant", "content": "Salam!"},
+                {"role": "user", "content": "Necəsən?"},
+            ],
+        )
+
+    def test_nvidia_history_merges_repeated_roles_and_ends_with_user(self):
+        messages = _normalize_openai_messages([
+            {"role": "model", "content": "Display greeting"},
+            {"role": "user", "content": "Birinci hissə"},
+            {"role": "user", "content": "İkinci hissə"},
+            {"role": "model", "content": "Cavab"},
+        ])
+        self.assertEqual(messages, [{"role": "user", "content": "Birinci hissə\n\nİkinci hissə"}])
+
+    def test_nvidia_history_requires_a_user_message(self):
+        with self.assertRaises(ValueError):
+            _normalize_openai_messages([
+                {"role": "model", "content": "Only greeting"},
+            ])
 
     def test_public_catalog_does_not_expose_credentials(self):
         catalog = public_catalog()
