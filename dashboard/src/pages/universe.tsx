@@ -64,7 +64,7 @@ export default function UniversePage() {
     guilds: 0, members: 0, latency: 0, ready: false,
   });
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
-  const [scene, setScene] = useState<'deep-space' | 'black-hole' | 'pulsar' | 'nebula'>('deep-space');
+  const [scene, setScene] = useState<'deep-space' | 'pulsar' | 'nebula'>('deep-space');
   const [quality, setQuality] = useState<'ultra' | 'balanced' | 'eco'>('ultra');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -89,12 +89,19 @@ export default function UniversePage() {
   const audioChunksRef = useRef<Blob[]>([]);
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const transcriptRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => () => {
     if (recorderRef.current?.state === 'recording') recorderRef.current.stop();
     recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
   }, []);
+
+  useEffect(() => {
+    const transcript = transcriptRef.current;
+    if (transcript) transcript.scrollTo({ top: transcript.scrollHeight, behavior: 'smooth' });
+  }, [messages, busy]);
 
   useEffect(() => {
     let active = true;
@@ -405,16 +412,6 @@ export default function UniversePage() {
     <main className="universe-page" ref={rootRef}>
       <SpaceCanvas quality={quality} />
       <div className="universe-vignette" />
-      {scene === 'black-hole' && (
-        <div className="universe-blackhole" aria-label="Animasyonlu kara delik manzarası" role="img">
-          <div className="blackhole-nebula" />
-          <div className="blackhole-disk blackhole-disk-back" />
-          <div className="blackhole-lensing" />
-          <div className="blackhole-core"><span /></div>
-          <div className="blackhole-disk blackhole-disk-front" />
-          <div className="blackhole-particles"><i/><i/><i/><i/><i/><i/><i/><i/></div>
-        </div>
-      )}
       {scene === 'pulsar' && <div className="universe-pulsar" role="img" aria-label="Fırlanan pulsar ulduzu animasiyası"><div className="pulsar-beam pulsar-beam-a"/><div className="pulsar-beam pulsar-beam-b"/><div className="pulsar-halo"/><div className="pulsar-star"><i/><i/><i/><i/></div><div className="pulsar-rings"/></div>}
       {scene === 'nebula' && <div className="universe-nebula-scene" aria-hidden="true"><i/><i/><i/><i/><span/></div>}
       <aside className="universe-sidebar">
@@ -494,7 +491,7 @@ export default function UniversePage() {
             </section>
           </div>}
           <div className="universe-quick">{quickPrompts.map((prompt) => <button key={prompt} type="button" onClick={() => { setMessage(prompt); inputRef.current?.focus(); }}>✦ {prompt}</button>)}</div>
-          <div className="universe-transcript" aria-live="polite">
+          <div className="universe-transcript" ref={transcriptRef} aria-live="polite">
             {messages.map((item, index) => <div className={item.role === 'user' ? 'universe-user-message' : 'universe-message'} key={index}>{item.role === 'model' && <small className="universe-message-label">XFA <button type="button" aria-label="Cavabı səsləndir" onClick={() => speakMessage(item.content)}><Volume2 size={12}/></button></small>}{item.content}{item.role === 'model' && !!item.sources?.length && <div className="universe-source-list"><strong>Mənbələr</strong>{item.sources.map((source, sourceIndex) => <a key={source.url} href={source.url} target="_blank" rel="noopener noreferrer">[{sourceIndex + 1}] {source.title}</a>)}</div>}</div>)}
             {busy && <div className="universe-message universe-thinking"><small>XFA</small><span className="universe-dots">Yanıt hazırlanıyor</span></div>}
           </div>
@@ -511,7 +508,7 @@ export default function UniversePage() {
         <section className="universe-ecosystem"><h3><Orbit size={15}/> XFA Ekosistemi <span>CANLI</span></h3><p>◉ &nbsp; Discord Bot <small>{stats.ready ? '● Çevrimiçi' : '● Çevrimdışı'}</small></p><p>◎ &nbsp; Web Platformu <small>● Çevrimiçi</small></p><p>▣ &nbsp; XFA Ajan API <small>{auth.authenticated ? '● Oturum açık' : '● Giriş gerekli'}</small></p></section>
       </aside>
       <div className="universe-quality"><label htmlFor="universe-quality-select">GRAFİK</label><select id="universe-quality-select" value={quality} onChange={(event) => setQuality(event.target.value as 'ultra' | 'balanced' | 'eco')}><option value="ultra">Ultra</option><option value="balanced">Balanced</option><option value="eco">Eco</option></select></div>
-      <div className="universe-scene-switch"><div><strong>{scene === 'deep-space' ? 'Deep Space' : scene === 'black-hole' ? 'Black Hole' : scene === 'pulsar' ? 'Pulsar' : 'Nebula'}</strong><small>Kosmik səhnəni seç</small></div><div className="universe-scene-buttons"><button type="button" className={scene === 'deep-space' ? 'selected' : ''} aria-pressed={scene === 'deep-space'} onClick={() => setScene('deep-space')}>Deep Space</button><button type="button" className={scene === 'black-hole' ? 'selected' : ''} aria-pressed={scene === 'black-hole'} onClick={() => setScene(scene === 'black-hole' ? 'deep-space' : 'black-hole')}>Kara delik</button><button type="button" className={scene === 'pulsar' ? 'selected' : ''} aria-pressed={scene === 'pulsar'} onClick={() => setScene('pulsar')}>Pulsar</button><button type="button" className={scene === 'nebula' ? 'selected' : ''} aria-pressed={scene === 'nebula'} onClick={() => setScene('nebula')}>Nebula</button></div><button className="universe-fullscreen" onClick={toggleFullscreen} aria-label="Tam ekran"><Maximize2 size={17}/></button></div>
+      <div className="universe-scene-switch"><div><strong>{scene === 'deep-space' ? 'Deep Space' : scene === 'pulsar' ? 'Pulsar' : 'Nebula'}</strong><small>Kosmik səhnəni seç</small></div><div className="universe-scene-buttons"><button type="button" className={scene === 'deep-space' ? 'selected' : ''} aria-pressed={scene === 'deep-space'} onClick={() => setScene('deep-space')}>Deep Space</button><button type="button" className={scene === 'pulsar' ? 'selected' : ''} aria-pressed={scene === 'pulsar'} onClick={() => setScene('pulsar')}>Pulsar</button><button type="button" className={scene === 'nebula' ? 'selected' : ''} aria-pressed={scene === 'nebula'} onClick={() => setScene('nebula')}>Nebula</button></div><button className="universe-fullscreen" onClick={toggleFullscreen} aria-label="Tam ekran"><Maximize2 size={17}/></button></div>
       <div className="universe-live"><Activity size={13}/> CANLI ANİMASİYA</div>
     </main>
   );
