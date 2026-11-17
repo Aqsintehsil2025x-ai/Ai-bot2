@@ -77,11 +77,36 @@ def _safe_provider_error(status: int | None) -> str:
         return "Seçilmiş model bu API layihəsində tapılmadı və ya əlçatan deyil. Model siyahısını yenilə."
     if status == 429:
         return "API istifadə limiti dolub. Bir az sonra yenidən cəhd et."
-    if status == 400:
-        return "Sorğu provayder tərəfindən qəbul edilmədi. Model və sorğu formatını yoxla."
+    if status in (400, 422):
+        return "Sorğu provayder tərəfindən qəbul edilmədi. Mesaj ardıcıllığı, model və sorğu formatını yoxla."
     if status is not None and status >= 500:
         return "AI provayderində müvəqqəti problem var. Bir az sonra yenidən cəhd et."
     return "AI provayderinə sorğu göndərilə bilmədi. Bağlantını və model ayarlarını yoxla."
+
+
+def _normalize_openai_messages(messages: list[dict]) -> list[dict]:
+    """Return a valid user-first, alternating OpenAI-compatible conversation."""
+    normalized = []
+    for item in messages:
+        role = "assistant" if item.get("role") == "model" else item.get("role")
+        if role not in {"user", "assistant"}:
+            continue
+        text = str(item.get("content", "")).strip()
+        if not text:
+            continue
+        if not normalized and role != "user":
+            # The dashboard's initial XFA greeting is display-only, not context.
+            continue
+        if normalized and normalized[-1]["role"] == role:
+            normalized[-1]["content"] += "\\n\\n" + text
+        else:
+            normalized.append({"role": role, "content": text})
+    # The request must end with the current user turn, never an assistant turn.
+    while normalized and normalized[-1]["role"] != "user":
+        normalized.pop()
+    if not normalized:
+        raise ValueError("NVIDIA sorğusu üçün istifadəçi mesajı tapılmadı.")
+    return normalized
 
 
 def _openai_compatible(provider: str, api_key: str, model: str, messages: list[dict], *, memory_context: str = "", test=False) -> str:
@@ -111,7 +136,7 @@ def _openai_compatible(provider: str, api_key: str, model: str, messages: list[d
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=25) as response:
+        with urllib.request.urlopen(request, timeout=90) as response:
             raw = response.read(2 * 1024 * 1024)
     except urllib.error.HTTPError as exc:
         # Never return or log provider response bodies: they may contain sensitive metadata.
