@@ -70,6 +70,7 @@ const commands = [
   { name: "kanalolustur", description: "Yeni metin kanalı oluşturur.", options: [{ type: 3, name: "kanal_adi", description: "Kanal adı", required: true, max_length: 90 }] },
   { name: "rololustur", description: "Yeni rol oluşturur.", options: [{ type: 3, name: "rol_adi", description: "Rol adı", required: true, max_length: 100 }] },
 
+  { name: "anket", description: "Seçenekli bir anket oluşturur.", options: [{ type: 3, name: "metin", description: "Soru | seçenek 1 | seçenek 2", required: true, max_length: 1500 }] },
   { name: "hosgeldin", description: "Bu kanalı otomatik karşılama kanalı yapar." },
   { name: "modlog", description: "Bu kanalı moderasyon log kanalı yapar." },
   { name: "afk", description: "AFK durumunu ayarlar.", options: [{ type: 3, name: "sebep", description: "AFK sebebi", required: false, max_length: 180 }] },
