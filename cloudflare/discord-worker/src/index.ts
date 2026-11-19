@@ -1,9 +1,9 @@
 // @ts-nocheck
-import { DiscordGateway } from "./gateway";
+import { runDeferredAI, type AIProvider } from "./ai";
 export interface SecretStoreBinding { get(): Promise<string>; }
 export interface Env {
   DB: D1Database;
-  GATEWAY: DurableObjectNamespace<DiscordGateway>;
+  GATEWAY: DurableObjectNamespace;
   DISCORD_PUBLIC_KEY?: string;
   DISCORD_TOKEN: SecretStoreBinding;
   DISCORD_CLIENT_ID: SecretStoreBinding;
@@ -37,6 +37,8 @@ async function verifyDiscordRequest(request: Request, body: string, publicKey: s
   const signature = request.headers.get("x-signature-ed25519");
   const timestamp = request.headers.get("x-signature-timestamp");
   if (!signature || !timestamp || !/^\d{10,}$/.test(timestamp)) return false;
+  const timestampMs = Number(timestamp) * 1000;
+  if (!Number.isFinite(timestampMs) || Math.abs(Date.now() - timestampMs) > 5 * 60 * 1000) return false;
   const key = await crypto.subtle.importKey("raw", hexToBytes(publicKey), { name: "Ed25519" }, false, ["verify"]);
   return crypto.subtle.verify({ name: "Ed25519" }, key, hexToBytes(signature), encoder.encode(timestamp + body));
 }
@@ -51,46 +53,6 @@ function reply(content: string, ephemeral = true): Response {
 
 function option(options: Option[] | undefined, name: string): Option | undefined {
   return options?.find((item) => item.name === name);
-}
-
-type AIProvider = "gemini" | "nvidia";
-async function generateAI(env: Env, provider: AIProvider, model: string, prompt: string): Promise<string> {
-  if (provider === "gemini") {
-    const apiKey = await env.GEMINI_API_KEY.get();
-    const models = model === "gemini-3.8-flash" ? [model, "gemini-3.5-flash-lite"] : [model];
-    let lastError: Error | null = null;
-    for (const candidate of models) {
-      for (let attempt = 0; attempt < 2; attempt++) {
-        const endpoint = "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(candidate) + ":generateContent?key=" + encodeURIComponent(apiKey);
-        const response = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 900, temperature: 0.7 } }), signal: AbortSignal.timeout(25000) });
-        const data = await response.json() as { candidates?: { content?: { parts?: { text?: string }[] } }[]; error?: { message?: string } };
-        if (response.ok) {
-          const answer = data.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("").trim();
-          if (answer) return answer.slice(0, 1850);
-          lastError = new Error("Gemini boş yanıt döndürdü.");
-        } else {
-          lastError = new Error(data.error?.message || "Gemini API HTTP " + response.status);
-          if (![429, 500, 502, 503, 504].includes(response.status) || attempt === 1) break;
-          await new Promise((resolve) => setTimeout(resolve, 900));
-        }
-      }
-    }
-    throw lastError || new Error("Gemini yanıt üretemedi.");
-  }
-  const apiKey = await env.NVIDIA_API_KEY.get();
-  const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", { method: "POST", headers: { authorization: "Bearer " + apiKey, "content-type": "application/json" }, body: JSON.stringify({ model, messages: [{ role: "user", content: prompt }], max_tokens: 900, temperature: 0.7, stream: false }), signal: AbortSignal.timeout(25000) });
-  const data = await response.json() as { choices?: { message?: { content?: string } }[]; error?: { message?: string } };
-  if (!response.ok) throw new Error(data.error?.message || "NVIDIA API HTTP " + response.status);
-  const answer = data.choices?.[0]?.message?.content?.trim();
-  if (!answer) throw new Error("NVIDIA boş yanıt döndürdü.");
-  return answer.slice(0, 1850);
-}
-async function runDeferredAI(interaction: Interaction, env: Env, provider: AIProvider, model: string, prompt: string): Promise<void> {
-  if (!interaction.application_id || !interaction.token) return;
-  let content: string;
-  try { content = await generateAI(env, provider, model, prompt); }
-  catch (error) { content = "AI sağlayıcı hatası: " + (error instanceof Error ? error.message : "Bilinmeyen hata"); }
-  await fetch("https://discord.com/api/v10/webhooks/" + interaction.application_id + "/" + interaction.token + "/messages/@original", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ content: content.slice(0, 1900), allowed_mentions: { parse: [] } }) });
 }
 
 function normalize(value: string): string {
@@ -387,6 +349,47 @@ async function processDueReminders(env: Env) {
   }
 }
 
+export async function dispatchInteraction(
+  interaction: Interaction,
+  env: Env,
+  defer: (task: Promise<unknown>) => void,
+): Promise<Response> {
+  const command = interaction.data?.name;
+  const guildId = interaction.guild_id ?? null;
+  const userId = interaction.member?.user?.id ?? interaction.user?.id ?? null;
+  await env.DB.prepare("INSERT OR IGNORE INTO interaction_audit (interaction_id, command_name, guild_id, user_id, created_at) VALUES (?, ?, ?, ?, ?)")
+    .bind(interaction.id ?? null, command ?? "unknown", guildId, userId, new Date().toISOString()).run();
+
+  if (command === "sor" || command === "xfa") {
+    const options = interaction.data?.options;
+    const promptName = command === "sor" ? "soru" : "prompt";
+    const prompt = String(option(options, promptName)?.value ?? "").trim();
+    if (!prompt || prompt.length > 3500) return reply("Soru/istek 1–3500 karakter olmalıdır.");
+
+    const requested = option(options, "provider")?.value;
+    const saved = guildId
+      ? await env.DB.prepare("SELECT value FROM guild_settings WHERE guild_id=? AND setting_key='ai_provider'").bind(guildId).first()
+      : null;
+    const provider: AIProvider = requested === "nvidia" || (requested !== "gemini" && saved?.value === "nvidia")
+      ? "nvidia"
+      : "gemini";
+    const model = String(option(options, "model")?.value ?? "").trim() || undefined;
+    if (model && !(provider === "gemini" ? /^gemini-[a-zA-Z0-9.-]{1,80}$/.test(model) : /^[a-zA-Z0-9._/-]{1,120}$/.test(model))) {
+      return reply("Model adı geçersiz.");
+    }
+    defer(runDeferredAI(interaction, env, provider, prompt, model));
+    return json({ type: 5, data: { flags: EPHEMERAL } });
+  }
+
+  if (command === "ping") return reply("Pong! Cloudflare Worker ve Gateway komut sistemi yanıt veriyor.");
+  if (command === "kb") return handleKnowledgeBase(interaction, env);
+  const moreResponse = await handleMoreCommands(interaction, env);
+  if (moreResponse) return moreResponse;
+  const utilityResponse = handleUtilityCommand(interaction);
+  if (utilityResponse) return utilityResponse;
+  return reply("Bu komut Cloudflare test sürümünde henüz taşınmadı.");
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
@@ -416,37 +419,8 @@ export default {
     if (interaction.type === 1) return json({ type: 1 });
     if (interaction.type !== 2) return json({ error: "Unsupported interaction type" }, 400);
 
-    const command = interaction.data?.name;
-    const guildId = interaction.guild_id ?? null;
-    const userId = interaction.member?.user?.id ?? interaction.user?.id ?? null;
-    await env.DB.prepare("INSERT OR IGNORE INTO interaction_audit (interaction_id, command_name, guild_id, user_id, created_at) VALUES (?, ?, ?, ?, ?)")
-      .bind(interaction.id ?? null, command ?? "unknown", guildId, userId, new Date().toISOString()).run();
+    return dispatchInteraction(interaction, env, (task) => ctx.waitUntil(task));
 
-    if (command === "ping") return reply("Pong! Cloudflare TypeScript test bot is online.");
-    if (command === "sor") {
-      const prompt = String(option(interaction.data?.options, "soru")?.value ?? "").trim();
-      if (prompt.length < 1 || prompt.length > 3500) return reply("Soru 1–3500 karakter olmalıdır.");
-      ctx.waitUntil(runDeferredAI(interaction, env, "gemini", "gemini-3.8-flash", prompt));
-      return json({ type: 5, data: { flags: EPHEMERAL } });
-    }
-    if (command === "xfa") {
-      const prompt = String(option(interaction.data?.options, "prompt")?.value ?? "").trim();
-      if (!prompt) return reply("XFA AI hazır. Komutu bir prompt ile kullan.");
-      if (prompt.length > 3500) return reply("İstek en fazla 3500 karakter olabilir.");
-      const providerValue = String(option(interaction.data?.options, "provider")?.value ?? "gemini");
-      const provider: AIProvider = providerValue === "nvidia" ? "nvidia" : "gemini";
-      const model = String(option(interaction.data?.options, "model")?.value ?? (provider === "gemini" ? "gemini-3.8-flash" : "meta/llama-3.3-70b-instruct"));
-      const validModel = provider === "gemini" ? /^gemini-[a-zA-Z0-9.-]{1,80}$/.test(model) : /^[a-zA-Z0-9._/-]{1,120}$/.test(model);
-      if (!validModel) return reply("Model adı geçersiz.");
-      ctx.waitUntil(runDeferredAI(interaction, env, provider, model, prompt));
-      return json({ type: 5, data: { flags: EPHEMERAL } });
-    }
-    if (command === "kb") return handleKnowledgeBase(interaction, env);
-    const moreResponse = await handleMoreCommands(interaction, env);
-    if (moreResponse) return moreResponse;
-    const utilityResponse = handleUtilityCommand(interaction);
-    if (utilityResponse) return utilityResponse;
-    return reply("Bu komut Cloudflare test sürümünde henüz taşınmadı.");
   },
   async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
     ctx.waitUntil(Promise.all([env.GATEWAY.getByName("xyrin-main").start(), processDueReminders(env)]));
