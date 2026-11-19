@@ -64,6 +64,11 @@ const commands = [
   { name: "duyuru", description: "Bu kanala duyuru gönderir.", options: [{ type: 3, name: "mesaj", description: "Duyuru metni", required: true, max_length: 1800 }] },
   { name: "gemini", description: "Sunucunun varsayılan XFA sağlayıcısını Gemini yapar." },
   { name: "nvidia", description: "Sunucunun varsayılan XFA sağlayıcısını NVIDIA yapar." }
+
+  { name: "kilitle", description: "Bu kanalı kilitler." },
+  { name: "kilita", description: "Bu kanalın kilidini açar." },
+  { name: "kanalolustur", description: "Yeni metin kanalı oluşturur.", options: [{ type: 3, name: "kanal_adi", description: "Kanal adı", required: true, max_length: 90 }] },
+  { name: "rololustur", description: "Yeni rol oluşturur.", options: [{ type: 3, name: "rol_adi", description: "Rol adı", required: true, max_length: 100 }] },
 ];
 
 const endpoint = guildId
