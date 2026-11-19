@@ -452,7 +452,9 @@ export class DiscordGateway extends DurableObject {
       await this.interactionReply(interaction, { type: 5, data: { flags: 64 } });
       let answer;
       try {
-        const provider = name === "xfa" && get(options, "provider")?.value === "nvidia" ? "nvidia" : "gemini";
+        const requestedProvider = get(options, "provider")?.value;
+        const savedProvider = guild ? await this.env.DB.prepare("SELECT value FROM guild_settings WHERE guild_id=? AND setting_key='ai_provider'").bind(guild).first() : null;
+        const provider = requestedProvider === "nvidia" || (requestedProvider !== "gemini" && savedProvider?.value === "nvidia") ? "nvidia" : "gemini";
         if (provider === "gemini") {
           const key = await this.env.GEMINI_API_KEY.get(), model = String(get(options, "model")?.value || "gemini-3.8-flash");
           const models = model === "gemini-3.8-flash" ? [model, "gemini-3.5-flash-lite"] : [model];
