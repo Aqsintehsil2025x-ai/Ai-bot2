@@ -1,7 +1,7 @@
 export interface Env {
   DB: D1Database;
   DISCORD_PUBLIC_KEY?: string;
- }
+}
 
 type Option = { name: string; type?: number; value?: string | number | boolean; options?: Option[] };
 type Interaction = {
