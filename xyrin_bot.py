@@ -2208,15 +2208,22 @@ class UltimateImperialBot(commands.Bot):
         if member.bot:
             return
         guild = member.guild
-        if WELCOME_ROLE_NAME:
-            role = discord.utils.get(guild.roles, name=WELCOME_ROLE_NAME)
-            if role:
+        configured_role_id = self.settings.value(guild.id, "auto_role_id", None)
+        if configured_role_id is not None:
+            role = guild.get_role(int(configured_role_id)) if int(configured_role_id or 0) else None
+        else:
+            role = discord.utils.get(guild.roles, name=WELCOME_ROLE_NAME) if WELCOME_ROLE_NAME else None
+        if role is not None:
+            bot_member = guild.me or guild.get_member(self.user.id)
+            if bot_member is not None and role >= bot_member.top_role:
+                logger.warning("Otomatik rol verilemedi: rol botun en yüksek rolünün üstünde.")
+            else:
                 try:
-                    await member.add_roles(role, reason="Otomatik karşılama rolü")
+                    await member.add_roles(role, reason="Sunucu otomatik karşılama rolü")
                 except discord.HTTPException as e:
                     logger.error(f"Karşılama rolü verilemedi: {e}")
-            else:
-                logger.warning(f"'{WELCOME_ROLE_NAME}' adında karşılama rolü sunucuda bulunamadı.")
+        elif configured_role_id is None and WELCOME_ROLE_NAME:
+            logger.warning(f"'{WELCOME_ROLE_NAME}' adında karşılama rolü sunucuda bulunamadı.")
 
         channel = self.announce_channel(guild)
         if channel is None:
@@ -3295,6 +3302,7 @@ def help_pages() -> dict:
             (f"`{p}uyarilar` `{p}uyarisifirla`", "Strike sicili."),
             (f"`{p}modlog` `{p}hosgeldin`", "Log / karşılama kanalı ayarı."),
             (f"`{p}ticketpanel`", "Destek paneli kurar; ticket kanalları özel ve kalıcıdır."),
+            (f"`{p}otorol [@rol]`", "Yeni katılan üyelere otomatik rol verir veya kapatır."),
             (f"`{p}kanaloluştur` `{p}rololuştur`", "Manuel kanal / rol."),
             (f"`{p}yedekle` `{p}sync` `{p}evrim`", "Yedek, slash eşitleme. Evrim: sanal ortamda dener, geçerse komutu ekler."),
         ]),
@@ -4748,6 +4756,32 @@ async def duyuru_komutu(ctx, *, mesaj: str):
         except discord.HTTPException:
             pass
         await ctx.channel.send(embed=embed)
+
+
+@bot.hybrid_command(
+    name="otorol",
+    aliases=["autorole"],
+    description="Sunucuya yeni katılan üyelere otomatik rol ayarlar.",
+)
+@app_commands.describe(role="Yeni üyelere verilecek rol; boş bırakırsan otomatik rol kapatılır.")
+@commands.guild_only()
+@perm_or_sovereign(manage_roles=True)
+async def otorol_komutu(ctx, role: Optional[discord.Role] = None):
+    if role is not None:
+        bot_member = ctx.guild.me or ctx.guild.get_member(bot.user.id)
+        if bot_member is not None and role >= bot_member.top_role:
+            await ctx.send("❌ Bu rol botun en yüksek rolünden yüksek veya eşit.")
+            return
+        if role.is_default():
+            await ctx.send("❌ @everyone rolü otomatik rol olarak ayarlanamaz.")
+            return
+        bot.settings.set(ctx.guild.id, "auto_role_id", role.id)
+        await bot.settings.store.flush()
+        await ctx.send(f"✅ Otomatik rol ayarlandı: {role.mention}")
+    else:
+        bot.settings.set(ctx.guild.id, "auto_role_id", 0)
+        await bot.settings.store.flush()
+        await ctx.send("✅ Otomatik rol kapatıldı.")
 
 
 # --- 14J. DESTEK TICKET SISTEMI ---
