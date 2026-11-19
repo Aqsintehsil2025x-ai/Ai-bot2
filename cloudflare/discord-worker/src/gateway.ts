@@ -454,7 +454,7 @@ export class DiscordGateway extends DurableObject {
       try {
         const provider = name === "xfa" && get(options, "provider")?.value === "nvidia" ? "nvidia" : "gemini";
         if (provider === "gemini") {
-          const key = await this.env.GEMINI_API_KEY.get(), model = String(get(options, "model")?.value || "gemini-2.5-flash");
+          const key = await this.env.GEMINI_API_KEY.get(), model = String(get(options, "model")?.value || "gemini-3.8-flash");
           const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent?key=" + encodeURIComponent(key), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 900 } }), signal: AbortSignal.timeout(25000) });
           const d = await r.json(); if (!r.ok) throw Error(d.error?.message || "Gemini HTTP " + r.status);
           answer = d.candidates?.[0]?.content?.parts?.map(x => x.text || "").join("").trim();
