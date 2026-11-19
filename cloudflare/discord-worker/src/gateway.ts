@@ -455,9 +455,25 @@ export class DiscordGateway extends DurableObject {
         const provider = name === "xfa" && get(options, "provider")?.value === "nvidia" ? "nvidia" : "gemini";
         if (provider === "gemini") {
           const key = await this.env.GEMINI_API_KEY.get(), model = String(get(options, "model")?.value || "gemini-3.8-flash");
-          const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent?key=" + encodeURIComponent(key), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 900 } }), signal: AbortSignal.timeout(25000) });
-          const d = await r.json(); if (!r.ok) throw Error(d.error?.message || "Gemini HTTP " + r.status);
-          answer = d.candidates?.[0]?.content?.parts?.map(x => x.text || "").join("").trim();
+          const models = model === "gemini-3.8-flash" ? [model, "gemini-3.5-flash-lite"] : [model];
+          let lastError = null;
+          for (const candidate of models) {
+            for (let attempt = 0; attempt < 2; attempt++) {
+              const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(candidate) + ":generateContent?key=" + encodeURIComponent(key), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 900 } }), signal: AbortSignal.timeout(25000) });
+              const d = await r.json();
+              if (r.ok) {
+                answer = d.candidates?.[0]?.content?.parts?.map(x => x.text || "").join("").trim();
+                if (answer) break;
+                lastError = Error("Gemini boş yanıt döndürdü.");
+              } else {
+                lastError = Error(d.error?.message || "Gemini HTTP " + r.status);
+                if (![429, 500, 502, 503, 504].includes(r.status) || attempt === 1) break;
+                await new Promise(resolve => setTimeout(resolve, 900));
+              }
+            }
+            if (answer) break;
+          }
+          if (!answer) throw lastError || Error("Gemini yanıt üretemedi.");
         } else {
           const key = await this.env.NVIDIA_API_KEY.get(), model = String(get(options, "model")?.value || "meta/llama-3.3-70b-instruct");
           const r = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", { method: "POST", headers: { authorization: "Bearer " + key, "content-type": "application/json" }, body: JSON.stringify({ model, messages: [{ role: "user", content: prompt }], max_tokens: 900 }), signal: AbortSignal.timeout(25000) });
