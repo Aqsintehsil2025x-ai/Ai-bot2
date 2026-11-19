@@ -352,7 +352,7 @@ export class DiscordGateway extends DurableObject<Env> {
     const joinedCount = Number(count?.total || 0);
     if (cfg?.value === "true" && joinedCount >= 6 && modlog?.value) {
       await this.discordRequest("/channels/" + modlog.value + "/messages", "POST", {
-        content: "⚠️ Şüpheli katılım artışı: Son 60 saniyede " + count.total + " yeni üye katıldı. Bu yalnızca uyarıdır; otomatik ceza uygulanmadı.",
+        content: "⚠️ Şüpheli katılım artışı: Son 60 saniyede " + joinedCount + " yeni üye katıldı. Bu yalnızca uyarıdır; otomatik ceza uygulanmadı.",
         allowed_mentions: { parse: [] }
       });
     }
