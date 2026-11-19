@@ -70,6 +70,15 @@ const commands = [
   { name: "kanalolustur", description: "Yeni metin kanalı oluşturur.", options: [{ type: 3, name: "kanal_adi", description: "Kanal adı", required: true, max_length: 90 }] },
   { name: "rololustur", description: "Yeni rol oluşturur.", options: [{ type: 3, name: "rol_adi", description: "Rol adı", required: true, max_length: 100 }] },
 
+
+  { name: "bakiye", description: "Kullanıcının sanal sunucu bakiyesini gösterir.", options: [{ type: 6, name: "member", description: "Bakiyesi gösterilecek üye", required: false }] },
+  { name: "gunluk", description: "Günlük sanal ödülünü alır." },
+  { name: "transfer", description: "Bir üyeye sanal bakiye gönderir.", options: [{ type: 6, name: "member", description: "Alıcı", required: true }, { type: 4, name: "miktar", description: "1-10000000", required: true, min_value: 1, max_value: 10000000 }] },
+  { name: "market", description: "İmparatorluk marketindeki eşyaları listeler." },
+  { name: "satinal", description: "Market'ten sanal eşya satın alır.", options: [{ type: 3, name: "item_adi", description: "vip, reklam, kalkan veya boost", required: true, max_length: 40 }] },
+  { name: "calis", description: "Çalışarak sanal bakiye kazanır." },
+  { name: "seviye", description: "Kullanıcının XP ve seviyesini gösterir.", options: [{ type: 6, name: "member", description: "Seviyesi gösterilecek üye", required: false }] },
+  { name: "siralama", description: "Sunucu sanal bakiye veya XP sıralamasını gösterir.", options: [{ type: 3, name: "tur", description: "Sıralama türü", required: false, choices: [{name:"Bakiye",value:"bakiye"},{name:"Seviye / XP",value:"seviye"}] }] },
   { name: "anket", description: "Seçenekli bir anket oluşturur.", options: [{ type: 3, name: "metin", description: "Soru | seçenek 1 | seçenek 2", required: true, max_length: 1500 }] },
   { name: "hosgeldin", description: "Bu kanalı otomatik karşılama kanalı yapar." },
   { name: "modlog", description: "Bu kanalı moderasyon log kanalı yapar." },
