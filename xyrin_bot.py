@@ -4287,6 +4287,44 @@ async def ship_komutu(ctx, member: Optional[discord.Member] = None):
     await ctx.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
 
 
+@bot.hybrid_command(name="secim", aliases=["choose"], description="Seçeneklerin arasından rastgele birini seçer.")
+@app_commands.describe(secenekler="Seçenekleri | işaretiyle ayır (örn: Pizza | Burger | Döner)")
+@commands.cooldown(1, 5, commands.BucketType.user)
+async def secim_komutu(ctx, *, secenekler: str):
+    options = [truncate(part.strip(), 100) for part in secenekler.split("|") if part.strip()]
+    if not 2 <= len(options) <= 10:
+        await ctx.send("❌ En az 2, en fazla 10 seçenek yaz. Örnek: !secim Pizza | Burger | Döner")
+        return
+    choice = random.choice(options)
+    embed = discord.Embed(
+        title="🎯 Xyrin Seçim Çarkı",
+        description="**Seçenekler:**\n" + "\n".join(f"• {discord.utils.escape_markdown(item)}" for item in options)
+                    + f"\n\n**Benim seçimim:** {discord.utils.escape_markdown(choice)}",
+        color=discord.Color.blurple(),
+    )
+    await ctx.send(embed=embed)
+
+
+@bot.hybrid_command(name="sekiztop", aliases=["8ball"], description="Soruna sihirli 8-top cevabı verir.")
+@app_commands.describe(soru="Evet/hayır türünde sorun")
+@commands.cooldown(1, 5, commands.BucketType.user)
+async def sekiztop_komutu(ctx, *, soru: str):
+    if len(soru.strip()) < 3:
+        await ctx.send("❌ Biraz daha açıklayıcı bir soru yaz.")
+        return
+    answers = [
+        "Kesinlikle evet. ✨", "Büyük ihtimalle evet.", "Bence olabilir.",
+        "İşaretler olumlu.", "Şu an emin değilim.", "Daha sonra tekrar sor.",
+        "Pek sanmıyorum.", "Büyük ihtimalle hayır.", "Cevabım hayır. 🌙",
+    ]
+    embed = discord.Embed(
+        title="🎱 Xyrin'in Sihirli 8-Topu",
+        description=f"**Soru:** {truncate(soru.strip(), 500)}\n\n**Cevap:** {random.choice(answers)}",
+        color=discord.Color.dark_purple(),
+    )
+    await ctx.send(embed=embed)
+
+
 @bot.hybrid_command(name="anket", aliases=["poll", "oylama"], description="Anket oluşturur. Seçenekleri | ile ayır.")
 @app_commands.describe(metin="Soru | seçenek1 | seçenek2 | ...")
 @commands.guild_only()
