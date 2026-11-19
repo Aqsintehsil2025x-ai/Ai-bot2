@@ -69,6 +69,11 @@ const commands = [
   { name: "kilita", description: "Bu kanalın kilidini açar." },
   { name: "kanalolustur", description: "Yeni metin kanalı oluşturur.", options: [{ type: 3, name: "kanal_adi", description: "Kanal adı", required: true, max_length: 90 }] },
   { name: "rololustur", description: "Yeni rol oluşturur.", options: [{ type: 3, name: "rol_adi", description: "Rol adı", required: true, max_length: 100 }] },
+
+  { name: "hosgeldin", description: "Bu kanalı otomatik karşılama kanalı yapar." },
+  { name: "modlog", description: "Bu kanalı moderasyon log kanalı yapar." },
+  { name: "afk", description: "AFK durumunu ayarlar.", options: [{ type: 3, name: "sebep", description: "AFK sebebi", required: false, max_length: 180 }] },
+  { name: "antiraid", description: "Anti-raid uyarılarını yönetir.", options: [{ type: 1, name: "set", description: "Katılım artışı uyarılarını aç veya kapat.", options: [{ type: 5, name: "enabled", description: "Uyarıları etkinleştir", required: true }] }] },
 ];
 
 const endpoint = guildId
