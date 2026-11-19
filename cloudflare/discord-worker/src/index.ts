@@ -1,8 +1,9 @@
 import { runDeferredAI, type AIProvider } from "./ai";
+import type { DiscordGateway } from "./gateway";
 export interface SecretStoreBinding { get(): Promise<string>; }
 export interface Env {
   DB: D1Database;
-  GATEWAY: DurableObjectNamespace;
+  GATEWAY: DurableObjectNamespace<DiscordGateway>;
   DISCORD_PUBLIC_KEY?: string;
   DISCORD_TOKEN: SecretStoreBinding;
   DISCORD_CLIENT_ID: SecretStoreBinding;
@@ -17,6 +18,7 @@ type Interaction = {
   type?: number;
   token?: string;
   application_id?: string;
+  channel_id?: string;
   guild_id?: string;
   member?: { user?: { id?: string }; permissions?: string };
   user?: { id?: string };
@@ -173,7 +175,7 @@ async function discordApi(env: Env, path: string, method = "GET", body?: unknown
 async function handleMoreCommands(i: Interaction, env: Env): Promise<Response | null> {
   const name=i.data?.name, opts=i.data?.options || [], guild=i.guild_id, channel=i.channel_id;
   const selected=String(option(opts,"member")?.value || i.member?.user?.id || i.user?.id || "");
-  const require=(bit,label)=>hasPermission(i,bit)?null:reply("Bu işlem için "+label+" yetkisi gerekiyor.");
+  const require=(bit: bigint,label: string): Response | null =>hasPermission(i,bit)?null:reply("Bu işlem için "+label+" yetkisi gerekiyor.");
   try {
     if(name==="kullanici" || name==="avatar") {
       const u=await discordApi(env,"/users/"+selected);
@@ -201,10 +203,10 @@ async function handleMoreCommands(i: Interaction, env: Env): Promise<Response | 
     if(name==="kilitle" || name==="kilita") {
       const p=require(REST_PERMS.manageChannels,"Kanalları Yönet"); if(p)return p;
       const channelData=await discordApi(env,"/channels/"+channel);
-      const everyone=String(guild), old=(channelData.permission_overwrites||[]).find(x=>x.id===everyone)||{id:everyone,type:0,allow:"0",deny:"0"};
+      const everyone=String(guild), old=(channelData.permission_overwrites||[]).find((x: any)=>x.id===everyone)||{id:everyone,type:0,allow:"0",deny:"0"};
       const send=2048n, allow=BigInt(old.allow||"0"), deny=BigInt(old.deny||"0");
       const next={...old,allow:(name==="kilita"?(allow|send):(allow&~send)).toString(),deny:(name==="kilitle"?(deny|send):(deny&~send)).toString()};
-      const overwrites=(channelData.permission_overwrites||[]).filter(x=>x.id!==everyone); overwrites.push(next);
+      const overwrites=(channelData.permission_overwrites||[]).filter((x: any)=>x.id!==everyone); overwrites.push(next);
       await discordApi(env,"/channels/"+channel,"PATCH",{permission_overwrites:overwrites});
       return reply(name==="kilitle"?"Kanal kilitlendi.":"Kanal kilidi açıldı.");
     }
@@ -278,7 +280,7 @@ async function handleMoreCommands(i: Interaction, env: Env): Promise<Response | 
       if(name==="mute") {
         const raw=String(option(opts,"sure")?.value||"10m"),m=raw.match(/^(\d{1,3})(s|m|h|d)$/i);
         if(!m)return reply("Süre biçimi: 30s, 10m, 2h veya 1d.");
-        const ms=Number(m[1])*({s:1000,m:60000,h:3600000,d:86400000}[m[2].toLowerCase()]);
+        const ms=Number(m[1])*({s:1000,m:60000,h:3600000,d:86400000}[m[2]!.toLowerCase()]);
         if(ms<1000||ms>2419200000)return reply("Süre 1 saniye ile 28 gün arasında olmalı.");
         until=new Date(Date.now()+ms).toISOString();
       }
@@ -288,7 +290,7 @@ async function handleMoreCommands(i: Interaction, env: Env): Promise<Response | 
     if(name==="temizle") {
       const p=require(REST_PERMS.manageMessages,"Mesajları Yönet"); if(p)return p;
       const count=Math.max(1,Math.min(100,Number(option(opts,"adet")?.value||1)));
-      const messages=await discordApi(env,"/channels/"+channel+"/messages?limit="+count);
+      const messages: any[] = await discordApi(env,"/channels/"+channel+"/messages?limit="+count);
       const ids=messages.filter(m=>Date.now()-Date.parse(m.timestamp)<1209600000).map(m=>m.id);
       if(!ids.length)return reply("Silinebilir mesaj bulunamadı.");
       if(ids.length===1)await discordApi(env,"/channels/"+channel+"/messages/"+ids[0],"DELETE");
