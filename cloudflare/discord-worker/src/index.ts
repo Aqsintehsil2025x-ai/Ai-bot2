@@ -57,13 +57,25 @@ type AIProvider = "gemini" | "nvidia";
 async function generateAI(env: Env, provider: AIProvider, model: string, prompt: string): Promise<string> {
   if (provider === "gemini") {
     const apiKey = await env.GEMINI_API_KEY.get();
-    const endpoint = "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent?key=" + encodeURIComponent(apiKey);
-    const response = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 900, temperature: 0.7 } }), signal: AbortSignal.timeout(25000) });
-    const data = await response.json() as { candidates?: { content?: { parts?: { text?: string }[] } }[]; error?: { message?: string } };
-    if (!response.ok) throw new Error(data.error?.message || "Gemini API HTTP " + response.status);
-    const answer = data.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("").trim();
-    if (!answer) throw new Error("Gemini boş yanıt döndürdü.");
-    return answer.slice(0, 1850);
+    const models = model === "gemini-3.8-flash" ? [model, "gemini-3.5-flash-lite"] : [model];
+    let lastError: Error | null = null;
+    for (const candidate of models) {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const endpoint = "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(candidate) + ":generateContent?key=" + encodeURIComponent(apiKey);
+        const response = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 900, temperature: 0.7 } }), signal: AbortSignal.timeout(25000) });
+        const data = await response.json() as { candidates?: { content?: { parts?: { text?: string }[] } }[]; error?: { message?: string } };
+        if (response.ok) {
+          const answer = data.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("").trim();
+          if (answer) return answer.slice(0, 1850);
+          lastError = new Error("Gemini boş yanıt döndürdü.");
+        } else {
+          lastError = new Error(data.error?.message || "Gemini API HTTP " + response.status);
+          if (![429, 500, 502, 503, 504].includes(response.status) || attempt === 1) break;
+          await new Promise((resolve) => setTimeout(resolve, 900));
+        }
+      }
+    }
+    throw lastError || new Error("Gemini yanıt üretemedi.");
   }
   const apiKey = await env.NVIDIA_API_KEY.get();
   const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", { method: "POST", headers: { authorization: "Bearer " + apiKey, "content-type": "application/json" }, body: JSON.stringify({ model, messages: [{ role: "user", content: prompt }], max_tokens: 900, temperature: 0.7, stream: false }), signal: AbortSignal.timeout(25000) });
