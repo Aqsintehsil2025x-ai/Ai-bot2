@@ -4,13 +4,52 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-11-19",
   "workers_dev": true,
-  "observability": { "enabled": true },
+  "observability": {
+    "enabled": true
+  },
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "xfa-discord-test",
       "database_id": "a94723cf-687c-4246-9b35-f680a86bf72f",
       "migrations_dir": "migrations"
+    }
+  ],
+  "secrets_store_secrets": [
+    {
+      "binding": "DISCORD_TOKEN",
+      "store_id": "38bf4f1392d145f1ae0a76757629b5cd",
+      "secret_name": "DISCORD_TOKEN"
+    },
+    {
+      "binding": "DISCORD_CLIENT_ID",
+      "store_id": "38bf4f1392d145f1ae0a76757629b5cd",
+      "secret_name": "DISCORD_CLIENT_ID"
+    },
+    {
+      "binding": "DISCORD_CLIENT_SECRET",
+      "store_id": "38bf4f1392d145f1ae0a76757629b5cd",
+      "secret_name": "DISCORD_CLIENT_SECRET"
+    },
+    {
+      "binding": "GEMINI_API_KEY",
+      "store_id": "38bf4f1392d145f1ae0a76757629b5cd",
+      "secret_name": "GEMINI_API_KEY"
+    },
+    {
+      "binding": "NVIDIA_API_KEY",
+      "store_id": "38bf4f1392d145f1ae0a76757629b5cd",
+      "secret_name": "NVIDIA_API_KEY"
+    },
+    {
+      "binding": "XFA_TOKEN_ENCRYPTION_KEY",
+      "store_id": "38bf4f1392d145f1ae0a76757629b5cd",
+      "secret_name": "XFA_TOKEN_ENCRYPTION_KEY"
+    },
+    {
+      "binding": "XFA_ACCESS_TOKEN",
+      "store_id": "38bf4f1392d145f1ae0a76757629b5cd",
+      "secret_name": "XFA_ACCESS_TOKEN"
     }
   ]
 }
