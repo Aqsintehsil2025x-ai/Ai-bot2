@@ -279,7 +279,7 @@ export class DiscordGateway extends DurableObject {
       }
       if (action === "ask") {
         const q = String(get(args, "query")?.value || "").trim(), n = q.normalize("NFKC").toLocaleLowerCase("tr").replace(/\\s+/g," ").trim();
-        const rows = await this.env.DB.prepare("SELECT question,answer FROM knowledge_base WHERE guild_id=? ORDER BY updated_at DESC LIMIT 100").bind(guild).all();
+        const rows = await this.env.DB.prepare("SELECT question,answer,normalized_question FROM knowledge_base WHERE guild_id=? ORDER BY updated_at DESC LIMIT 100").bind(guild).all();
         const hit = rows.results.find(x => x.normalized_question === n) || rows.results.find(x => x.normalized_question.includes(n) || n.includes(x.normalized_question));
         return send(hit ? "**" + hit.question + "**\n" + hit.answer : "Bilgi tabanında kayıt bulunamadı.", false);
       }
