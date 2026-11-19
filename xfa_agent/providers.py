@@ -9,6 +9,9 @@ import urllib.request
 API_ENV_VARS = {
     "gemini": "GEMINI_API_KEY",
     "nvidia": "NVIDIA_API_KEY",
+    "groq": "GROQ_API_KEY",
+    "openrouter": "OPENROUTER_API_KEY",
+    "deepseek": "DEEPSEEK_API_KEY",
 }
 
 PROVIDERS = {
@@ -30,6 +33,27 @@ PROVIDERS = {
         ],
         "default_model": "meta/llama-3.3-70b-instruct",
         "note": "XFA server-managed provider",
+    },
+    "groq": {
+        "name": "Groq", "kind": "openai",
+        "base_url": "https://api.groq.com/openai/v1/chat/completions",
+        "models": ["openai/gpt-oss-120b", "openai/gpt-oss-20b"],
+        "default_model": "openai/gpt-oss-120b",
+        "note": "Limited developer-tier usage; account-specific rate limits apply",
+    },
+    "openrouter": {
+        "name": "OpenRouter", "kind": "openai",
+        "base_url": "https://openrouter.ai/api/v1/chat/completions",
+        "models": ["openrouter/free"],
+        "default_model": "openrouter/free",
+        "note": "Free model router; availability and rate limits vary by model/provider",
+    },
+    "deepseek": {
+        "name": "DeepSeek", "kind": "openai",
+        "base_url": "https://api.deepseek.com/chat/completions",
+        "models": ["deepseek-flash", "deepseek-v4-pro"],
+        "default_model": "deepseek-flash",
+        "note": "Paid API usage; check current token pricing and account balance",
     },
 }
 
