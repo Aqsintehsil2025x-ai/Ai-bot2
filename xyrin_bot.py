@@ -4245,6 +4245,48 @@ async def avatar_komutu(ctx, member: Optional[discord.Member] = None):
     await ctx.send(embed=embed)
 
 
+@bot.hybrid_command(name="ship", description="İki üyenin günlük eğlenceli uyum puanını gösterir.")
+@app_commands.describe(member="Eşleştirmek istediğin üye (boş bırakırsan rastgele seçilir)")
+@commands.guild_only()
+@commands.cooldown(1, 8, commands.BucketType.user)
+async def ship_komutu(ctx, member: Optional[discord.Member] = None):
+    """Günlük sabit, sunucuya özel ve eğlence amaçlı ikili uyum kartı."""
+    if member is None:
+        candidates = [
+            m for m in ctx.guild.members
+            if not m.bot and m.id != ctx.author.id
+        ]
+        if not candidates:
+            await ctx.send("❌ Rastgele eşleştirme için başka bir üye bulunamadı.", ephemeral=True)
+            return
+        member = random.choice(candidates)
+
+    first_id, second_id = sorted((ctx.author.id, member.id))
+    # Aynı ikili aynı sunucuda gün boyunca aynı sonucu görür; yeniden komut çalıştırarak puan kasılamaz.
+    seed = f"{ctx.guild.id}:{first_id}:{second_id}:{utcnow().date().isoformat()}"
+    score = random.Random(seed).randint(1, 100)
+    filled = round(score / 10)
+    bar = "🟪" * filled + "⬛" * (10 - filled)
+
+    if score >= 85:
+        verdict = "Efsane ikili! ⚡"
+    elif score >= 65:
+        verdict = "Güçlü takım uyumu! ✨"
+    elif score >= 40:
+        verdict = "Fena değil, birlikte deneyin! 🤝"
+    else:
+        verdict = "Kaos ekibi olabilir 😄"
+
+    embed = discord.Embed(
+        title="🔗 Günün Ship Eşleşmesi",
+        description=f"**{ctx.author.display_name}** × **{member.display_name}**\n\n{bar}\n**Uyum: %{score}**\n\n{verdict}",
+        color=discord.Color.from_rgb(145, 90, 220),
+    )
+    embed.set_thumbnail(url=ctx.author.display_avatar.url)
+    embed.set_footer(text="Sadece eğlence amaçlıdır • Sonuçlar her gün yenilenir")
+    await ctx.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
+
+
 @bot.hybrid_command(name="anket", aliases=["poll", "oylama"], description="Anket oluşturur. Seçenekleri | ile ayır.")
 @app_commands.describe(metin="Soru | seçenek1 | seçenek2 | ...")
 @commands.guild_only()
