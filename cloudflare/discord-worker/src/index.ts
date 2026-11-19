@@ -146,7 +146,7 @@ function handleUtilityCommand(interaction: Interaction): Response | null {
   const name = interaction.data?.name;
   const opts = interaction.data?.options;
   const userId = interaction.member?.user?.id ?? interaction.user?.id ?? "kullanıcı";
-  const mention = /^\\d+$/.test(userId) ? `<@${userId}>` : "Kullanıcı";
+  const mention = /^\d+$/.test(userId) ? `<@${userId}>` : "Kullanıcı";
   if (name === "zar") {
     const raw = Number(option(opts, "max_sayi")?.value ?? 100);
     const max = Number.isInteger(raw) ? Math.min(1000000, Math.max(2, raw)) : 100;
