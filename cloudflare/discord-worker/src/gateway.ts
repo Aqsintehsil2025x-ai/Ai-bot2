@@ -1,12 +1,10 @@
 import { DurableObject } from "cloudflare:workers";
-import { dispatchInteraction } from "./index";
+import { dispatchInteraction, type Env } from "./index";
 
-type GatewayEnv = {
-  DB: D1Database;
-  DISCORD_TOKEN: { get(): Promise<string> };
+
 };
 
-export class DiscordGateway extends DurableObject<GatewayEnv> {
+export class DiscordGateway extends DurableObject<Env> {
   private socket: WebSocket | null = null;
   private state = "offline";
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
@@ -21,7 +19,7 @@ export class DiscordGateway extends DurableObject<GatewayEnv> {
   private reconnectAttempts = 0;
   private lastCloseCode: number | null = null;
 
-  constructor(ctx: DurableObjectState, env: GatewayEnv) {
+  constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.socket = null;
     this.state = "offline";
@@ -354,7 +352,8 @@ export class DiscordGateway extends DurableObject<GatewayEnv> {
     const count = await this.env.DB.prepare("SELECT COUNT(*) AS total FROM guild_join_events WHERE guild_id=?").bind(guild).first();
     const cfg = await this.env.DB.prepare("SELECT value FROM guild_settings WHERE guild_id=? AND setting_key='anti_raid_enabled'").bind(guild).first();
     const modlog = await this.env.DB.prepare("SELECT value FROM guild_settings WHERE guild_id=? AND setting_key='modlog_channel'").bind(guild).first();
-    if (cfg?.value === "true" && Number(count?.total || 0) >= 6 && modlog?.value) {
+    const joinedCount = Number(count?.total || 0);
+    if (cfg?.value === "true" && joinedCount >= 6 && modlog?.value) {
       await this.discordRequest("/channels/" + modlog.value + "/messages", "POST", {
         content: "⚠️ Şüpheli katılım artışı: Son 60 saniyede " + count.total + " yeni üye katıldı. Bu yalnızca uyarıdır; otomatik ceza uygulanmadı.",
         allowed_mentions: { parse: [] }
