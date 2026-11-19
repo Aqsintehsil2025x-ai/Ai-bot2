@@ -27,6 +27,7 @@ Worker health endpoint: `https://xfa-discord-test.aqsin-tehsil2025x.workers.dev/
 Register slash commands using `node scripts/register-commands.mjs` with `DISCORD_APPLICATION_ID`, `DISCORD_TOKEN`, and optionally `DISCORD_TEST_GUILD_ID` set locally. The production application is not yet configured to send interactions to this Worker.
 
 ## Ported in this slice
+- Basic account/help commands: `/yardim`, `/kimlik`; Gemini question command: `/sor`.
 - Utility/fun commands: `/zar`, `/yazitura`, `/kahve`, `/secim`, `/sekiztop`.
 - These are additional working implementations, not command-name placeholders.
 
