@@ -1,45 +1,47 @@
 # XFA Discord Worker + Gateway
 
-This branch contains an isolated Cloudflare test deployment for the Xyrin Discord bot. It does not modify `main` or the Replit project.
+This is an isolated Cloudflare test runtime for the Xyrin Discord bot. It does not modify the Replit project or the production Discord Interactions Endpoint.
 
 ## Runtime architecture
 
-- **Worker HTTP endpoint**: verifies Discord Ed25519 signatures and handles HTTP-delivered slash-command interactions.
-- **Durable Object `DiscordGateway`**: opens the outbound Discord Gateway WebSocket, identifies/resumes the bot session, heartbeats, and handles Gateway-delivered interactions and selected message/member events.
-- **D1**: stores FAQ entries, interaction audit records, per-server provider/configuration values, suggestions, and member-join event timestamps.
-- **Secrets Store**: `DISCORD_TOKEN`, `DISCORD_CLIENT_ID`, `GEMINI_API_KEY`, and `NVIDIA_API_KEY` are bound at runtime; secret values are not stored in Git.
+- **Worker**: Discord HTTP Interactions endpoint, Ed25519 signature verification, D1 access, and Cron processing.
+- **Durable Object — DiscordGateway**: persistent outbound Discord Gateway WebSocket, Identify/Resume, heartbeat ACK checks, reconnects, selected message/member events, and Gateway-delivered slash interactions.
+- **D1**: FAQ, audit logs, server settings, suggestions, join events, virtual economy/XP, and scheduled reminders.
+- **Secrets Store**: bot token and AI provider keys are bound at runtime; secret values are not in Git.
 
-The Worker is configured with a one-minute Cron Trigger to ensure the Gateway Durable Object starts or reconnects. Manual endpoints:
-- Health: `/health`
-- Gateway state: `/gateway/status`
-- Start/reconnect Gateway: `/gateway/start`
+The Worker has a one-minute Cron Trigger to start/reconnect the Gateway and deliver due reminders. Endpoints:
+- Health: https://xfa-discord-test.aqsin-tehsil2025x.workers.dev/health
+- Gateway state: https://xfa-discord-test.aqsin-tehsil2025x.workers.dev/gateway/status
+- Start/reconnect: https://xfa-discord-test.aqsin-tehsil2025x.workers.dev/gateway/start
 
-## Implemented interaction handlers
+## Implemented commands
 
-- `/ping`, `/yardim`, `/kimlik`
-- `/sor`, `/xfa` (Gemini and NVIDIA)
-- `/zar`, `/yazitura`, `/kahve`, `/secim`, `/sekiztop`, `/ship`
-- `/kb add|ask|list|remove` with D1 and `MANAGE_GUILD` checks
-- `/kullanici`, `/avatar`, `/sunucu`, `/rapor`
-- `/oneri`, `/analytics`, `/gemini`, `/nvidia`
-- Moderation and channel/role command handlers are present in the TypeScript source branch; test them before relying on them in a live server.
+- General/AI: /ping, /yardim, /kimlik, /sor, /xfa
+- Utilities: /zar, /yazitura, /kahve, /secim, /sekiztop, /ship, /anket
+- FAQ: /kb add, /kb ask, /kb list, /kb remove
+- User/server: /kullanici, /avatar, /sunucu, /rapor, /analytics
+- Moderation: /kick, /ban, /unban, /mute, /unmute, /temizle, /slowmode, /rolver, /rolal, /nick, /duyuru, /kilitle, /kilita, /kanalolustur, /rololustur
+- Server settings/events: /gemini, /nvidia, /hosgeldin, /modlog, /afk, /antiraid
+- Virtual economy (no betting): /bakiye, /gunluk, /transfer, /market, /satinal, /calis, /seviye, /siralama
+- Scheduling: /hatirlat, /etkinlik, /hatirlatmalar, /hatirlatsil
+- Prefix subset: !ping, !yardim, !kimlik, !zar, !yazitura, !kahve, !secim, !sekiztop
 
-The Gateway also handles selected prefix commands (`!ping`, `!yardim`, `!kimlik`, `!zar`, `!yazitura`, `!kahve`, `!secim`, `!sekiztop`), welcome-channel messages, anti-raid warning events, and AFK mention notices.
+D1 stores the economy, reminders, suggestions, and server settings. Message XP has a per-user cooldown. Anti-raid only sends warnings; it does not automatically punish members.
 
 ## Slash command registration
 
-Run `node scripts/register-commands.mjs` with `DISCORD_APPLICATION_ID`, `DISCORD_TOKEN`, and optionally `DISCORD_TEST_GUILD_ID`. The script reads the existing command list and creates/updates only the listed command names; it does not bulk-replace unrelated application commands.
+Run node scripts/register-commands.mjs with DISCORD_APPLICATION_ID, DISCORD_TOKEN, and optionally DISCORD_TEST_GUILD_ID. The script upserts only the listed command names and preserves unrelated existing application commands.
 
-The Discord Developer Portal Interactions Endpoint URL has **not** been changed. To route slash commands over HTTP, set it to:
+The Discord Developer Portal Interactions Endpoint URL has not been changed. To route slash commands over HTTP, set it to:
 
-`https://xfa-discord-test.aqsin-tehsil2025x.workers.dev/discord/interactions`
+https://xfa-discord-test.aqsin-tehsil2025x.workers.dev/discord/interactions
 
-If that URL is not set, Discord delivers slash interactions through the Gateway; the Durable Object handles the implemented subset. Do not switch production routing until the commands you rely on have been tested.
+If that URL is not set, Discord sends slash interactions through the Gateway; the Durable Object handles the supported commands directly. Existing Replit deployment and production routing remain untouched.
 
-## Deployment and limits
+## Remaining gaps
 
-The test Worker currently receives 100% of traffic for its own `workers.dev` hostname. It is not a replacement for every Python bot feature yet. Voice-channel joining/voice playback, all original prefix commands, every cog, and full feature parity still need implementation. Cloudflare Workers do not run the original `discord.py` process.
+This is a broad Worker migration, not yet byte-for-byte feature parity with the Python bot. Voice-channel joining/playback, every original command/cog, and some background automations are not ported. Discord voice requires a separate voice transport and is not provided by this Worker.
 
-A continuously connected outbound Gateway WebSocket keeps the Durable Object active and is billable duration. Cloudflare's Free allowance currently includes 13,000 GB-s/day; one 128 MB object running continuously is approximately 10,800 GB-s/day before other account usage. If the account exceeds a Free limit, further operations can fail. Monitor usage before relying on this as a permanent always-on host.
+## Free-plan usage
 
-Replit and the production Discord Interactions Endpoint were not changed by this deployment.
+A continuously connected outbound Gateway WebSocket keeps one 128 MB Durable Object active. At 24/7 uptime this is approximately 10,800 GB-s/day, against Cloudflare's 13,000 GB-s/day Free allowance before other account usage. Exceeding a Free limit can cause further operations to fail. Monitor usage; this is not a guarantee of unlimited free hosting.
