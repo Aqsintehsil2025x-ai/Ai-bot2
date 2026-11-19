@@ -1,7 +1,9 @@
 // @ts-nocheck
+import { DiscordGateway } from "./gateway";
 export interface SecretStoreBinding { get(): Promise<string>; }
 export interface Env {
   DB: D1Database;
+  GATEWAY: DurableObjectNamespace<DiscordGateway>;
   DISCORD_PUBLIC_KEY?: string;
   DISCORD_TOKEN: SecretStoreBinding;
   DISCORD_CLIENT_ID: SecretStoreBinding;
@@ -335,6 +337,12 @@ async function handleMoreCommands(i, env) {
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    if (request.method === "GET" && url.pathname === "/gateway/status") {
+      return json(await env.GATEWAY.getByName("xyrin-main").status());
+    }
+    if (request.method === "GET" && url.pathname === "/gateway/start") {
+      return json(await env.GATEWAY.getByName("xyrin-main").start());
+    }
     if (request.method === "GET" && url.pathname === "/health") {
       return json({ ok: true, service: "xfa-discord-test", runtime: "cloudflare-workers", language: "typescript" });
     }
@@ -386,5 +394,8 @@ export default {
     const utilityResponse = handleUtilityCommand(interaction);
     if (utilityResponse) return utilityResponse;
     return reply("Bu komut Cloudflare test sürümünde henüz taşınmadı.");
+  },
+  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(env.GATEWAY.getByName("xyrin-main").start());
   },
 };
