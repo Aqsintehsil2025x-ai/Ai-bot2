@@ -266,6 +266,57 @@ export class DiscordGateway extends DurableObject {
       await this.env.DB.prepare("INSERT INTO guild_settings(guild_id,setting_key,value,updated_at) VALUES(?,?,?,?) ON CONFLICT(guild_id,setting_key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at").bind(guild, "ai_provider", name, new Date().toISOString()).run();
       return send("XFA sağlayıcısı " + name.toUpperCase() + " olarak ayarlandı.");
     }
+
+    if (name === "hosgeldin" || name === "modlog") {
+      if (!guild || !manageGuild) return send("Sunucuyu Yönet yetkisi gerekiyor.");
+      const key = name === "hosgeldin" ? "welcome_channel" : "modlog_channel";
+      await this.env.DB.prepare("INSERT INTO guild_settings(guild_id,setting_key,value,updated_at) VALUES(?,?,?,?) ON CONFLICT(guild_id,setting_key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at").bind(guild,key,interaction.channel_id,new Date().toISOString()).run();
+      return send(name === "hosgeldin" ? "Karşılama kanalı ayarlandı." : "Moderasyon log kanalı ayarlandı.");
+    }
+    if (name === "afk") {
+      if (!guild) return send("Bu komut yalnızca sunucuda kullanılabilir.");
+      const reason = String(get(options,"sebep")?.value || "AFK").trim().slice(0,180);
+      await this.env.DB.prepare("INSERT INTO guild_settings(guild_id,setting_key,value,updated_at) VALUES(?,?,?,?) ON CONFLICT(guild_id,setting_key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at").bind(guild,"afk:"+uid,reason,new Date().toISOString()).run();
+      return send("💤 AFK durumu ayarlandı: "+reason);
+    }
+    if (name === "antiraid") {
+      if (!guild || !manageGuild) return send("Sunucuyu Yönet yetkisi gerekiyor.");
+      const enabled = Boolean(get(options[0]?.options,"enabled")?.value);
+      await this.env.DB.prepare("INSERT INTO guild_settings(guild_id,setting_key,value,updated_at) VALUES(?,?,?,?) ON CONFLICT(guild_id,setting_key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at").bind(guild,"anti_raid_enabled",enabled?"true":"false",new Date().toISOString()).run();
+      return send(enabled?"Anti-raid uyarıları açıldı; otomatik ceza uygulanmaz.":"Anti-raid uyarıları kapatıldı.");
+    }
+    if (name === "kullanici" || name === "avatar") {
+      const target=String(get(options,"member")?.value||uid), u=await this.discordRequest("/users/"+target);
+      const avatar=u.avatar?"https://cdn.discordapp.com/avatars/"+u.id+"/"+u.avatar+"."+(u.avatar.startsWith("a_")?"gif":"png")+"?size=1024":"https://cdn.discordapp.com/embed/avatars/0.png";
+      return send(name==="avatar"?"🖼️ "+avatar:"**Kullanıcı bilgisi**\nAd: "+(u.global_name||u.username)+"\nID: "+u.id+"\nBot: "+(u.bot?"Evet":"Hayır")+"\nAvatar: "+avatar,false);
+    }
+    if (name === "sunucu" || name === "rapor") {
+      if(!guild)return send("Bu komut yalnızca sunucuda kullanılabilir.");
+      const g=await this.discordRequest("/guilds/"+guild+"?with_counts=true");
+      const count=await this.env.DB.prepare("SELECT COUNT(*) AS total FROM interaction_audit WHERE guild_id=? AND created_at>=?").bind(guild,new Date(Date.now()-604800000).toISOString()).first();
+      return send("**"+g.name+"**\nÜye sayısı: **"+(g.approximate_member_count||g.member_count||"—")+"**\nSon 7 gün Worker komutu: **"+(count?.total||0)+"**",false);
+    }
+    const permissions = {kick:2n,ban:4n,manageChannels:16n,manageMessages:8192n,manageRoles:268435456n,manageNicknames:67108864n,moderate:1099511627776n};
+    const permitted = bit => { try { const p=BigInt(interaction.member?.permissions||"0"); return (p&8n)!==0n || (p&bit)===bit; } catch { return false; } };
+    const selected=String(get(options,"member")?.value||uid), channel=interaction.channel_id;
+    if (["kick","ban","unban","mute","unmute","temizle","slowmode","rolver","rolal","nick","duyuru","kilitle","kilita","kanalolustur","rololustur"].includes(name)) {
+      if(!guild)return send("Bu komut yalnızca sunucuda kullanılabilir.");
+      try {
+        if(name==="kick"){if(!permitted(permissions.kick))return send("Üyeleri At yetkisi gerekiyor.");await this.discordRequest("/guilds/"+guild+"/members/"+selected,"DELETE");return send("Üye sunucudan atıldı.");}
+        if(name==="ban"){if(!permitted(permissions.ban))return send("Üyeleri Yasakla yetkisi gerekiyor.");const days=Math.max(0,Math.min(7,Number(get(options,"sil_gun")?.value||0)));await this.discordRequest("/guilds/"+guild+"/bans/"+selected,"PUT",{delete_message_seconds:days*86400});return send("Üye yasaklandı.");}
+        if(name==="unban"){if(!permitted(permissions.ban))return send("Üyeleri Yasakla yetkisi gerekiyor.");const id=String(get(options,"user_id")?.value||"");if(!/^\d{15,22}$/.test(id))return send("Geçerli kullanıcı ID'si gir.");await this.discordRequest("/guilds/"+guild+"/bans/"+id,"DELETE");return send("Kullanıcının yasağı kaldırıldı.");}
+        if(name==="mute"||name==="unmute"){if(!permitted(permissions.moderate))return send("Üyelere Zaman Aşımı Uygula yetkisi gerekiyor.");let until=null;if(name==="mute"){const m=String(get(options,"sure")?.value||"10m").match(/^(\d{1,3})(s|m|h|d)$/i);if(!m)return send("Süre biçimi: 30s, 10m, 2h veya 1d.");const ms=Number(m[1])*({s:1000,m:60000,h:3600000,d:86400000}[m[2].toLowerCase()]);if(ms<1000||ms>2419200000)return send("Süre 1 saniye ile 28 gün arasında olmalı.");until=new Date(Date.now()+ms).toISOString();}await this.discordRequest("/guilds/"+guild+"/members/"+selected,"PATCH",{communication_disabled_until:until});return send(name==="mute"?"Üyeye zaman aşımı uygulandı.":"Zaman aşımı kaldırıldı.");}
+        if(name==="temizle"){if(!permitted(permissions.manageMessages))return send("Mesajları Yönet yetkisi gerekiyor.");const amount=Math.max(1,Math.min(100,Number(get(options,"adet")?.value||1))),msgs=await this.discordRequest("/channels/"+channel+"/messages?limit="+amount),ids=msgs.filter(x=>Date.now()-Date.parse(x.timestamp)<1209600000).map(x=>x.id);if(!ids.length)return send("Silinebilir mesaj bulunamadı.");if(ids.length===1)await this.discordRequest("/channels/"+channel+"/messages/"+ids[0],"DELETE");else await this.discordRequest("/channels/"+channel+"/messages/bulk-delete","POST",{messages:ids});return send("🧹 "+ids.length+" mesaj silindi.");}
+        if(name==="slowmode"){if(!permitted(permissions.manageChannels))return send("Kanalları Yönet yetkisi gerekiyor.");const sec=Math.max(0,Math.min(21600,Number(get(options,"saniye")?.value||0)));await this.discordRequest("/channels/"+channel,"PATCH",{rate_limit_per_user:sec});return send("Yavaş mod "+sec+" saniye olarak ayarlandı.");}
+        if(name==="rolver"||name==="rolal"){if(!permitted(permissions.manageRoles))return send("Rolleri Yönet yetkisi gerekiyor.");const role=String(get(options,"role")?.value||"");if(!role)return send("Rol seçmelisin.");await this.discordRequest("/guilds/"+guild+"/members/"+selected+"/roles/"+role,name==="rolver"?"PUT":"DELETE");return send(name==="rolver"?"Rol verildi.":"Rol alındı.");}
+        if(name==="nick"){if(!permitted(permissions.manageNicknames))return send("Takma Adları Yönet yetkisi gerekiyor.");const raw=String(get(options,"yeni_isim")?.value||"").trim(),nick=raw==="-"?"":raw;await this.discordRequest("/guilds/"+guild+"/members/"+selected,"PATCH",{nick:nick||null});return send("Takma ad güncellendi.");}
+        if(name==="duyuru"){if(!manageGuild)return send("Sunucuyu Yönet yetkisi gerekiyor.");const text=String(get(options,"mesaj")?.value||"").trim();if(!text||text.length>1800)return send("Duyuru 1–1800 karakter olmalı.");await this.discordRequest("/channels/"+channel+"/messages","POST",{content:"📢 **Duyuru**\n"+text,allowed_mentions:{parse:[]}});return send("Duyuru gönderildi.");}
+        if(name==="kilitle"||name==="kilita"){if(!permitted(permissions.manageChannels))return send("Kanalları Yönet yetkisi gerekiyor.");const data=await this.discordRequest("/channels/"+channel),everyone=String(guild),old=(data.permission_overwrites||[]).find(x=>x.id===everyone)||{id:everyone,type:0,allow:"0",deny:"0"},sendBit=2048n,allow=BigInt(old.allow||"0"),deny=BigInt(old.deny||"0"),next={...old,allow:(name==="kilita"?(allow|sendBit):(allow&~sendBit)).toString(),deny:(name==="kilitle"?(deny|sendBit):(deny&~sendBit)).toString()},over=(data.permission_overwrites||[]).filter(x=>x.id!==everyone);over.push(next);await this.discordRequest("/channels/"+channel,"PATCH",{permission_overwrites:over});return send(name==="kilitle"?"Kanal kilitlendi.":"Kanal kilidi açıldı.");}
+        if(name==="kanalolustur"){if(!permitted(permissions.manageChannels))return send("Kanalları Yönet yetkisi gerekiyor.");const channelName=String(get(options,"kanal_adi")?.value||"").toLowerCase().replace(/[^a-z0-9-]/g,"-").slice(0,90);if(!channelName)return send("Kanal adı gir.");const created=await this.discordRequest("/guilds/"+guild+"/channels","POST",{name:channelName,type:0});return send("Kanal oluşturuldu: <#"+created.id+">");}
+        if(name==="rololustur"){if(!permitted(permissions.manageRoles))return send("Rolleri Yönet yetkisi gerekiyor.");const roleName=String(get(options,"rol_adi")?.value||"").trim().slice(0,100);if(!roleName)return send("Rol adı gir.");const created=await this.discordRequest("/guilds/"+guild+"/roles","POST",{name:roleName,permissions:"0",mentionable:false,hoist:false});return send("Rol oluşturuldu: <@&"+created.id+">");}
+      } catch(error) { return send("Discord işlemi başarısız: "+(error instanceof Error?error.message:"Bilinmeyen hata")); }
+    }
+
     if (name === "kb") {
       if (!guild) return send("Bu komut yalnızca sunucuda kullanılabilir.");
       const sub = options[0], action = sub?.name, args = sub?.options || [];
