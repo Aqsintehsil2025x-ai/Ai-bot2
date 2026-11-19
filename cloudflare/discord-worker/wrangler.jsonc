@@ -17,19 +17,9 @@
   ],
   "secrets_store_secrets": [
     {
-      "binding": "DISCORD_TOKEN",
-      "store_id": "38bf4f1392d145f1ae0a76757629b5cd",
-      "secret_name": "DISCORD_TOKEN"
-    },
-    {
       "binding": "DISCORD_CLIENT_ID",
       "store_id": "38bf4f1392d145f1ae0a76757629b5cd",
       "secret_name": "DISCORD_CLIENT_ID"
-    },
-    {
-      "binding": "DISCORD_CLIENT_SECRET",
-      "store_id": "38bf4f1392d145f1ae0a76757629b5cd",
-      "secret_name": "DISCORD_CLIENT_SECRET"
     },
     {
       "binding": "GEMINI_API_KEY",
@@ -40,16 +30,6 @@
       "binding": "NVIDIA_API_KEY",
       "store_id": "38bf4f1392d145f1ae0a76757629b5cd",
       "secret_name": "NVIDIA_API_KEY"
-    },
-    {
-      "binding": "XFA_TOKEN_ENCRYPTION_KEY",
-      "store_id": "38bf4f1392d145f1ae0a76757629b5cd",
-      "secret_name": "XFA_TOKEN_ENCRYPTION_KEY"
-    },
-    {
-      "binding": "XFA_ACCESS_TOKEN",
-      "store_id": "38bf4f1392d145f1ae0a76757629b5cd",
-      "secret_name": "XFA_ACCESS_TOKEN"
     }
   ]
 }
