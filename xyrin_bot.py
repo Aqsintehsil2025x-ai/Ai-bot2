@@ -2247,6 +2247,66 @@ class UltimateImperialBot(commands.Bot):
         if member.bot:
             return
         guild = member.guild
+
+        # Join-to-create temporary voice rooms, configured independently per server.
+        voice_config = self.settings.value(guild.id, "temp_voice_config", {})
+        trigger_id = int(voice_config.get("trigger_channel_id") or 0) if isinstance(voice_config, dict) else 0
+        temp_ids = [
+            int(value) for value in self.settings.value(guild.id, "temp_voice_channels", [])
+            if str(value).isdigit()
+        ]
+        if after.channel and before.channel != after.channel and after.channel.id == trigger_id:
+            category = guild.get_channel(int(voice_config.get("category_id") or 0))
+            if not isinstance(category, discord.CategoryChannel):
+                category = after.channel.category
+            slug = re.sub(r"[^a-z0-9-]+", "-", fold_text(member.display_name).lower()).strip("-")[:35] or "member"
+            room = None
+            try:
+                room = await guild.create_voice_channel(
+                    name=f"{slug}-odasi",
+                    category=category,
+                    reason=f"Temporary voice room for {member} ({member.id})",
+                )
+                temp_ids.append(room.id)
+                self.settings.set(guild.id, "temp_voice_channels", temp_ids)
+                await member.move_to(room, reason="Join-to-create temporary voice room")
+            except discord.Forbidden:
+                logger.warning("Geçici ses odası oluşturulamadı: Manage Channels / Move Members izinlerini kontrol et.")
+                if room is not None:
+                    try:
+                        await room.delete(reason="Temporary room setup failed")
+                    except discord.HTTPException:
+                        pass
+                    self.settings.set(
+                        guild.id, "temp_voice_channels",
+                        [value for value in temp_ids if value != room.id],
+                    )
+            except discord.HTTPException:
+                logger.exception("Geçici ses odası oluşturulurken Discord hatası.")
+                if room is not None:
+                    try:
+                        await room.delete(reason="Temporary room setup failed")
+                    except discord.HTTPException:
+                        pass
+                    self.settings.set(
+                        guild.id, "temp_voice_channels",
+                        [value for value in temp_ids if value != room.id],
+                    )
+
+        if before.channel and before.channel.id in temp_ids:
+            remaining_humans = [voice_member for voice_member in before.channel.members if not voice_member.bot]
+            if not remaining_humans:
+                try:
+                    await before.channel.delete(reason="Temporary voice room is empty")
+                except discord.NotFound:
+                    pass
+                except discord.HTTPException:
+                    logger.warning("Boş geçici ses odası silinemedi.", exc_info=True)
+                self.settings.set(
+                    guild.id, "temp_voice_channels",
+                    [value for value in temp_ids if value != before.channel.id],
+                )
+
         if after.channel and before.channel != after.channel:
             logger.info(f"[HOLOGRAPHIC DLC] {member.name} ses kanalına katıldı: {after.channel.name}. Hologram projektör hazırlanıyor...")
             self.active_holograms[guild.id] = {
@@ -3303,6 +3363,7 @@ def help_pages() -> dict:
             (f"`{p}modlog` `{p}hosgeldin`", "Log / karşılama kanalı ayarı."),
             (f"`{p}ticketpanel`", "Destek paneli kurar; ticket kanalları özel ve kalıcıdır."),
             (f"`{p}otorol [@rol]`", "Yeni katılan üyelere otomatik rol verir veya kapatır."),
+            (f"`{p}tempvoice [#ses-kanalı]`", "Katıl-oluştur geçici ses odası kurar veya kapatır."),
             (f"`{p}kanaloluştur` `{p}rololuştur`", "Manuel kanal / rol."),
             (f"`{p}yedekle` `{p}sync` `{p}evrim`", "Yedek, slash eşitleme. Evrim: sanal ortamda dener, geçerse komutu ekler."),
         ]),
@@ -4782,6 +4843,38 @@ async def otorol_komutu(ctx, role: Optional[discord.Role] = None):
         bot.settings.set(ctx.guild.id, "auto_role_id", 0)
         await bot.settings.store.flush()
         await ctx.send("✅ Otomatik rol kapatıldı.")
+
+
+@bot.hybrid_command(
+    name="tempvoice",
+    aliases=["gecicises"],
+    description="Katıl-oluştur geçici ses odası sistemini ayarlar.",
+)
+@app_commands.describe(
+    trigger_channel="Üyelerin katılınca kendi odasını oluşturacağı ses kanalı; boş bırakırsan kapatılır",
+    category="Yeni geçici odaların açılacağı kategori (isteğe bağlı)",
+)
+@commands.guild_only()
+@perm_or_sovereign(manage_channels=True)
+async def temp_voice_komutu(
+    ctx,
+    trigger_channel: Optional[discord.VoiceChannel] = None,
+    category: Optional[discord.CategoryChannel] = None,
+):
+    if trigger_channel is None:
+        bot.settings.set(ctx.guild.id, "temp_voice_config", {"trigger_channel_id": 0, "category_id": None})
+        await bot.settings.store.flush()
+        await ctx.send("✅ Geçici ses odası sistemi kapatıldı. Mövcud otaqlar boşaldıqca silinəcək.")
+        return
+    config = {
+        "trigger_channel_id": trigger_channel.id,
+        "category_id": category.id if category else None,
+    }
+    bot.settings.set(ctx.guild.id, "temp_voice_config", config)
+    await bot.settings.store.flush()
+    await ctx.send(
+        f"✅ Üyeler {trigger_channel.mention} kanalına katılınca kendilerine geçici ses odası oluşturulacak."
+    )
 
 
 # --- 14J. DESTEK TICKET SISTEMI ---
