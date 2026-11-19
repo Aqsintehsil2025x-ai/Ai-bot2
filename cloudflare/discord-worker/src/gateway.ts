@@ -388,6 +388,33 @@ export class DiscordGateway extends DurableObject {
       }
     }
 
+
+    if (name === "hatirlat" || name === "etkinlik") {
+      const duration=String(get(options,"sure")?.value||"").trim().toLocaleLowerCase("tr"), title=String(get(options,name==="hatirlat"?"mesaj":"baslik")?.value||"").trim();
+      if(name==="etkinlik"&&!manageGuild)return send("Etkinlik planlamak için Sunucuyu Yönet yetkisi gerekiyor.");
+      const matches=[...duration.matchAll(/(\d+)(sn|s|dk|m|h|g|d|w)/g)];
+      if(!matches.length||matches.map(x=>x[0]).join("")!==duration)return send("Süre biçimi: 30m, 2h, 1h30m, 45dk veya 1g. En az 10 saniye, en fazla 365 gün.");
+      const factors={sn:1000,s:1000,dk:60000,m:60000,h:3600000,g:86400000,d:86400000,w:604800000};
+      const ms=matches.reduce((sum,x)=>sum+Number(x[1])*factors[x[2]],0);
+      if(ms<10000||ms>31536000000||!title||title.length>200)return send("Geçerli süre ve 1–200 karakterlik bir mesaj gir.");
+      const count=await this.env.DB.prepare("SELECT COUNT(*) AS total FROM reminders WHERE user_id=? AND due_at>?").bind(uid,new Date().toISOString()).first();
+      if(name==="hatirlat"&&Number(count?.total||0)>=10)return send("En fazla 10 bekleyen hatırlatman olabilir.");
+      const due=new Date(Date.now()+ms).toISOString();
+      const result=await this.env.DB.prepare("INSERT INTO reminders(guild_id,channel_id,user_id,kind,title,due_at,created_at) VALUES(?,?,?,?,?,?,?)").bind(guild||null,interaction.channel_id,uid,name==="etkinlik"?"event":"reminder",title,due,new Date().toISOString()).run();
+      return send("⏰ Tamam! <t:"+Math.floor(Date.parse(due)/1000)+":R> "+(name==="etkinlik"?"etkinlik":"hatırlatma")+" zamanı. ID: "+result.meta.last_row_id);
+    }
+    if (name === "hatirlatmalar") {
+      const rows=await this.env.DB.prepare("SELECT id,kind,title,due_at,user_id FROM reminders WHERE due_at>? AND (user_id=? OR (guild_id=? AND kind='event')) ORDER BY due_at LIMIT 15").bind(new Date().toISOString(),uid,guild).all();
+      return send(rows.results.length?rows.results.map(x=>"#"+x.id+" "+(x.kind==="event"?"📣":"⏰")+" <t:"+Math.floor(Date.parse(x.due_at)/1000)+":R> — "+x.title).join("\n"):"📭 Bekleyen hatırlatma veya etkinlik yok.",false);
+    }
+    if (name === "hatirlatsil") {
+      const id=Number(get(options,"kimlik")?.value||0),item=await this.env.DB.prepare("SELECT id,user_id,guild_id FROM reminders WHERE id=?").bind(id).first();
+      if(!item)return send("Bu ID'de bekleyen kayıt yok.");
+      if(item.user_id!==uid&&!manageGuild)return send("Bu kaydı silme yetkin yok.");
+      await this.env.DB.prepare("DELETE FROM reminders WHERE id=?").bind(id).run();
+      return send("🗑️ #"+id+" numaralı kayıt silindi.");
+    }
+
     if (name === "kb") {
       if (!guild) return send("Bu komut yalnızca sunucuda kullanılabilir.");
       const sub = options[0], action = sub?.name, args = sub?.options || [];
