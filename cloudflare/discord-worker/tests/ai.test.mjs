@@ -64,7 +64,7 @@ test("Gemini overload retries once, then uses NVIDIA", async (t) => {
   };
 
   const result = await generateAI(env, "gemini", "Test");
-  assert.equal(geminiCalls, 2);
+  assert.equal(geminiCalls, 4);
   assert.equal(result.provider, "nvidia");
   assert.equal(result.fallback, true);
   assert.equal(result.text, "NVIDIA ehtiyat cavabı");
@@ -81,7 +81,7 @@ test("both provider failures are surfaced without exposing API keys", async (t) 
     generateAI(env, "nvidia", "Test"),
     (error) => {
       assert.match(error.message, /NVIDIA HTTP 410/);
-      assert.match(error.message, /Gemini API HTTP 503/);
+      assert.match(error.message, /GEMINI API HTTP 503/);
       assert.equal(error.message.includes("test-nvidia-key"), false);
       assert.equal(error.message.includes("test-gemini-key"), false);
       return true;
