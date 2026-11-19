@@ -8,7 +8,10 @@ export class DiscordGateway extends DurableObject {
     this.socket = null;
     this.state = "offline";
     this.heartbeatTimer = null;
+    this.heartbeatStartTimer = null;
     this.awaitingAck = false;
+    this.reconnectAttempts = 0;
+    this.lastCloseCode = null;
     this.sequence = null;
     this.sessionId = null;
     this.resumeUrl = null;
@@ -29,7 +32,9 @@ export class DiscordGateway extends DurableObject {
       online: this.state === "ready",
       username: this.username,
       sessionResumable: Boolean(this.sessionId),
-      lastEventAt: this.lastEventAt
+      lastEventAt: this.lastEventAt,
+      lastCloseCode: this.lastCloseCode,
+      reconnectAttempts: this.reconnectAttempts
     };
   }
 
@@ -64,10 +69,20 @@ export class DiscordGateway extends DurableObject {
     });
     ws.addEventListener("error", () => {
       this.state = "error";
+      try { ws.close(4000, "Gateway socket error"); } catch {}
     });
-    ws.addEventListener("close", event => {
+    ws.addEventListener("close", async event => {
       this.socket = null;
+      this.lastCloseCode = event.code;
       this.stopHeartbeat();
+      if ([4007, 4009].includes(event.code)) {
+        this.sessionId = null;
+        this.sequence = null;
+        this.resumeUrl = null;
+        await this.ctx.storage.delete("session_id");
+        await this.ctx.storage.delete("sequence");
+        await this.ctx.storage.delete("resume_url");
+      }
       if ([4004, 4013, 4014].includes(event.code)) {
         this.state = "configuration_error";
         console.error("Discord Gateway rejected token or intents", event.code);
@@ -80,10 +95,13 @@ export class DiscordGateway extends DurableObject {
 
   scheduleReconnect() {
     if (this.reconnectTimer) return;
+    this.reconnectAttempts = Math.min(this.reconnectAttempts + 1, 8);
+    const baseDelay = Math.min(60000, 1000 * (2 ** (this.reconnectAttempts - 1)));
+    const delay = Math.round(baseDelay * (0.8 + Math.random() * 0.4));
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       this.connect().catch(error => console.error("Gateway reconnect failed", error));
-    }, 5000);
+    }, delay);
   }
 
   send(payload) {
@@ -98,14 +116,18 @@ export class DiscordGateway extends DurableObject {
     this.stopHeartbeat();
     this.awaitingAck = false;
     const firstDelay = Math.floor(Math.random() * interval);
-    setTimeout(() => {
+    this.heartbeatStartTimer = setTimeout(() => {
+      this.heartbeatStartTimer = null;
+      if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
       this.heartbeat();
       this.heartbeatTimer = setInterval(() => this.heartbeat(), interval);
     }, firstDelay);
   }
 
   stopHeartbeat() {
+    if (this.heartbeatStartTimer) clearTimeout(this.heartbeatStartTimer);
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+    this.heartbeatStartTimer = null;
     this.heartbeatTimer = null;
     this.awaitingAck = false;
   }
@@ -178,11 +200,13 @@ export class DiscordGateway extends DurableObject {
       await this.ctx.storage.put("resume_url", this.resumeUrl);
       await this.ctx.storage.put("username", this.username);
       this.state = "ready";
+      this.reconnectAttempts = 0;
       console.log("Discord Gateway READY", this.username);
       return;
     }
     if (packet.t === "RESUMED") {
       this.state = "ready";
+      this.reconnectAttempts = 0;
       console.log("Discord Gateway session resumed");
       return;
     }
