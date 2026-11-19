@@ -3350,6 +3350,175 @@ class HelpView(discord.ui.View):
                 pass
 
 
+class TicketPanelView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Destek talebi aç", style=discord.ButtonStyle.primary, emoji="🎫", custom_id="xyrin:tickets:open")
+    async def open_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        guild = interaction.guild
+        member = interaction.user
+        if guild is None or not isinstance(member, discord.Member):
+            await interaction.response.send_message("Bu panel yalnızca sunucuda kullanılabilir.", ephemeral=True)
+            return
+        if member.bot:
+            await interaction.response.send_message("Bot hesapları destek talebi açamaz.", ephemeral=True)
+            return
+
+        active = bot.tickets.data.setdefault("active", {})
+        existing = next((item for item in active.values()
+                         if item.get("guild_id") == guild.id
+                         and item.get("user_id") == member.id
+                         and item.get("status") == "open"), None)
+        if existing:
+            old_channel = guild.get_channel(int(existing.get("channel_id") or 0))
+            if old_channel is not None:
+                await interaction.response.send_message(
+                    f"Açık bir destek talebin zaten var: {old_channel.mention}", ephemeral=True
+                )
+                return
+            active.pop(str(existing.get("channel_id") or ""), None)
+            bot.tickets.mark_dirty()
+
+        await interaction.response.defer(ephemeral=True)
+        config = bot.settings.value(guild.id, "ticket_config", {})
+        if not isinstance(config, dict):
+            config = {}
+        category = guild.get_channel(int(config.get("category_id") or 0))
+        if not isinstance(category, discord.CategoryChannel):
+            category = None
+        support_role = guild.get_role(int(config.get("support_role_id") or 0))
+        bot_member = guild.me or guild.get_member(bot.user.id)
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(view_channel=False),
+            member: discord.PermissionOverwrite(
+                view_channel=True, send_messages=True, read_message_history=True,
+                attach_files=True, embed_links=True,
+            ),
+        }
+        if bot_member is not None:
+            overwrites[bot_member] = discord.PermissionOverwrite(
+                view_channel=True, send_messages=True, read_message_history=True,
+                manage_channels=True, manage_messages=True,
+            )
+        if support_role is not None:
+            overwrites[support_role] = discord.PermissionOverwrite(
+                view_channel=True, send_messages=True, read_message_history=True,
+            )
+        slug = re.sub(r"[^a-z0-9-]+", "-", fold_text(member.name).lower()).strip("-")[:35] or "member"
+        try:
+            channel = await guild.create_text_channel(
+                name=f"ticket-{slug}",
+                category=category,
+                overwrites=overwrites,
+                topic=f"Xyrin support ticket • opener_id={member.id}",
+                reason=f"Support ticket opened by {member} ({member.id})",
+            )
+        except discord.Forbidden:
+            await interaction.followup.send("Kanal yaradıla bilmədi. Botda Manage Channels icazəsini yoxlayın.", ephemeral=True)
+            return
+        except discord.HTTPException:
+            await interaction.followup.send("Dəstək kanalı yaradılarkən Discord xətası baş verdi.", ephemeral=True)
+            return
+
+        record = {
+            "channel_id": channel.id,
+            "guild_id": guild.id,
+            "user_id": member.id,
+            "support_role_id": support_role.id if support_role else None,
+            "log_channel_id": int(config.get("log_channel_id") or 0),
+            "status": "open",
+            "created_at": utcnow().isoformat(),
+        }
+        active[str(channel.id)] = record
+        bot.tickets.mark_dirty()
+        embed = discord.Embed(
+            title="🎫 Dəstək talebin açıldı",
+            description=(
+                f"Salam {member.mention}! Problemini bu kanalda izah edə bilərsən. "
+                "Dəstək komandası sənə burada cavab verəcək.\n\n"
+                "Talebin həll olunanda Talebi bağla düyməsini istifadə et."
+            ),
+            color=discord.Color.blurple(),
+        )
+        if support_role is not None:
+            embed.add_field(name="Dəstək komandası", value=support_role.mention, inline=False)
+        embed.set_footer(text=f"Ticket ID: {channel.id}")
+        await channel.send(embed=embed, view=TicketControlView())
+        await interaction.followup.send(f"Ticket kanalın yaradıldı: {channel.mention}", ephemeral=True)
+
+
+class TicketControlView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Talebi bağla", style=discord.ButtonStyle.danger, emoji="🔒", custom_id="xyrin:tickets:close")
+    async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        channel = interaction.channel
+        guild = interaction.guild
+        if guild is None or not isinstance(channel, discord.TextChannel):
+            await interaction.response.send_message("Bu düymə yalnız ticket kanalında işləyir.", ephemeral=True)
+            return
+        record = bot.tickets.data.setdefault("active", {}).get(str(channel.id))
+        if not record or record.get("status") != "open":
+            await interaction.response.send_message("Bu ticket artıq bağlıdır və ya qeydiyyatda deyil.", ephemeral=True)
+            return
+
+        support_role_id = int(record.get("support_role_id") or 0)
+        is_support = bool(support_role_id and any(
+            role.id == support_role_id for role in getattr(interaction.user, "roles", [])
+        ))
+        is_opener = interaction.user.id == int(record.get("user_id") or 0)
+        can_manage = bool(getattr(interaction.user.guild_permissions, "manage_channels", False))
+        if not (is_opener or is_support or can_manage):
+            await interaction.response.send_message(
+                "Bu ticket-i yalnız onu açan şəxs, dəstək komandası və ya server rəhbərliyi bağlaya bilər.",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.response.defer(ephemeral=True)
+        try:
+            opener = guild.get_member(int(record.get("user_id") or 0))
+            if opener is not None:
+                await channel.set_permissions(
+                    opener, view_channel=True, send_messages=False, add_reactions=False,
+                    reason=f"Ticket closed by {interaction.user}",
+                )
+            await channel.edit(name=("closed-" + channel.name)[:100])
+        except discord.Forbidden:
+            await interaction.followup.send("Ticket bağlana bilmədi. Botun kanal icazələrini yoxlayın.", ephemeral=True)
+            return
+        except discord.HTTPException:
+            await interaction.followup.send("Ticket bağlanarkən Discord xətası baş verdi.", ephemeral=True)
+            return
+
+        record["status"] = "closed"
+        record["closed_at"] = utcnow().isoformat()
+        record["closed_by"] = interaction.user.id
+        bot.tickets.mark_dirty()
+        await channel.send(embed=discord.Embed(
+            title="🔒 Dəstək talebi bağlandı",
+            description=f"Bağlayan: {interaction.user.mention}\nBu kanal arxiv kimi saxlanılır.",
+            color=discord.Color.dark_grey(),
+        ))
+        log_id = int(record.get("log_channel_id") or 0)
+        log_channel = guild.get_channel(log_id) if log_id else None
+        if isinstance(log_channel, discord.TextChannel) and log_channel.id != channel.id:
+            try:
+                await log_channel.send(
+                    f"Ticket bağlandı: {channel.mention} • Açan ID: {record.get('user_id')} • Bağlayan: {interaction.user.mention}"
+                )
+            except discord.HTTPException:
+                pass
+        try:
+            if interaction.message:
+                await interaction.message.edit(view=None)
+        except discord.HTTPException:
+            pass
+        await interaction.followup.send("Ticket bağlandı və arxivləndi.", ephemeral=True)
+
+
 # ==============================================================================
 # 14. İMPARATORLUK KOMUT SETİ
 # ==============================================================================
