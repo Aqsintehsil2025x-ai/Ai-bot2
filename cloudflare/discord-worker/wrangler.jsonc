@@ -9,7 +9,7 @@
     {
       "binding": "DB",
       "database_name": "xfa-discord-test",
-      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "database_id": "a94723cf-687c-4246-9b35-f680a86bf72f",
       "migrations_dir": "migrations"
     }
   ]
