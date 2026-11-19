@@ -375,7 +375,7 @@ function Router() {
   return (
     <RoutedErrorBoundary>
       <Switch>
-        <Route path="/" component={UniversePage}/>
+        <Route path="/" component={Home}/>
         <Route path="/universe" component={UniversePage}/>
         <Route path="/welcome" component={Home}/>
         <Route path="/panel" component={Panel}/>
