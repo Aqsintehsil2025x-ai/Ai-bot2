@@ -306,7 +306,7 @@ export class DiscordGateway extends DurableObject<Env> {
     } else if (command === "yazitura") response = "🪙 " + mention + ", sonuç: **" + (Math.random() < 0.5 ? "Yazı" : "Tura") + "**!";
     else if (command === "kahve") response = "☕ " + mention + ", " + (parts.join(" ").slice(0, 40) || "Espresso") + " siparişin hazır!";
     else if (command === "secim") {
-      const choices = content.slice(prefix.length + command.length).trim().split("|").map(x => x.trim()).filter(Boolean);
+      const choices = content.slice(prefix.length + command.length).trim().split("|").map((x: string) => x.trim()).filter(Boolean);
       if (choices.length < 2 || choices.length > 10) response = "En az 2, en fazla 10 seçeneği | ile ayır.";
       else response = "🎯 Seçimim: **" + choices[Math.floor(Math.random() * choices.length)] + "**";
     } else if (command === "sekiztop" || command === "8ball") {
