@@ -1,9 +1,27 @@
-// @ts-nocheck
 import { DurableObject } from "cloudflare:workers";
 import { dispatchInteraction } from "./index";
 
+type GatewayEnv = {
+  DB: D1Database;
+  DISCORD_TOKEN: { get(): Promise<string> };
+};
+
 export class DiscordGateway extends DurableObject {
-  constructor(ctx, env) {
+  private socket: WebSocket | null = null;
+  private state = "offline";
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private heartbeatStartTimer: ReturnType<typeof setTimeout> | null = null;
+  private awaitingAck = false;
+  private sequence: number | null = null;
+  private sessionId: string | null = null;
+  private resumeUrl: string | null = null;
+  private username: string | null = null;
+  private lastEventAt: string | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private reconnectAttempts = 0;
+  private lastCloseCode: number | null = null;
+
+  constructor(ctx: DurableObjectState, env: GatewayEnv) {
     super(ctx, env);
     this.socket = null;
     this.state = "offline";
@@ -26,7 +44,7 @@ export class DiscordGateway extends DurableObject {
     });
   }
 
-  async status() {
+  async status(): Promise<Record<string, unknown>> {
     return {
       state: this.state,
       online: this.state === "ready",
@@ -38,7 +56,7 @@ export class DiscordGateway extends DurableObject {
     };
   }
 
-  async start() {
+  async start(): Promise<Record<string, unknown>> {
     if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
       return this.status();
     }
@@ -46,7 +64,7 @@ export class DiscordGateway extends DurableObject {
     return this.status();
   }
 
-  async connect() {
+  async connect(): Promise<void> {
     if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) return;
     this.state = "connecting";
     const base = this.sessionId && this.resumeUrl ? this.resumeUrl : "wss://gateway.discord.gg/";
@@ -93,7 +111,7 @@ export class DiscordGateway extends DurableObject {
     });
   }
 
-  scheduleReconnect() {
+  scheduleReconnect(): void {
     if (this.reconnectTimer) return;
     this.reconnectAttempts = Math.min(this.reconnectAttempts + 1, 8);
     const baseDelay = Math.min(60000, 1000 * (2 ** (this.reconnectAttempts - 1)));
@@ -104,7 +122,7 @@ export class DiscordGateway extends DurableObject {
     }, delay);
   }
 
-  send(payload) {
+  send(payload: unknown): boolean {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       this.socket.send(JSON.stringify(payload));
       return true;
@@ -112,7 +130,7 @@ export class DiscordGateway extends DurableObject {
     return false;
   }
 
-  startHeartbeat(interval) {
+  startHeartbeat(interval: number): void {
     this.stopHeartbeat();
     this.awaitingAck = false;
     const firstDelay = Math.floor(Math.random() * interval);
@@ -124,7 +142,7 @@ export class DiscordGateway extends DurableObject {
     }, firstDelay);
   }
 
-  stopHeartbeat() {
+  stopHeartbeat(): void {
     if (this.heartbeatStartTimer) clearTimeout(this.heartbeatStartTimer);
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
     this.heartbeatStartTimer = null;
@@ -132,7 +150,7 @@ export class DiscordGateway extends DurableObject {
     this.awaitingAck = false;
   }
 
-  heartbeat() {
+  heartbeat(): void {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
     if (this.awaitingAck) {
       this.socket.close(4000, "Heartbeat ACK timeout");
@@ -142,7 +160,7 @@ export class DiscordGateway extends DurableObject {
     this.send({ op: 1, d: this.sequence });
   }
 
-  async handleGatewayMessage(raw) {
+  async handleGatewayMessage(raw: string | ArrayBuffer): Promise<void> {
     const packet = JSON.parse(typeof raw === "string" ? raw : new TextDecoder().decode(raw));
     if (packet.s !== null && packet.s !== undefined) {
       this.sequence = packet.s;
@@ -223,7 +241,7 @@ export class DiscordGateway extends DurableObject {
     }
   }
 
-  async discordRequest(path, method = "GET", body) {
+  async discordRequest(path: string, method = "GET", body?: unknown): Promise<any> {
     const token = await this.env.DISCORD_TOKEN.get();
     const response = await fetch("https://discord.com/api/v10" + path, {
       method,
@@ -236,7 +254,7 @@ export class DiscordGateway extends DurableObject {
   }
 
 
-  async interactionReply(interaction, data) {
+  async interactionReply(interaction: any, data: any): Promise<void> {
     const response = await fetch("https://discord.com/api/v10/interactions/" + interaction.id + "/" + interaction.token + "/callback", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -249,7 +267,7 @@ export class DiscordGateway extends DurableObject {
     }
   }
 
-  async handleInteraction(interaction) {
+  async handleInteraction(interaction: any): Promise<void> {
     try {
       const response = await dispatchInteraction(
         interaction,
@@ -271,7 +289,7 @@ export class DiscordGateway extends DurableObject {
     }
   }
 
-  async handleMessage(message) {
+  async handleMessage(message: any): Promise<void> {
     if (!message.guild_id || message.author?.bot || !message.content) return;
     const content = message.content.trim();
     const now = new Date().toISOString();
@@ -320,7 +338,7 @@ export class DiscordGateway extends DurableObject {
     }
   }
 
-  async handleMemberJoin(member) {
+  async handleMemberJoin(member: any): Promise<void> {
     const guild = member.guild_id;
     if (!guild || member.user?.bot) return;
     const welcome = await this.env.DB.prepare("SELECT value FROM guild_settings WHERE guild_id=? AND setting_key='welcome_channel'").bind(guild).first();
