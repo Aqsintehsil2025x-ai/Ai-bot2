@@ -22,6 +22,11 @@
       "secret_name": "DISCORD_CLIENT_ID"
     },
     {
+      "binding": "DISCORD_TOKEN",
+      "store_id": "38bf4f1392d145f1ae0a76757629b5cd",
+      "secret_name": "DISCORD_TOKEN"
+    },
+    {
       "binding": "GEMINI_API_KEY",
       "store_id": "38bf4f1392d145f1ae0a76757629b5cd",
       "secret_name": "GEMINI_API_KEY"
