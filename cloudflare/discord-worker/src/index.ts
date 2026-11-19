@@ -148,10 +148,10 @@ function handleUtilityCommand(interaction: Interaction): Response | null {
   const userId = interaction.member?.user?.id ?? interaction.user?.id ?? "kullanıcı";
   const mention = /^\d+$/.test(userId) ? `<@${userId}>` : "Kullanıcı";
   if (name === "kimlik") {
-    return reply(\`🪪 Discord kullanıcı ID'n: \\\`\${userId}\\\`\`, true);
+    return reply("🪪 Discord kullanıcı ID'n: `" + userId + "`", true);
   }
   if (name === "yardim") {
-    return reply("**Cloudflare test komutları**\\n/ping • /xfa • /sor • /kb\\n/zar • /yazitura • /kahve • /secim • /sekiztop\\nKomutlar taşındıkça bu liste genişletilecek.", true);
+    return reply("**Cloudflare test komutları**\n/ping • /xfa • /sor • /kb\n/zar • /yazitura • /kahve • /secim • /sekiztop\nKomutlar taşındıkça bu liste genişletilecek.", true);
   }
   if (name === "zar") {
     const raw = Number(option(opts, "max_sayi")?.value ?? 100);
