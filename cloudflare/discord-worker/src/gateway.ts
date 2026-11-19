@@ -6,7 +6,7 @@ type GatewayEnv = {
   DISCORD_TOKEN: { get(): Promise<string> };
 };
 
-export class DiscordGateway extends DurableObject {
+export class DiscordGateway extends DurableObject<GatewayEnv> {
   private socket: WebSocket | null = null;
   private state = "offline";
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
@@ -37,10 +37,10 @@ export class DiscordGateway extends DurableObject {
     this.lastEventAt = null;
     this.reconnectTimer = null;
     ctx.blockConcurrencyWhile(async () => {
-      this.sequence = await ctx.storage.get("sequence") ?? null;
-      this.sessionId = await ctx.storage.get("session_id") ?? null;
-      this.resumeUrl = await ctx.storage.get("resume_url") ?? null;
-      this.username = await ctx.storage.get("username") ?? null;
+      this.sequence = await ctx.storage.get<number>("sequence") ?? null;
+      this.sessionId = await ctx.storage.get<string>("session_id") ?? null;
+      this.resumeUrl = await ctx.storage.get<string>("resume_url") ?? null;
+      this.username = await ctx.storage.get<string>("username") ?? null;
     });
   }
 
