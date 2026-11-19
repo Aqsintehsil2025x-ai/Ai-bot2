@@ -63,10 +63,15 @@ export class DiscordGateway extends DurableObject {
     ws.addEventListener("error", () => {
       this.state = "error";
     });
-    ws.addEventListener("close", () => {
-      this.state = "offline";
+    ws.addEventListener("close", event => {
       this.socket = null;
       this.stopHeartbeat();
+      if ([4004, 4013, 4014].includes(event.code)) {
+        this.state = "configuration_error";
+        console.error("Discord Gateway rejected token or intents", event.code);
+        return;
+      }
+      this.state = "offline";
       this.scheduleReconnect();
     });
   }
