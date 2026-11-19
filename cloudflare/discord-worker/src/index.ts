@@ -142,6 +142,36 @@ async function handleKnowledgeBase(interaction: Interaction, env: Env): Promise<
   return reply("Bilinmeyen FAQ işlemi.");
 }
 
+function handleUtilityCommand(interaction: Interaction): Response | null {
+  const name = interaction.data?.name;
+  const opts = interaction.data?.options;
+  const userId = interaction.member?.user?.id ?? interaction.user?.id ?? "kullanıcı";
+  const mention = /^\\d+$/.test(userId) ? `<@${userId}>` : "Kullanıcı";
+  if (name === "zar") {
+    const raw = Number(option(opts, "max_sayi")?.value ?? 100);
+    const max = Number.isInteger(raw) ? Math.min(1000000, Math.max(2, raw)) : 100;
+    return reply(`🎲 ${mention} zar attı: **${Math.floor(Math.random() * max) + 1} / ${max}**`, false);
+  }
+  if (name === "yazitura") return reply(`🪙 ${mention}, sonuç: **${Math.random() < 0.5 ? "Yazı" : "Tura"}**!`, false);
+  if (name === "kahve") {
+    const coffee = String(option(opts, "kahve_turu")?.value ?? "Espresso").trim().slice(0, 40) || "Espresso";
+    return reply(`☕ ${mention}, ${coffee} siparişin hazır! Afiyet olsun.`, false);
+  }
+  if (name === "secim") {
+    const raw = String(option(opts, "secenekler")?.value ?? "");
+    const choices = raw.split("|").map((item) => item.trim()).filter(Boolean);
+    if (choices.length < 2 || choices.length > 10) return reply("En az 2, en fazla 10 seçeneği | işaretiyle ayırmalısın.");
+    if (choices.some((item) => item.length > 100)) return reply("Her seçenek en fazla 100 karakter olabilir.");
+    return reply(`🎯 Seçimim: **${choices[Math.floor(Math.random() * choices.length)]}**`, false);
+  }
+  if (name === "sekiztop") {
+    const question = String(option(opts, "soru")?.value ?? "").trim();
+    if (question.length < 3) return reply("Biraz daha açıklayıcı bir soru yaz.");
+    const answers = ["Kesinlikle!", "Büyük ihtimalle evet.", "Bence evet.", "İşaretler olumlu.", "Şu an söylemek zor.", "Daha sonra tekrar sor.", "Pek sanmıyorum.", "Cevabım hayır."];
+    return reply(`🎱 **${question.slice(0, 500)}**\\n${answers[Math.floor(Math.random() * answers.length)]}`, false);
+  }
+  return null;
+}
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
@@ -185,6 +215,8 @@ export default {
       return json({ type: 5, data: { flags: EPHEMERAL } });
     }
     if (command === "kb") return handleKnowledgeBase(interaction, env);
+    const utilityResponse = handleUtilityCommand(interaction);
+    if (utilityResponse) return utilityResponse;
     return reply("Bu komut Cloudflare test sürümünde henüz taşınmadı.");
   },
 };
