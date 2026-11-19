@@ -56,9 +56,10 @@ export class DiscordGateway extends DurableObject {
     this.socket = ws;
     ws.addEventListener("open", () => { this.state = "connected"; });
     ws.addEventListener("message", event => {
-      this.handleGatewayMessage(event.data).catch(error => {
+      // Keep async Gateway work alive while commands (especially AI) call external APIs.
+      this.ctx.waitUntil(this.handleGatewayMessage(event.data).catch(error => {
         console.error("Gateway message handler failed", error);
-      });
+      }));
     });
     ws.addEventListener("error", () => {
       this.state = "error";
