@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { runDeferredAI, type AIProvider } from "./ai";
 export interface SecretStoreBinding { get(): Promise<string>; }
 export interface Env {
@@ -157,11 +156,11 @@ function handleUtilityCommand(interaction: Interaction): Response | null {
 }
 
 const REST_PERMS = { manageChannels:16n, kick:2n, ban:4n, manageRoles:268435456n, manageMessages:8192n, moderate:1099511627776n, manageNicknames:67108864n, administrator:8n };
-function hasPermission(interaction, bit) {
+function hasPermission(interaction: Interaction, bit: bigint): boolean {
   try { const p=BigInt(interaction.member?.permissions ?? "0"); return (p & REST_PERMS.administrator) !== 0n || (p & bit) === bit; }
   catch { return false; }
 }
-async function discordApi(env, path, method="GET", body) {
+async function discordApi(env: Env, path: string, method = "GET", body?: unknown): Promise<any> {
   const token = await env.DISCORD_TOKEN.get();
   const response = await fetch("https://discord.com/api/v10"+path, {
     method, headers:{authorization:"Bot "+token,"content-type":"application/json"},
@@ -171,7 +170,7 @@ async function discordApi(env, path, method="GET", body) {
   if(!response.ok) throw new Error(data?.message || "Discord API HTTP "+response.status);
   return data;
 }
-async function handleMoreCommands(i, env) {
+async function handleMoreCommands(i: Interaction, env: Env): Promise<Response | null> {
   const name=i.data?.name, opts=i.data?.options || [], guild=i.guild_id, channel=i.channel_id;
   const selected=String(option(opts,"member")?.value || i.member?.user?.id || i.user?.id || "");
   const require=(bit,label)=>hasPermission(i,bit)?null:reply("Bu işlem için "+label+" yetkisi gerekiyor.");
