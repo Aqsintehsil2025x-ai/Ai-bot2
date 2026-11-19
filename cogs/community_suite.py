@@ -175,7 +175,7 @@ class CommunitySuite(commands.Cog):
         needle = _normalise(query)
         ranked = sorted(
             (
-                (SequenceMatcher(None, needle, _normalise(str(entry.get("question", ""))).ratio(), entry)
+                (SequenceMatcher(None, needle, _normalise(str(entry.get("question", "")))).ratio(), entry)
                 for entry in entries
                 if isinstance(entry, dict) and entry.get("question") and entry.get("answer")
             ),
