@@ -31,7 +31,7 @@ References:
 
 ## Deployment status
 
-The Pages project is connected to GitHub, but Cloudflare marked the current Git-triggered preview attempts as skipped with `path_config`. No successful Pages build or public production release has been verified yet. Fix the Git integration/path-filter behavior and obtain a successful preview build before proceeding.
+The Pages project is connected to GitHub. Path filters have been cleared and the build root is now the repository root, with the dashboard build invoked from `dashboard/`. A fresh preview build is pending; no successful Pages build or public production release has been verified yet.
 
 ## Rollout policy
 
