@@ -179,7 +179,7 @@ function handleUtilityCommand(interaction: Interaction): Response | null {
   return null;
 }
 
-const REST_PERMS = { manageChannels:16n, kick:2n, ban:4n, manageRoles:268435456n, manageMessages:8192n, moderate:1099511627776n, administrator:8n };
+const REST_PERMS = { manageChannels:16n, kick:2n, ban:4n, manageRoles:268435456n, manageMessages:8192n, moderate:1099511627776n, manageNicknames:67108864n, administrator:8n };
 function hasPermission(interaction, bit) {
   try { const p=BigInt(interaction.member?.permissions ?? "0"); return (p & REST_PERMS.administrator) !== 0n || (p & bit) === bit; }
   catch { return false; }
@@ -210,6 +210,41 @@ async function handleMoreCommands(i, env) {
       const x=await discordApi(env,"/guilds/"+guild+"?with_counts=true");
       const row=await env.DB.prepare("SELECT COUNT(*) AS total FROM interaction_audit WHERE guild_id=? AND created_at>=?").bind(guild,new Date(Date.now()-604800000).toISOString()).first();
       return reply("**"+x.name+"**\nID: "+x.id+"\nÜye: **"+(x.approximate_member_count||x.member_count||"—")+"**\nSon 7 gün Worker komutu: **"+(row?.total||0)+"**",false);
+    }
+    if(name==="gemini" || name==="nvidia") {
+      if(!guild)return reply("Bu komut yalnızca sunucuda kullanılabilir.");
+      if(!hasPermission(i,32n))return reply("Sunucuyu Yönet yetkisi gerekiyor.");
+      await env.DB.prepare("INSERT INTO guild_settings(guild_id,setting_key,value,updated_at) VALUES(?,?,?,?) ON CONFLICT(guild_id,setting_key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at").bind(guild,"ai_provider",name,new Date().toISOString()).run();
+      return reply("Bu sunucunun XFA sağlayıcısı "+name.toUpperCase()+" olarak ayarlandı.");
+    }
+    if(name==="ship") {
+      const a=i.member?.user?.id||i.user?.id||"", b=String(option(opts,"member")?.value||a);
+      const seed=(a+b+new Date().toISOString().slice(0,10)).split("").reduce((v,c)=>((v*31+c.charCodeAt(0))>>>0),7);
+      return reply("💞 <@"+a+"> + <@"+b+">\nGünlük uyum puanı: **"+(seed%101)+"%**",false);
+    }
+    if(name==="kilitle" || name==="kilita") {
+      const p=require(REST_PERMS.manageChannels,"Kanalları Yönet"); if(p)return p;
+      const channelData=await discordApi(env,"/channels/"+channel);
+      const everyone=String(guild), old=(channelData.permission_overwrites||[]).find(x=>x.id===everyone)||{id:everyone,type:0,allow:"0",deny:"0"};
+      const send=2048n, allow=BigInt(old.allow||"0"), deny=BigInt(old.deny||"0");
+      const next={...old,allow:(name==="kilita"?(allow|send):(allow&~send)).toString(),deny:(name==="kilitle"?(deny|send):(deny&~send)).toString()};
+      const overwrites=(channelData.permission_overwrites||[]).filter(x=>x.id!==everyone); overwrites.push(next);
+      await discordApi(env,"/channels/"+channel,"PATCH",{permission_overwrites:overwrites});
+      return reply(name==="kilitle"?"Kanal kilitlendi.":"Kanal kilidi açıldı.");
+    }
+    if(name==="kanalolustur") {
+      const p=require(REST_PERMS.manageChannels,"Kanalları Yönet"); if(p)return p;
+      const channelName=String(option(opts,"kanal_adi")?.value||"").toLowerCase().replace(/[^a-z0-9-]/g,"-").slice(0,90);
+      if(!channelName)return reply("Geçerli kanal adı gir.");
+      const created=await discordApi(env,"/guilds/"+guild+"/channels","POST",{name:channelName,type:0});
+      return reply("Kanal oluşturuldu: <#"+created.id+">");
+    }
+    if(name==="rololustur") {
+      const p=require(REST_PERMS.manageRoles,"Rolleri Yönet"); if(p)return p;
+      const roleName=String(option(opts,"rol_adi")?.value||"").trim().slice(0,100);
+      if(!roleName)return reply("Rol adı gir.");
+      const created=await discordApi(env,"/guilds/"+guild+"/roles","POST",{name:roleName,permissions:"0",mentionable:false,hoist:false});
+      return reply("Rol oluşturuldu: <@&"+created.id+">");
     }
     if(name==="oneri") {
       const text=String(option(opts,"metin")?.value||"").trim();
@@ -277,8 +312,9 @@ async function handleMoreCommands(i, env) {
       return reply(name==="rolver"?"Rol verildi.":"Rol alındı.");
     }
     if(name==="nick") {
-      const p=require(REST_PERMS.manageRoles,"Takma Adları Yönet"); if(p)return p;
-      const nick=String(option(opts,"yeni_isim")?.value||"").trim();
+      const p=require(REST_PERMS.manageNicknames,"Takma Adları Yönet"); if(p)return p;
+      const rawNick=String(option(opts,"yeni_isim")?.value||"").trim();
+      const nick=rawNick==="-"?"":rawNick;
       await discordApi(env,"/guilds/"+guild+"/members/"+selected,"PATCH",{nick:nick||null});
       return reply("Takma ad güncellendi.");
     }
