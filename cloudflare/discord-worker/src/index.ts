@@ -1,14 +1,7 @@
 export interface Env {
   DB: D1Database;
   DISCORD_PUBLIC_KEY?: string;
-  DISCORD_APPLICATION_ID?: string;
-  DISCORD_TOKEN?: string;
-  GEMINI_API_KEY?: string;
-  NVIDIA_API_KEY?: string;
-  GROQ_API_KEY?: string;
-  OPENROUTER_API_KEY?: string;
-  DEEPSEEK_API_KEY?: string;
-}
+ }
 
 type Option = { name: string; type?: number; value?: string | number | boolean; options?: Option[] };
 type Interaction = {
