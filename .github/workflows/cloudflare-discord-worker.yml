@@ -1,0 +1,29 @@
+name: Cloudflare Discord Worker
+
+on:
+  pull_request:
+    paths:
+      - "cloudflare/discord-worker/**"
+      - ".github/workflows/cloudflare-discord-worker.yml"
+  push:
+    branches:
+      - feature/cloudflare-worker-port
+    paths:
+      - "cloudflare/discord-worker/**"
+      - ".github/workflows/cloudflare-discord-worker.yml"
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cloudflare/discord-worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: cloudflare/discord-worker/package-lock.json
+      - run: npm install --no-audit --no-fund
+      - run: npm run typecheck
