@@ -42,7 +42,7 @@ const commands = [
         options: [{ type: 3, name: "question", description: "Silinecek sorunun tam metni", required: true, max_length: 180 }]
       }
     ]
-  }
+  },
 
   { name: "kullanici", description: "Kullanıcı bilgilerini gösterir.", options: [{ type: 6, name: "member", description: "Bilgisine bakılacak üye", required: false }] },
   { name: "avatar", description: "Kullanıcının avatarını gösterir.", options: [{ type: 6, name: "member", description: "Avatarı gösterilecek üye", required: false }] },
@@ -63,7 +63,7 @@ const commands = [
   { name: "nick", description: "Üyenin takma adını değiştirir.", options: [{ type: 6, name: "member", description: "Üye", required: true }, { type: 3, name: "yeni_isim", description: "Yeni isim; boş bırakmak için -", required: false, max_length: 32 }] },
   { name: "duyuru", description: "Bu kanala duyuru gönderir.", options: [{ type: 3, name: "mesaj", description: "Duyuru metni", required: true, max_length: 1800 }] },
   { name: "gemini", description: "Sunucunun varsayılan XFA sağlayıcısını Gemini yapar." },
-  { name: "nvidia", description: "Sunucunun varsayılan XFA sağlayıcısını NVIDIA yapar." }
+  { name: "nvidia", description: "Sunucunun varsayılan XFA sağlayıcısını NVIDIA yapar." },
 
   { name: "kilitle", description: "Bu kanalı kilitler." },
   { name: "kilita", description: "Bu kanalın kilidini açar." },
