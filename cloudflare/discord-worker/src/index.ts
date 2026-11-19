@@ -481,8 +481,8 @@ export async function dispatchInteraction(
     const messages = await discordApi(env, "/channels/" + interaction.channel_id + "/messages?limit=" + count) as any[];
     const transcript = messages.reverse()
       .filter((message: any) => !message.author?.bot && typeof message.content === "string" && message.content.trim())
-      .map((message: any) => (message.author?.username || "Üye") + ": " + message.content.replace(/\\s+/g, " ").slice(0, 220))
-      .join("\\n")
+      .map((message: any) => (message.author?.username || "Üye") + ": " + message.content.replace(/\s+/g, " ").slice(0, 220))
+      .join("\n")
       .slice(-2600);
     if (!transcript) return reply("Özetlenecek metin mesajı bulunamadı.");
     const saved = interaction.guild_id
