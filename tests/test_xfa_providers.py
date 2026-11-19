@@ -62,13 +62,28 @@ class XFAProviderConfigTests(unittest.TestCase):
 
     def test_public_catalog_does_not_expose_credentials(self):
         catalog = public_catalog()
-        self.assertEqual(set(catalog), {"gemini", "nvidia"})
+        self.assertEqual(set(catalog), {"gemini", "nvidia", "groq", "openrouter", "deepseek"})
         self.assertNotIn("api_key", str(catalog).lower())
-        self.assertNotIn("base_url", catalog["nvidia"])
+        for provider in catalog.values():
+            self.assertNotIn("base_url", provider)
+        self.assertEqual(catalog["openrouter"]["default_model"], "openrouter/free")
+        self.assertEqual(catalog["deepseek"]["default_model"], "deepseek-flash")
 
     def test_gemini_uses_google_api_key_as_fallback(self):
         with patch.dict(os.environ, {"GEMINI_API_KEY": "", "GOOGLE_API_KEY": "fallback-test"}, clear=False):
             self.assertEqual(server_api_key("gemini"), "fallback-test")
+
+    def test_additional_server_keys_are_provider_scoped(self):
+        values = {
+            "GROQ_API_KEY": "groq-test",
+            "OPENROUTER_API_KEY": "router-test",
+            "DEEPSEEK_API_KEY": "deepseek-test",
+        }
+        with patch.dict(os.environ, values, clear=False):
+            self.assertEqual(server_api_key("groq"), "groq-test")
+            self.assertEqual(server_api_key("openrouter"), "router-test")
+            self.assertEqual(server_api_key("deepseek"), "deepseek-test")
+        self.assertEqual(server_api_key("unknown"), "")
 
     def test_provider_errors_are_sanitized_and_actionable(self):
         self.assertIn("model", _safe_provider_error(404).lower())
