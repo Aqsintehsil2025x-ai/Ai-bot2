@@ -414,7 +414,7 @@ export default {
     if (command === "sor") {
       const prompt = String(option(interaction.data?.options, "soru")?.value ?? "").trim();
       if (prompt.length < 1 || prompt.length > 3500) return reply("Soru 1–3500 karakter olmalıdır.");
-      ctx.waitUntil(runDeferredAI(interaction, env, "gemini", "gemini-2.5-flash", prompt));
+      ctx.waitUntil(runDeferredAI(interaction, env, "gemini", "gemini-3.8-flash", prompt));
       return json({ type: 5, data: { flags: EPHEMERAL } });
     }
     if (command === "xfa") {
@@ -423,7 +423,7 @@ export default {
       if (prompt.length > 3500) return reply("İstek en fazla 3500 karakter olabilir.");
       const providerValue = String(option(interaction.data?.options, "provider")?.value ?? "gemini");
       const provider: AIProvider = providerValue === "nvidia" ? "nvidia" : "gemini";
-      const model = String(option(interaction.data?.options, "model")?.value ?? (provider === "gemini" ? "gemini-2.5-flash" : "meta/llama-3.3-70b-instruct"));
+      const model = String(option(interaction.data?.options, "model")?.value ?? (provider === "gemini" ? "gemini-3.8-flash" : "meta/llama-3.3-70b-instruct"));
       const validModel = provider === "gemini" ? /^gemini-[a-zA-Z0-9.-]{1,80}$/.test(model) : /^[a-zA-Z0-9._/-]{1,120}$/.test(model);
       if (!validModel) return reply("Model adı geçersiz.");
       ctx.waitUntil(runDeferredAI(interaction, env, provider, model, prompt));
