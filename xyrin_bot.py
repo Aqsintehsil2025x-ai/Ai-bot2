@@ -4618,6 +4618,86 @@ async def avatar_komutu(ctx, member: Optional[discord.Member] = None):
     await ctx.send(embed=embed)
 
 
+@bot.hybrid_command(name="ship", description="İki üyenin günlük eğlenceli uyum puanını gösterir.")
+@app_commands.describe(member="Eşleştirmek istediğin üye (boş bırakırsan rastgele seçilir)")
+@commands.guild_only()
+@commands.cooldown(1, 8, commands.BucketType.user)
+async def ship_komutu(ctx, member: Optional[discord.Member] = None):
+    """Günlük sabit, sunucuya özel ve eğlence amaçlı ikili uyum kartı."""
+    if member is None:
+        candidates = [
+            m for m in ctx.guild.members
+            if not m.bot and m.id != ctx.author.id
+        ]
+        if not candidates:
+            await ctx.send("❌ Rastgele eşleştirme için başka bir üye bulunamadı.", ephemeral=True)
+            return
+        member = random.choice(candidates)
+
+    first_id, second_id = sorted((ctx.author.id, member.id))
+    # Aynı ikili aynı sunucuda gün boyunca aynı sonucu görür; yeniden komut çalıştırarak puan kasılamaz.
+    seed = f"{ctx.guild.id}:{first_id}:{second_id}:{utcnow().date().isoformat()}"
+    score = random.Random(seed).randint(1, 100)
+    filled = round(score / 10)
+    bar = "🟪" * filled + "⬛" * (10 - filled)
+
+    if score >= 85:
+        verdict = "Efsane ikili! ⚡"
+    elif score >= 65:
+        verdict = "Güçlü takım uyumu! ✨"
+    elif score >= 40:
+        verdict = "Fena değil, birlikte deneyin! 🤝"
+    else:
+        verdict = "Kaos ekibi olabilir 😄"
+
+    embed = discord.Embed(
+        title="🔗 Günün Ship Eşleşmesi",
+        description=f"**{ctx.author.display_name}** × **{member.display_name}**\n\n{bar}\n**Uyum: %{score}**\n\n{verdict}",
+        color=discord.Color.from_rgb(145, 90, 220),
+    )
+    embed.set_thumbnail(url=ctx.author.display_avatar.url)
+    embed.set_footer(text="Sadece eğlence amaçlıdır • Sonuçlar her gün yenilenir")
+    await ctx.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
+
+
+@bot.hybrid_command(name="secim", aliases=["choose"], description="Seçeneklerin arasından rastgele birini seçer.")
+@app_commands.describe(secenekler="Seçenekleri | işaretiyle ayır (örn: Pizza | Burger | Döner)")
+@commands.cooldown(1, 5, commands.BucketType.user)
+async def secim_komutu(ctx, *, secenekler: str):
+    options = [truncate(part.strip(), 100) for part in secenekler.split("|") if part.strip()]
+    if not 2 <= len(options) <= 10:
+        await ctx.send("❌ En az 2, en fazla 10 seçenek yaz. Örnek: !secim Pizza | Burger | Döner")
+        return
+    choice = random.choice(options)
+    embed = discord.Embed(
+        title="🎯 Xyrin Seçim Çarkı",
+        description="**Seçenekler:**\n" + "\n".join(f"• {discord.utils.escape_markdown(item)}" for item in options)
+                    + f"\n\n**Benim seçimim:** {discord.utils.escape_markdown(choice)}",
+        color=discord.Color.blurple(),
+    )
+    await ctx.send(embed=embed)
+
+
+@bot.hybrid_command(name="sekiztop", aliases=["8ball"], description="Soruna sihirli 8-top cevabı verir.")
+@app_commands.describe(soru="Evet/hayır türünde sorun")
+@commands.cooldown(1, 5, commands.BucketType.user)
+async def sekiztop_komutu(ctx, *, soru: str):
+    if len(soru.strip()) < 3:
+        await ctx.send("❌ Biraz daha açıklayıcı bir soru yaz.")
+        return
+    answers = [
+        "Kesinlikle evet. ✨", "Büyük ihtimalle evet.", "Bence olabilir.",
+        "İşaretler olumlu.", "Şu an emin değilim.", "Daha sonra tekrar sor.",
+        "Pek sanmıyorum.", "Büyük ihtimalle hayır.", "Cevabım hayır. 🌙",
+    ]
+    embed = discord.Embed(
+        title="🎱 Xyrin'in Sihirli 8-Topu",
+        description=f"**Soru:** {truncate(soru.strip(), 500)}\n\n**Cevap:** {random.choice(answers)}",
+        color=discord.Color.dark_purple(),
+    )
+    await ctx.send(embed=embed)
+
+
 @bot.hybrid_command(name="anket", aliases=["poll", "oylama"], description="Anket oluşturur. Seçenekleri | ile ayır.")
 @app_commands.describe(metin="Soru | seçenek1 | seçenek2 | ...")
 @commands.guild_only()
