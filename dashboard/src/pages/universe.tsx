@@ -15,12 +15,12 @@ function SpaceCanvas({ quality }: { quality: 'ultra' | 'balanced' | 'eco' }) {
     let meteors: { x: number; y: number; vx: number; vy: number; life: number; max: number }[] = [];
     const resize = () => {
       const rect = canvas.getBoundingClientRect(); width = Math.max(1, rect.width); height = Math.max(1, rect.height);
-      const pixelBudget = 6000000; dpr = Math.min(window.devicePixelRatio || 1, 2.25, Math.sqrt(pixelBudget / (width * height)));
+      const pixelBudget = 3500000; dpr = Math.min(window.devicePixelRatio || 1, 1.6, Math.sqrt(pixelBudget / (width * height)));
       canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr); context.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const starLimit = quality === 'ultra' ? 1100 : quality === 'balanced' ? 650 : 300;
-      const density = quality === 'ultra' ? 1250 : quality === 'balanced' ? 2100 : 3800;
+      const starLimit = quality === 'ultra' ? 900 : quality === 'balanced' ? 500 : 250;
+      const density = quality === 'ultra' ? 1600 : quality === 'balanced' ? 2600 : 4500;
       stars = Array.from({ length: Math.min(starLimit, Math.floor(width * height / density)) }, () => { const layer = Math.random(); return { x: Math.random() * width, y: Math.random() * height, r: .25 + Math.random() * (layer > .92 ? 1.65 : .8), alpha: .22 + Math.random() * .72, phase: Math.random() * Math.PI * 2, speed: .25 + Math.random() * 1.2, layer }; });
-      dust = Array.from({ length: Math.min(quality === 'ultra' ? 180 : quality === 'balanced' ? 90 : 35, Math.floor(width * height / (quality === 'ultra' ? 9000 : quality === 'balanced' ? 18000 : 36000))) }, () => ({ x: Math.random() * width, y: Math.random() * height, r: .5 + Math.random() * 1.8, vx: (Math.random() - .5) * .13, vy: -.08 - Math.random() * .18, alpha: .08 + Math.random() * .22 }));
+      dust = Array.from({ length: Math.min(quality === 'ultra' ? 120 : quality === 'balanced' ? 60 : 25, Math.floor(width * height / (quality === 'ultra' ? 13000 : quality === 'balanced' ? 24000 : 42000))) }, () => ({ x: Math.random() * width, y: Math.random() * height, r: .5 + Math.random() * 1.8, vx: (Math.random() - .5) * .13, vy: -.08 - Math.random() * .18, alpha: .08 + Math.random() * .22 }));
     };
     const nebula = (x: number, y: number, radius: number, color: string, drift: number) => {
       context.save(); context.translate(x + Math.sin(time * drift) * 24, y + Math.cos(time * drift * .7) * 16);
@@ -41,9 +41,10 @@ function SpaceCanvas({ quality }: { quality: 'ultra' | 'balanced' | 'eco' }) {
       if (Math.random() < .012 && meteors.length < 3) meteors.push({ x: Math.random() * width * .8 + width * .1, y: Math.random() * height * .55, vx: 7 + Math.random() * 5, vy: 2.5 + Math.random() * 2.5, life: 0, max: 38 });
       meteors = meteors.filter((m) => m.life < m.max);
       for (const m of meteors) { m.x += m.vx * delta; m.y += m.vy * delta; m.life += delta; const fade = Math.sin((m.life / m.max) * Math.PI); context.strokeStyle = 'rgba(238,218,255,' + (fade * .8) + ')'; context.lineWidth = 1.2; context.beginPath(); context.moveTo(m.x - m.vx * 12, m.y - m.vy * 12); context.lineTo(m.x, m.y); context.stroke(); }
-      raf = window.requestAnimationFrame(draw);
+      raf = reduceMotion ? 0 : window.requestAnimationFrame(draw);
     };
     resize(); const observer = new ResizeObserver(resize); observer.observe(canvas);
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const onVisibility = () => { if (!document.hidden && !raf) { last = 0; raf = window.requestAnimationFrame(draw); } };
     document.addEventListener('visibilitychange', onVisibility); raf = window.requestAnimationFrame(draw);
     return () => { window.cancelAnimationFrame(raf); observer.disconnect(); document.removeEventListener('visibilitychange', onVisibility); };
@@ -65,7 +66,7 @@ export default function UniversePage() {
   });
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [scene, setScene] = useState<'deep-space' | 'pulsar' | 'nebula'>('deep-space');
-  const [quality, setQuality] = useState<'ultra' | 'balanced' | 'eco'>('ultra');
+  const [quality, setQuality] = useState<'ultra' | 'balanced' | 'eco'>('balanced');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authBusy, setAuthBusy] = useState(false);
@@ -285,8 +286,12 @@ export default function UniversePage() {
   }
 
   async function toggleFullscreen() {
-    if (!document.fullscreenElement) await rootRef.current?.requestFullscreen?.();
-    else await document.exitFullscreen();
+    try {
+      if (!document.fullscreenElement) await rootRef.current?.requestFullscreen?.();
+      else await document.exitFullscreen();
+    } catch {
+      setError('Tam ekran modu bu tarayıcıda kullanılamıyor.');
+    }
   }
 
   async function sendMessage(event?: FormEvent<HTMLFormElement>) {
@@ -425,7 +430,7 @@ export default function UniversePage() {
         <div className="universe-sidebar-foot">© 2026 XFA.<br/>Herkes için geliştirildi. ♡</div>
       </aside>
       <header className="universe-topbar">
-        <Link href="/welcome" className="universe-back"><ArrowLeft size={15}/> Tanıtım sayfası</Link>
+        <Link href="/" className="universe-back"><ArrowLeft size={15}/> Tanıtım sayfası</Link>
         <button className="universe-search" type="button" onClick={() => inputRef.current?.focus()}><Search size={14}/> Mesaj yazmak için tıkla...</button>
         <div className="universe-status"><i className={stats.ready ? '' : 'offline'}/> {auth.authenticated ? (auth.name || 'Hesabım') : 'Misafir'} <span>◉</span><b>{auth.name ? auth.name.slice(0,1).toUpperCase() : 'A'}</b>{auth.authenticated && <button type="button" className="universe-logout" onClick={logout}>Çıkış</button>}</div>
       </header>
