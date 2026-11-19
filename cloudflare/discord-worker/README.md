@@ -4,7 +4,8 @@ This is an isolated Cloudflare Workers implementation. It does not replace the P
 
 ## Included
 - TypeScript HTTP Interaction endpoint with Ed25519 signature verification.
-- Discord PING handshake, `/ping`, and `/xfa`.
+- Discord PING handshake and `/ping`.
+- `/xfa prompt:<question> provider:<gemini|nvidia> model:<optional>` with deferred Discord responses, Gemini `generateContent`, and NVIDIA OpenAI-compatible chat completions.
 - D1-backed per-server FAQ commands: `/kb add`, `/kb ask`, `/kb list`, `/kb remove`.
 - Permission checks for FAQ administration (`MANAGE_GUILD`).
 - Interaction audit log.
