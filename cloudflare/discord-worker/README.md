@@ -26,5 +26,9 @@ Worker health endpoint: `https://xfa-discord-test.aqsin-tehsil2025x.workers.dev/
 
 Register slash commands using `node scripts/register-commands.mjs` with `DISCORD_APPLICATION_ID`, `DISCORD_TOKEN`, and optionally `DISCORD_TEST_GUILD_ID` set locally. The production application is not yet configured to send interactions to this Worker.
 
+## Ported in this slice
+- Utility/fun commands: `/zar`, `/yazitura`, `/kahve`, `/secim`, `/sekiztop`.
+- These are additional working implementations, not command-name placeholders.
+
 ## Not yet ported
 Gateway event features (message tracking, member-join anti-raid detection, voice-state/tempvoice, welcome events, prefix commands, and continuous background tasks) are not HTTP interactions. They need a separate persistent Gateway runtime or a deliberate redesign. This Worker does not claim those features are available.
