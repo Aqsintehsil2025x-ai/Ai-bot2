@@ -147,6 +147,12 @@ function handleUtilityCommand(interaction: Interaction): Response | null {
   const opts = interaction.data?.options;
   const userId = interaction.member?.user?.id ?? interaction.user?.id ?? "kullanıcı";
   const mention = /^\d+$/.test(userId) ? `<@${userId}>` : "Kullanıcı";
+  if (name === "kimlik") {
+    return reply(\`🪪 Discord kullanıcı ID'n: \\\`\${userId}\\\`\`, true);
+  }
+  if (name === "yardim") {
+    return reply("**Cloudflare test komutları**\\n/ping • /xfa • /sor • /kb\\n/zar • /yazitura • /kahve • /secim • /sekiztop\\nKomutlar taşındıkça bu liste genişletilecek.", true);
+  }
   if (name === "zar") {
     const raw = Number(option(opts, "max_sayi")?.value ?? 100);
     const max = Number.isInteger(raw) ? Math.min(1000000, Math.max(2, raw)) : 100;
@@ -202,6 +208,12 @@ export default {
       .bind(interaction.id ?? null, command ?? "unknown", guildId, userId, new Date().toISOString()).run();
 
     if (command === "ping") return reply("Pong! Cloudflare TypeScript test bot is online.");
+    if (command === "sor") {
+      const prompt = String(option(interaction.data?.options, "soru")?.value ?? "").trim();
+      if (prompt.length < 1 || prompt.length > 3500) return reply("Soru 1–3500 karakter olmalıdır.");
+      ctx.waitUntil(runDeferredAI(interaction, env, "gemini", "gemini-2.5-flash", prompt));
+      return json({ type: 5, data: { flags: EPHEMERAL } });
+    }
     if (command === "xfa") {
       const prompt = String(option(interaction.data?.options, "prompt")?.value ?? "").trim();
       if (!prompt) return reply("XFA AI hazır. Komutu bir prompt ile kullan.");
