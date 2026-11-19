@@ -477,10 +477,27 @@ export class DiscordGateway extends DurableObject {
           }
           if (!answer) throw lastError || Error("Gemini yanıt üretemedi.");
         } else {
-          const key = await this.env.NVIDIA_API_KEY.get(), model = String(get(options, "model")?.value || "meta/llama-3.3-70b-instruct");
-          const r = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", { method: "POST", headers: { authorization: "Bearer " + key, "content-type": "application/json" }, body: JSON.stringify({ model, messages: [{ role: "user", content: prompt }], max_tokens: 900 }), signal: AbortSignal.timeout(25000) });
-          const d = await r.json(); if (!r.ok) throw Error(d.error?.message || "NVIDIA HTTP " + r.status);
-          answer = d.choices?.[0]?.message?.content;
+          const key = await this.env.NVIDIA_API_KEY.get();
+          const requestedModel = String(get(options, "model")?.value || "nvidia/llama-3.3-nemotron-super-49b-v1.5");
+          const models = requestedModel === "nvidia/llama-3.3-nemotron-super-49b-v1.5" ? [requestedModel] : [requestedModel, "nvidia/llama-3.3-nemotron-super-49b-v1.5"];
+          let lastError = null;
+          for (const model of models) {
+            for (let attempt = 0; attempt < 2; attempt++) {
+              const r = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", { method: "POST", headers: { authorization: "Bearer " + key, "content-type": "application/json" }, body: JSON.stringify({ model, messages: [{ role: "user", content: prompt }], max_tokens: 900, stream: false }), signal: AbortSignal.timeout(25000) });
+              const d = await r.json();
+              if (r.ok) {
+                answer = d.choices?.[0]?.message?.content?.trim();
+                if (answer) break;
+                lastError = Error("NVIDIA boş yanıt döndürdü.");
+              } else {
+                lastError = Error(d.error?.message || "NVIDIA HTTP " + r.status);
+                if (![429, 500, 502, 503, 504].includes(r.status) || attempt === 1) break;
+                await new Promise(resolve => setTimeout(resolve, 1000));
+              }
+            }
+            if (answer) break;
+          }
+          if (!answer) throw lastError || Error("NVIDIA yanıt üretemedi.");
         }
       } catch (error) { answer = "AI sağlayıcı hatası: " + (error instanceof Error ? error.message : "Bilinmeyen hata"); }
       await fetch("https://discord.com/api/v10/webhooks/" + interaction.application_id + "/" + interaction.token + "/messages/@original", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ content: String(answer || "AI boş yanıt döndürdü.").slice(0, 1900), allowed_mentions: { parse: [] } }) });
