@@ -1,5 +1,7 @@
 // @ts-nocheck
 import { runDeferredAI, type AIProvider } from "./ai";
+import { DiscordGateway } from "./gateway";
+export { DiscordGateway };
 export interface SecretStoreBinding { get(): Promise<string>; }
 export interface Env {
   DB: D1Database;
