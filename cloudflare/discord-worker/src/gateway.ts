@@ -490,7 +490,9 @@ export class DiscordGateway extends DurableObject {
                 if (answer) break;
                 lastError = Error("NVIDIA boş yanıt döndürdü.");
               } else {
-                lastError = Error(d.error?.message || "NVIDIA HTTP " + r.status);
+                const detail = d.detail || d.title || d.error?.message || d.message || "NVIDIA HTTP " + r.status;
+                if (r.status === 410) throw Error("NVIDIA API 410 Gone: endpoint access is unavailable for this account or the requested model has been retired. " + detail);
+                lastError = Error(detail);
                 if (![429, 500, 502, 503, 504].includes(r.status) || attempt === 1) break;
                 await new Promise(resolve => setTimeout(resolve, 1000));
               }
