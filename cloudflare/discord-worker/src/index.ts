@@ -178,6 +178,123 @@ function handleUtilityCommand(interaction: Interaction): Response | null {
   }
   return null;
 }
+
+const REST_PERMS = { manageChannels:16n, kick:2n, ban:4n, manageRoles:268435456n, manageMessages:8192n, moderate:1099511627776n, administrator:8n };
+function hasPermission(interaction, bit) {
+  try { const p=BigInt(interaction.member?.permissions ?? "0"); return (p & REST_PERMS.administrator) !== 0n || (p & bit) === bit; }
+  catch { return false; }
+}
+async function discordApi(env, path, method="GET", body) {
+  const token = await env.DISCORD_TOKEN.get();
+  const response = await fetch("https://discord.com/api/v10"+path, {
+    method, headers:{authorization:"Bot "+token,"content-type":"application/json"},
+    ...(body === undefined ? {} : {body:JSON.stringify(body)}), signal:AbortSignal.timeout(12000)
+  });
+  const raw=await response.text(); let data=null; try { data=raw?JSON.parse(raw):null; } catch {}
+  if(!response.ok) throw new Error(data?.message || "Discord API HTTP "+response.status);
+  return data;
+}
+async function handleMoreCommands(i, env) {
+  const name=i.data?.name, opts=i.data?.options || [], guild=i.guild_id, channel=i.channel_id;
+  const selected=String(option(opts,"member")?.value || i.member?.user?.id || i.user?.id || "");
+  const require=(bit,label)=>hasPermission(i,bit)?null:reply("Bu işlem için "+label+" yetkisi gerekiyor.");
+  try {
+    if(name==="kullanici" || name==="avatar") {
+      const u=await discordApi(env,"/users/"+selected);
+      const avatar=u.avatar ? "https://cdn.discordapp.com/avatars/"+u.id+"/"+u.avatar+"."+(u.avatar.startsWith("a_")?"gif":"png")+"?size=1024" : "https://cdn.discordapp.com/embed/avatars/0.png";
+      if(name==="avatar") return reply("🖼️ "+avatar,false);
+      return reply("**Kullanıcı bilgisi**\nAd: "+(u.global_name||u.username)+"\nID: "+u.id+"\nBot: "+(u.bot?"Evet":"Hayır")+"\nAvatar: "+avatar,false);
+    }
+    if(name==="sunucu" || name==="rapor") {
+      if(!guild) return reply("Bu komut yalnızca sunucuda kullanılabilir.");
+      const x=await discordApi(env,"/guilds/"+guild+"?with_counts=true");
+      const row=await env.DB.prepare("SELECT COUNT(*) AS total FROM interaction_audit WHERE guild_id=? AND created_at>=?").bind(guild,new Date(Date.now()-604800000).toISOString()).first();
+      return reply("**"+x.name+"**\nID: "+x.id+"\nÜye: **"+(x.approximate_member_count||x.member_count||"—")+"**\nSon 7 gün Worker komutu: **"+(row?.total||0)+"**",false);
+    }
+    if(name==="oneri") {
+      const text=String(option(opts,"metin")?.value||"").trim();
+      if(!text||text.length>1500) return reply("Öneri 1–1500 karakter olmalı.");
+      await env.DB.prepare("INSERT INTO suggestions(guild_id,user_id,content,created_at) VALUES(?,?,?,?)").bind(guild||"dm",i.member?.user?.id||i.user?.id||"",text,new Date().toISOString()).run();
+      return reply("💡 Önerin kaydedildi. Teşekkürler!");
+    }
+    if(name==="analytics") {
+      const p=require(32n,"Sunucuyu Yönet"); if(p)return p;
+      const row=await env.DB.prepare("SELECT COUNT(*) AS total FROM interaction_audit WHERE guild_id=? AND created_at>=?").bind(guild,new Date(Date.now()-604800000).toISOString()).first();
+      return reply("📊 Son 7 günde Worker üzerinden **"+(row?.total||0)+"** komut kullanıldı. Bu rapor mesaj trafiğini veya Gateway olaylarını içermez.");
+    }
+    if(name==="kick") {
+      const p=require(REST_PERMS.kick,"Üyeleri At"); if(p)return p;
+      await discordApi(env,"/guilds/"+guild+"/members/"+selected,"DELETE");
+      return reply("Üye sunucudan atıldı.");
+    }
+    if(name==="ban") {
+      const p=require(REST_PERMS.ban,"Üyeleri Yasakla"); if(p)return p;
+      const days=Math.max(0,Math.min(7,Number(option(opts,"sil_gun")?.value||0)));
+      await discordApi(env,"/guilds/"+guild+"/bans/"+selected,"PUT",{delete_message_seconds:days*86400});
+      return reply("Üye yasaklandı.");
+    }
+    if(name==="unban") {
+      const p=require(REST_PERMS.ban,"Üyeleri Yasakla"); if(p)return p;
+      const id=String(option(opts,"user_id")?.value||"");
+      if(!/^\d{15,22}$/.test(id))return reply("Geçerli kullanıcı ID'si gir.");
+      await discordApi(env,"/guilds/"+guild+"/bans/"+id,"DELETE");
+      return reply("Kullanıcının yasağı kaldırıldı.");
+    }
+    if(name==="mute" || name==="unmute") {
+      const p=require(REST_PERMS.moderate,"Üyelere Zaman Aşımı Uygula"); if(p)return p;
+      let until=null;
+      if(name==="mute") {
+        const raw=String(option(opts,"sure")?.value||"10m"),m=raw.match(/^(\d{1,3})(s|m|h|d)$/i);
+        if(!m)return reply("Süre biçimi: 30s, 10m, 2h veya 1d.");
+        const ms=Number(m[1])*({s:1000,m:60000,h:3600000,d:86400000}[m[2].toLowerCase()]);
+        if(ms<1000||ms>2419200000)return reply("Süre 1 saniye ile 28 gün arasında olmalı.");
+        until=new Date(Date.now()+ms).toISOString();
+      }
+      await discordApi(env,"/guilds/"+guild+"/members/"+selected,"PATCH",{communication_disabled_until:until});
+      return reply(name==="mute"?"Üyeye zaman aşımı uygulandı.":"Üyenin zaman aşımı kaldırıldı.");
+    }
+    if(name==="temizle") {
+      const p=require(REST_PERMS.manageMessages,"Mesajları Yönet"); if(p)return p;
+      const count=Math.max(1,Math.min(100,Number(option(opts,"adet")?.value||1)));
+      const messages=await discordApi(env,"/channels/"+channel+"/messages?limit="+count);
+      const ids=messages.filter(m=>Date.now()-Date.parse(m.timestamp)<1209600000).map(m=>m.id);
+      if(!ids.length)return reply("Silinebilir mesaj bulunamadı.");
+      if(ids.length===1)await discordApi(env,"/channels/"+channel+"/messages/"+ids[0],"DELETE");
+      else await discordApi(env,"/channels/"+channel+"/messages/bulk-delete","POST",{messages:ids});
+      return reply("🧹 "+ids.length+" mesaj silindi.");
+    }
+    if(name==="slowmode") {
+      const p=require(REST_PERMS.manageChannels,"Kanalları Yönet"); if(p)return p;
+      const seconds=Math.max(0,Math.min(21600,Number(option(opts,"saniye")?.value||0)));
+      await discordApi(env,"/channels/"+channel,"PATCH",{rate_limit_per_user:seconds});
+      return reply("Yavaş mod "+seconds+" saniye olarak ayarlandı.");
+    }
+    if(name==="rolver" || name==="rolal") {
+      const p=require(REST_PERMS.manageRoles,"Rolleri Yönet"); if(p)return p;
+      const role=String(option(opts,"role")?.value||"");
+      if(!selected||!role)return reply("Üye ve rol seçmelisin.");
+      await discordApi(env,"/guilds/"+guild+"/members/"+selected+"/roles/"+role,name==="rolver"?"PUT":"DELETE");
+      return reply(name==="rolver"?"Rol verildi.":"Rol alındı.");
+    }
+    if(name==="nick") {
+      const p=require(REST_PERMS.manageRoles,"Takma Adları Yönet"); if(p)return p;
+      const nick=String(option(opts,"yeni_isim")?.value||"").trim();
+      await discordApi(env,"/guilds/"+guild+"/members/"+selected,"PATCH",{nick:nick||null});
+      return reply("Takma ad güncellendi.");
+    }
+    if(name==="duyuru") {
+      const p=require(32n,"Sunucuyu Yönet"); if(p)return p;
+      const message=String(option(opts,"mesaj")?.value||"").trim();
+      if(!message||message.length>1800)return reply("Duyuru 1–1800 karakter olmalı.");
+      await discordApi(env,"/channels/"+channel+"/messages","POST",{content:"📢 **Duyuru**\n"+message,allowed_mentions:{parse:[]}});
+      return reply("Duyuru gönderildi.");
+    }
+  } catch(error) {
+    return reply("Discord işlemi başarısız: "+(error instanceof Error?error.message:"Bilinmeyen hata"));
+  }
+  return null;
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
@@ -227,6 +344,8 @@ export default {
       return json({ type: 5, data: { flags: EPHEMERAL } });
     }
     if (command === "kb") return handleKnowledgeBase(interaction, env);
+    const moreResponse = await handleMoreCommands(interaction, env);
+    if (moreResponse) return moreResponse;
     const utilityResponse = handleUtilityCommand(interaction);
     if (utilityResponse) return utilityResponse;
     return reply("Bu komut Cloudflare test sürümünde henüz taşınmadı.");
