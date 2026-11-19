@@ -1,9 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { dispatchInteraction, type Env } from "./index";
 
-
-};
-
 export class DiscordGateway extends DurableObject<Env> {
   private socket: WebSocket | null = null;
   private state = "offline";
