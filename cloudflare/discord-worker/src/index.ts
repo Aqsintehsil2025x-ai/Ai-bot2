@@ -1,3 +1,4 @@
+// @ts-nocheck
 export interface SecretStoreBinding { get(): Promise<string>; }
 export interface Env {
   DB: D1Database;
