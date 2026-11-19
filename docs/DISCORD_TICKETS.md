@@ -19,3 +19,8 @@ Ticket panel and close buttons are persistent across bot restarts. Open ticket r
 - Closed tickets are retained; they are not automatically deleted.
 - Configure a log channel if you want a closure notice.
 - The bot must be above the support role in the server role hierarchy and have channel-management permissions.
+
+
+## Automatic join role
+
+Use `/otorol @role` to assign a role to each new member. Run `/otorol` without a role to disable the per-server setting. The bot must have Manage Roles and its highest role must be above the selected role.
