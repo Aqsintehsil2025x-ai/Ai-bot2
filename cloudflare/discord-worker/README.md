@@ -15,15 +15,15 @@ npm ci
 npm run typecheck
 npm run db:remote
 npx wrangler secret put DISCORD_PUBLIC_KEY
-npx wrangler secret put DISCORD_TOKEN
-npx wrangler secret put DISCORD_APPLICATION_ID
 npm run deploy
 ```
 
 Set Discord Developer Portal > General Information > Interactions Endpoint URL to:
-`https://xfa-discord-test.<your-workers-subdomain>.workers.dev/discord/interactions`
+`https://xfa-discord-test.aqsin-tehsil2025x.workers.dev/discord/interactions`
 
-Register slash commands using the command definitions in `scripts/register-commands.ts`. Use a dedicated test Discord application and test server; do not point the production application at this endpoint.
+Worker health endpoint: `https://xfa-discord-test.aqsin-tehsil2025x.workers.dev/health`. Only the dedicated test application's `DISCORD_PUBLIC_KEY` belongs in Worker secrets. Keep its bot token local for the command registration script; do not copy the production Replit token into this test Worker.
+
+Register slash commands using `node scripts/register-commands.mjs` with `DISCORD_APPLICATION_ID`, `DISCORD_TOKEN`, and optionally `DISCORD_TEST_GUILD_ID` set locally. Use a dedicated test Discord application and test server; do not point the production application at this endpoint. Use a dedicated test Discord application and test server; do not point the production application at this endpoint.
 
 ## Not yet ported
 Gateway event features (message tracking, member-join anti-raid detection, voice-state/tempvoice, welcome events, prefix commands, and continuous background tasks) are not HTTP interactions. They need a separate persistent Gateway runtime or a deliberate redesign. This Worker does not claim those features are available.
