@@ -249,6 +249,27 @@ async function handleMoreCommands(i, env) {
       const created=await discordApi(env,"/guilds/"+guild+"/roles","POST",{name:roleName,permissions:"0",mentionable:false,hoist:false});
       return reply("Rol oluşturuldu: <@&"+created.id+">");
     }
+    if(name==="hosgeldin" || name==="modlog") {
+      if(!guild)return reply("Bu komut yalnızca sunucuda kullanılabilir.");
+      if(!hasPermission(i,32n))return reply("Sunucuyu Yönet yetkisi gerekiyor.");
+      const key=name==="hosgeldin"?"welcome_channel":"modlog_channel";
+      await env.DB.prepare("INSERT INTO guild_settings(guild_id,setting_key,value,updated_at) VALUES(?,?,?,?) ON CONFLICT(guild_id,setting_key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at").bind(guild,key,channel,new Date().toISOString()).run();
+      return reply(name==="hosgeldin"?"Karşılama kanalı bu kanal olarak ayarlandı.":"Moderasyon log kanalı bu kanal olarak ayarlandı.");
+    }
+    if(name==="afk") {
+      if(!guild)return reply("Bu komut yalnızca sunucuda kullanılabilir.");
+      const reason=String(option(opts,"sebep")?.value||"AFK").trim().slice(0,180);
+      const uid=i.member?.user?.id||i.user?.id||"";
+      await env.DB.prepare("INSERT INTO guild_settings(guild_id,setting_key,value,updated_at) VALUES(?,?,?,?) ON CONFLICT(guild_id,setting_key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at").bind(guild,"afk:"+uid,reason,new Date().toISOString()).run();
+      return reply("💤 AFK durumu ayarlandı: "+reason);
+    }
+    if(name==="antiraid") {
+      if(!guild)return reply("Bu komut yalnızca sunucuda kullanılabilir.");
+      if(!hasPermission(i,32n))return reply("Sunucuyu Yönet yetkisi gerekiyor.");
+      const sub=opts[0], enabled=Boolean(option(sub?.options,"enabled")?.value);
+      await env.DB.prepare("INSERT INTO guild_settings(guild_id,setting_key,value,updated_at) VALUES(?,?,?,?) ON CONFLICT(guild_id,setting_key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at").bind(guild,"anti_raid_enabled",enabled?"true":"false",new Date().toISOString()).run();
+      return reply(enabled?"Anti-raid uyarıları etkinleştirildi (otomatik ceza yok).":"Anti-raid uyarıları kapatıldı.");
+    }
     if(name==="oneri") {
       const text=String(option(opts,"metin")?.value||"").trim();
       if(!text||text.length>1500) return reply("Öneri 1–1500 karakter olmalı.");
