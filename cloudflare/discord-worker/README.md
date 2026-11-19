@@ -1,36 +1,29 @@
-# XFA / Discord Cloudflare test worker
+# XFA Discord Worker (TypeScript test port)
 
-This is an isolated, free-tier-oriented interaction-endpoint prototype. It does not alter the Python bot, Flask app, or repository `main` branch.
+This is an isolated Cloudflare Workers implementation. It does not replace the Python bot on Replit and does not modify `main`.
 
-## What works in this first slice
+## Included
+- TypeScript HTTP Interaction endpoint with Ed25519 signature verification.
+- Discord PING handshake, `/ping`, and `/xfa`.
+- D1-backed per-server FAQ commands: `/kb add`, `/kb ask`, `/kb list`, `/kb remove`.
+- Permission checks for FAQ administration (`MANAGE_GUILD`).
+- Interaction audit log.
 
-- `GET /health` returns a non-sensitive health response.
-- `POST /discord/interactions` verifies Discord Ed25519 request signatures.
-- Handles Discord's PING handshake.
-- Handles test slash commands `/ping` and `/xfa`.
-- Writes a minimal interaction audit record to D1.
+## Deploy
+```bash
+npm ci
+npm run typecheck
+npm run db:remote
+npx wrangler secret put DISCORD_PUBLIC_KEY
+npx wrangler secret put DISCORD_TOKEN
+npx wrangler secret put DISCORD_APPLICATION_ID
+npm run deploy
+```
 
-## Important scope boundary
+Set Discord Developer Portal > General Information > Interactions Endpoint URL to:
+`https://xfa-discord-test.<your-workers-subdomain>.workers.dev/discord/interactions`
 
-This is **not** a full port of the existing `discord.py` bot. It uses Discord's HTTP Interactions model, not the long-lived Discord Gateway connection. Gateway-driven features (message listeners, member join events, voice state / temporary voice channels, and other event-driven cogs) are not migrated by this prototype. Each existing command must be ported and tested individually. The Python bot remains the production implementation on Replit.
+Register slash commands using the command definitions in `scripts/register-commands.ts`. Use a dedicated test Discord application and test server; do not point the production application at this endpoint.
 
-## Setup
-
-1. Create a D1 database named `xfa-discord-test` in the Cloudflare dashboard.
-2. Replace `REPLACE_WITH_D1_DATABASE_ID` in `wrangler.jsonc` with that database's ID.
-3. From this directory run `npm install`, then `npm run db:remote`.
-4. Add Worker-scoped secrets with `npx wrangler secret put DISCORD_PUBLIC_KEY`. Add any provider keys only when the relevant feature is implemented.
-5. Deploy with `npm run deploy`.
-6. In the Discord Developer Portal, configure the Interactions Endpoint URL as `https://<worker-domain>/discord/interactions`. Discord's endpoint verification sends a PING which this Worker answers.
-7. Register the `ping` and `xfa` application commands using Discord's application-commands API. Do not point the production bot at this test endpoint.
-
-## Secrets Store note
-
-Account-level Secrets Store entries are not automatically exposed as Worker environment variables. This first prototype expects Worker-scoped secrets/bindings. Bind the central Secrets Store only after following Cloudflare's current Workers integration instructions and confirming the required plan/permissions. Never commit secret values.
-
-## Security and rollout
-
-- Do not log request bodies, signatures, tokens, or provider credentials.
-- Use a separate Discord test application and test server.
-- Keep the production bot token and endpoint unchanged.
-- Do not merge this branch into `main` until all checks and manual Discord tests pass.
+## Not yet ported
+Gateway event features (message tracking, member-join anti-raid detection, voice-state/tempvoice, welcome events, prefix commands, and continuous background tasks) are not HTTP interactions. They need a separate persistent Gateway runtime or a deliberate redesign. This Worker does not claim those features are available.
