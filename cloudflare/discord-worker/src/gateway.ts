@@ -324,7 +324,7 @@ export class DiscordGateway extends DurableObject<Env> {
         allowed_mentions: { parse: [], replied_user: false }
       });
     }
-    const mentioned = [...(message.mentions || [])].filter(x => !x.bot);
+    const mentioned = [...(message.mentions || [])].filter((x: any) => !x.bot);
     for (const user of mentioned.slice(0, 5)) {
       const row = await this.env.DB.prepare("SELECT value FROM guild_settings WHERE guild_id=? AND setting_key=?").bind(message.guild_id, "afk:" + user.id).first();
       if (row?.value) {
