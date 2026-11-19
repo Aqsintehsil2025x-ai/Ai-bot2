@@ -94,6 +94,9 @@ test("deferred AI edits the original Discord interaction", async (t) => {
   t.after(() => { globalThis.fetch = originalFetch; });
   let edited = null;
   globalThis.fetch = async (url, init) => {
+    if (String(url).includes("generativelanguage.googleapis.com")) {
+      return jsonResponse({ candidates: [{ content: { parts: [{ text: "Merhaba!" }] } }] });
+    }
     assert.match(String(url), /webhooks\/app-id\/interaction-token\/messages\/@original$/);
     edited = JSON.parse(init.body);
     return new Response(null, { status: 204 });
