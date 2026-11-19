@@ -255,6 +255,17 @@ export class DiscordGateway extends DurableObject {
       const seed = (uid + other + new Date().toISOString().slice(0, 10)).split("").reduce((v, c) => ((v * 31 + c.charCodeAt(0)) >>> 0), 7);
       return send("💞 <@" + uid + "> + <@" + other + ">\nGünlük uyum puanı: **" + (seed % 101) + "%**", false);
     }
+
+    if (name === "anket") {
+      const raw=String(get(options,"metin")?.value||"").trim(), parts=raw.split("|").map(x=>x.trim()).filter(Boolean);
+      if(parts.length<3||parts.length>11)return send("Anket biçimi: Soru | seçenek 1 | seçenek 2 (en fazla 10 seçenek).");
+      const emojis=["1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"];
+      const content="📊 **"+parts[0].slice(0,250)+"**\n"+parts.slice(1).map((x,i)=>emojis[i]+" "+x.slice(0,120)).join("\n");
+      const message=await this.discordRequest("/channels/"+interaction.channel_id+"/messages","POST",{content,allowed_mentions:{parse:[]}});
+      for(let i=1;i<parts.length;i++)await this.discordRequest("/channels/"+interaction.channel_id+"/messages/"+message.id+"/reactions/"+encodeURIComponent(emojis[i-1])+"/@me","PUT");
+      return send("Anket oluşturuldu: "+message.id);
+    }
+
     if (name === "oneri") {
       const value = String(get(options, "metin")?.value || "").trim();
       if (!value || value.length > 1500) return send("Öneri 1–1500 karakter olmalı.");
