@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-# XFA public dashboard preview
+# XFA public dashboard
