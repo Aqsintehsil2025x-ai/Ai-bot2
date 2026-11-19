@@ -168,7 +168,7 @@ function handleUtilityCommand(interaction: Interaction): Response | null {
     const question = String(option(opts, "soru")?.value ?? "").trim();
     if (question.length < 3) return reply("Biraz daha açıklayıcı bir soru yaz.");
     const answers = ["Kesinlikle!", "Büyük ihtimalle evet.", "Bence evet.", "İşaretler olumlu.", "Şu an söylemek zor.", "Daha sonra tekrar sor.", "Pek sanmıyorum.", "Cevabım hayır."];
-    return reply(`🎱 **${question.slice(0, 500)}**\\n${answers[Math.floor(Math.random() * answers.length)]}`, false);
+    return reply(`🎱 **${question.slice(0, 500)}**\n${answers[Math.floor(Math.random() * answers.length)]}`, false);
   }
   return null;
 }
