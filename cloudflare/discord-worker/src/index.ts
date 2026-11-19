@@ -129,7 +129,7 @@ function handleUtilityCommand(interaction: Interaction): Response | null {
     return reply("🪪 Discord kullanıcı ID'n: `" + userId + "`", true);
   }
   if (name === "yardim") {
-    return reply("**Cloudflare test komutları**\n/ping • /xfa • /sor • /kb\n/zar • /yazitura • /kahve • /secim • /sekiztop\nKomutlar taşındıkça bu liste genişletilecek.", true);
+    return reply("**Xyrin Cloudflare komutları**\n**AI:** /sor • /xfa • /gemini • /nvidia • /kb\n**Ekonomi:** /bakiye • /seviye • /gunluk • /calis • /transfer • /siralama • /market\n**Sunucu:** /afk • /hosgeldin • /modlog • /antiraid • /analytics\n**Moderasyon:** /kick • /ban • /unban • /mute • /unmute • /temizle • /slowmode • /rolver • /rolal\n**Eğlence:** /zar • /yazitura • /kahve • /secim • /sekiztop • /ship • /anket\nSatın alma teslimatı ve bazı Python özellikleri henüz taşınmadı.", true);
   }
   if (name === "zar") {
     const raw = Number(option(opts, "max_sayi")?.value ?? 100);
