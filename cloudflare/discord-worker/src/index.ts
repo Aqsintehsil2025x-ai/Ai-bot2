@@ -280,7 +280,9 @@ async function handleMoreCommands(i: Interaction, env: Env): Promise<Response | 
       if(name==="mute") {
         const raw=String(option(opts,"sure")?.value||"10m"),m=raw.match(/^(\d{1,3})(s|m|h|d)$/i);
         if(!m)return reply("Süre biçimi: 30s, 10m, 2h veya 1d.");
-        const ms=Number(m[1])*({s:1000,m:60000,h:3600000,d:86400000}[m[2]!.toLowerCase()]);
+        const unit = (m[2] ?? "m").toLowerCase();
+        const factors: Record<string, number> = {s:1000,m:60000,h:3600000,d:86400000};
+        const ms=Number(m[1])*(factors[unit] ?? 60000);
         if(ms<1000||ms>2419200000)return reply("Süre 1 saniye ile 28 gün arasında olmalı.");
         until=new Date(Date.now()+ms).toISOString();
       }
