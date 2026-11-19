@@ -328,6 +328,66 @@ export class DiscordGateway extends DurableObject {
       } catch(error) { return send("Discord işlemi başarısız: "+(error instanceof Error?error.message:"Bilinmeyen hata")); }
     }
 
+
+    if (["bakiye","gunluk","transfer","market","satinal","calis","seviye","siralama"].includes(name)) {
+      if(!guild)return send("Ekonomi komutları yalnızca sunucuda kullanılabilir.");
+      const now=new Date().toISOString();
+      const ensure=async id=>this.env.DB.prepare("INSERT OR IGNORE INTO economy_accounts(guild_id,user_id,updated_at) VALUES(?,?,?)").bind(guild,id,now).run();
+      const account=async id=>{await ensure(id);return this.env.DB.prepare("SELECT * FROM economy_accounts WHERE guild_id=? AND user_id=?").bind(guild,id).first();};
+      if(name==="bakiye"){const target=String(get(options,"member")?.value||uid),a=await account(target);return send("🪙 **İmparatorluk Hazinesi**\n<@"+target+"> bakiye: **"+Number(a.balance||0).toLocaleString("tr-TR")+"**\nGünlük seri: **"+Number(a.streak||0)+" gün**",false);}
+      if(name==="gunluk"){
+        const a=await account(uid),last=a.last_daily?Date.parse(a.last_daily):0,elapsed=Date.now()-last;
+        if(last&&elapsed<86400000)return send("⏳ Günlük ödülünü zaten aldın. "+Math.ceil((86400000-elapsed)/3600000)+" saat sonra tekrar gel.");
+        const streak=last&&elapsed<172800000?Number(a.streak||0)+1:1,bonus=20*(Math.min(streak,7)-1),reward=100+Math.floor(Math.random()*151)+bonus;
+        const result=await this.env.DB.prepare("UPDATE economy_accounts SET balance=balance+?,streak=?,last_daily=?,updated_at=? WHERE guild_id=? AND user_id=? AND (last_daily IS NULL OR last_daily<=?)").bind(reward,streak,now,now,guild,uid,new Date(Date.now()-86400000).toISOString()).run();
+        if(!result.meta.changes)return send("⏳ Günlük ödülünü zaten aldın.");
+        const fresh=await account(uid);return send("🎁 Günlük ödülün: **"+reward.toLocaleString("tr-TR")+"**"+(bonus?" (seri bonusu +"+bonus+")":"")+"\nYeni bakiye: **"+Number(fresh.balance).toLocaleString("tr-TR")+"**",false);
+      }
+      if(name==="transfer"){
+        const target=String(get(options,"member")?.value||""),amount=Math.floor(Number(get(options,"miktar")?.value||0));
+        if(!target||target===uid||amount<1||amount>10000000)return send("Geçerli bir alıcı ve 1–10.000.000 arası miktar gir.");
+        const targetUser=await this.discordRequest("/users/"+target);if(targetUser.bot)return send("Botlara bakiye gönderilemez.");
+        await ensure(uid);await ensure(target);const tx=crypto.randomUUID();
+        const results=await this.env.DB.batch([
+          this.env.DB.prepare("INSERT INTO economy_transfers(id,guild_id,sender_id,receiver_id,amount,created_at) SELECT ?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM economy_accounts WHERE guild_id=? AND user_id=? AND balance>=?)").bind(tx,guild,uid,target,amount,now,guild,uid,amount),
+          this.env.DB.prepare("UPDATE economy_accounts SET balance=balance-?,updated_at=? WHERE guild_id=? AND user_id=? AND balance>=? AND EXISTS(SELECT 1 FROM economy_transfers WHERE id=?)").bind(amount,now,guild,uid,amount,tx),
+          this.env.DB.prepare("UPDATE economy_accounts SET balance=balance+?,updated_at=? WHERE guild_id=? AND user_id=? AND EXISTS(SELECT 1 FROM economy_transfers WHERE id=?)").bind(amount,now,guild,target,tx)
+        ]);
+        if(!results[0].meta.changes||!results[1].meta.changes||!results[2].meta.changes)return send("Yetersiz bakiye veya transfer tamamlanamadı.");
+        return send("✅ <@"+uid+">, <@"+target+"> kullanıcısına **"+amount.toLocaleString("tr-TR")+"** gönderdi.",false);
+      }
+      if(name==="market")return send("🏪 **İmparatorluk Marketi**\n• vip — 1000: VIP rolü\n• reklam — 300: reklam hakkı\n• kalkan — 500: kalkan eşyası\n• boost — 750: XP boost eşyası\nSatın almak için /satinal kullan.",false);
+      if(name==="satinal"){
+        const key=String(get(options,"item_adi")?.value||"").trim().toLocaleLowerCase("tr"),items={vip:{price:1000,role:"VIP"},reklam:{price:300},kalkan:{price:500},boost:{price:750}};
+        const item=items[key];if(!item)return send("Bu eşya markette yok. /market komutuna bak.");
+        const a=await account(uid);if(Number(a.balance)<item.price)return send("Yetersiz bakiye. Gereken: "+item.price+", mevcut: "+a.balance);
+        let role=null;
+        if(item.role){const roles=await this.discordRequest("/guilds/"+guild+"/roles");role=roles.find(x=>x.name===item.role);if(!role)return send("VIP rolü sunucuda bulunamadı; bakiye düşülmedi.");}
+        const debited=await this.env.DB.prepare("UPDATE economy_accounts SET balance=balance-?,updated_at=? WHERE guild_id=? AND user_id=? AND balance>=?").bind(item.price,now,guild,uid,item.price).run();
+        if(!debited.meta.changes)return send("Yetersiz bakiye.");
+        try{if(role)await this.discordRequest("/guilds/"+guild+"/members/"+uid+"/roles/"+role.id,"PUT");const inv=JSON.parse(a.inventory||"[]");inv.push({item:key,at:now});await this.env.DB.prepare("UPDATE economy_accounts SET inventory=?,updated_at=? WHERE guild_id=? AND user_id=?").bind(JSON.stringify(inv),now,guild,uid).run();}
+        catch(e){await this.env.DB.prepare("UPDATE economy_accounts SET balance=balance+?,updated_at=? WHERE guild_id=? AND user_id=?").bind(item.price,now,guild,uid).run();return send("Satın alma tamamlanamadı; bakiye iade edildi.");}
+        return send("✅ "+key+" satın alındı. "+item.price+" bakiye harcandı.",false);
+      }
+      if(name==="calis"){
+        const a=await account(uid),last=a.last_work?Date.parse(a.last_work):0,remaining=3600000-(Date.now()-last);
+        if(last&&remaining>0)return send("⏳ "+Math.ceil(remaining/60000)+" dakika sonra tekrar çalışabilirsin.");
+        const jobs=[["Demircide çıraklık yaptın",1],["İmparatorluk arşivlerini düzenledin",1.1],["Pazarda tezgâh açtın",.9],["Kale duvarlarını onardın",1.2],["Elçi olarak komşu krallığa gittin",1.3],["Tarlada hasat topladın",.85],["Saray mutfağında yardımcı oldun",1],["Kütüphanede el yazmalarını kopyaladın",1.15]];
+        const job=jobs[Math.floor(Math.random()*jobs.length)],reward=Math.max(1,Math.floor((40+Math.floor(Math.random()*81))*job[1]));
+        const done=await this.env.DB.prepare("UPDATE economy_accounts SET balance=balance+?,last_work=?,updated_at=? WHERE guild_id=? AND user_id=? AND (last_work IS NULL OR last_work<=?)").bind(reward,now,now,guild,uid,new Date(Date.now()-3600000).toISOString()).run();
+        if(!done.meta.changes)return send("⏳ Biraz dinlen, sonra tekrar çalış.");
+        const fresh=await account(uid);return send("💼 "+job[0]+" ve **"+reward+"** kazandın! Bakiye: **"+fresh.balance+"**",false);
+      }
+      if(name==="seviye"){
+        const target=String(get(options,"member")?.value||uid),a=await account(target),rank=await this.env.DB.prepare("SELECT COUNT(*) AS rank FROM economy_accounts WHERE guild_id=? AND xp>?").bind(guild,a.xp).first();
+        const inLevel=Number(a.xp)%150;return send("📈 **Seviye Kartı**\n<@"+target+">\nSeviye: **"+Math.floor(Number(a.xp)/150)+"**\nXP: **"+a.xp+"** ("+inLevel+"/150)\nSıra: **#"+(Number(rank.rank)+1)+"**",false);
+      }
+      if(name==="siralama"){
+        const type=String(get(options,"tur")?.value||"bakiye"),column=type==="seviye"?"xp":"balance",rows=await this.env.DB.prepare("SELECT user_id,balance,xp FROM economy_accounts WHERE guild_id=? ORDER BY "+column+" DESC LIMIT 10").bind(guild).all();
+        return send(rows.results.length?("🏆 **İmparatorluk Sıralaması**\n"+rows.results.map((x,i)=>(i+1)+". <@"+x.user_id+"> — "+(column==="xp"?"Seviye "+Math.floor(x.xp/150)+" / "+x.xp+" XP":Number(x.balance).toLocaleString("tr-TR"))).join("\n")):"Henüz sıralama verisi yok.",false);
+      }
+    }
+
     if (name === "kb") {
       if (!guild) return send("Bu komut yalnızca sunucuda kullanılabilir.");
       const sub = options[0], action = sub?.name, args = sub?.options || [];
