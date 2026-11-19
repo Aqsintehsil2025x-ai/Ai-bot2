@@ -2018,6 +2018,12 @@ class UltimateImperialBot(commands.Bot):
     async def setup_hook(self):
         logger.info(f"İmparatorluk alt sistemleri başlatılıyor... [platform={PLATFORM}, örnek={INSTANCE_ID}, veri={DATA_DIR.resolve()}]")
         self.ai = AIService()
+        try:
+            from cogs.community_suite import CommunitySuite
+            await self.add_cog(CommunitySuite(self))
+            logger.info("Community Suite: analytics, FAQ knowledge base, anti-raid alerts active.")
+        except Exception:
+            logger.exception("Community Suite yüklenemedi; temel bot çalışmaya devam edecek.")
         self.add_view(TicketPanelView())
         self.add_view(TicketControlView())
         await self.restore_from_backup_if_needed()  # Döngüler başlamadan önce: yeni açılan boş diske eski verileri getir.
