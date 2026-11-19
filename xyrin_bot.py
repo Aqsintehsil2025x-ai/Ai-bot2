@@ -3294,6 +3294,7 @@ def help_pages() -> dict:
             (f"`{p}duyuru <mesaj>`", "Embed ile duyuru yapar."),
             (f"`{p}uyarilar` `{p}uyarisifirla`", "Strike sicili."),
             (f"`{p}modlog` `{p}hosgeldin`", "Log / karşılama kanalı ayarı."),
+            (f"`{p}ticketpanel`", "Destek paneli kurar; ticket kanalları özel ve kalıcıdır."),
             (f"`{p}kanaloluştur` `{p}rololuştur`", "Manuel kanal / rol."),
             (f"`{p}yedekle` `{p}sync` `{p}evrim`", "Yedek, slash eşitleme. Evrim: sanal ortamda dener, geçerse komutu ekler."),
         ]),
