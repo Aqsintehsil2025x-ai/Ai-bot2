@@ -24,3 +24,10 @@ Ticket panel and close buttons are persistent across bot restarts. Open ticket r
 ## Automatic join role
 
 Use `/otorol @role` to assign a role to each new member. Run `/otorol` without a role to disable the per-server setting. The bot must have Manage Roles and its highest role must be above the selected role.
+
+
+## Temporary voice rooms
+
+Use `/tempvoice #join-to-create [category]` to configure a join-to-create voice channel. Members who join it receive a temporary room and are moved into it. The room is deleted when its last human member leaves. Run `/tempvoice` without a channel to disable creation; existing rooms are cleaned up when they become empty.
+
+The bot needs **Manage Channels** and **Move Members** permissions for this feature.
