@@ -472,7 +472,10 @@ export async function dispatchInteraction(
     return json({ type: 5, data: { flags: EPHEMERAL } });
   }
 
-  const economyResponse = await handleEconomyCommand(interaction, env);\n  if (economyResponse) return economyResponse;\n\n  if (command === "ping") return reply("Pong! Cloudflare Worker ve Gateway komut sistemi yanıt veriyor.");
+  const economyResponse = await handleEconomyCommand(interaction, env);
+  if (economyResponse) return economyResponse;
+
+  if (command === "ping") return reply("Pong! Cloudflare Worker ve Gateway komut sistemi yanıt veriyor.");
   if (command === "kb") return handleKnowledgeBase(interaction, env);
   const moreResponse = await handleMoreCommands(interaction, env);
   if (moreResponse) return moreResponse;
