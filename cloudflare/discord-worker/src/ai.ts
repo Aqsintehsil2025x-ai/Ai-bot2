@@ -123,9 +123,10 @@ async function callModel(env: AIEnvironment, provider: AIProvider, model: string
   return provider === "gemini" ? callGemini(key, model, prompt) : callNvidia(key, model, prompt);
 }
 
-async function runProvider(env: AIEnvironment, provider: AIProvider, prompt: string): Promise<{ text: string; model: string }> {
+async function runProvider(env: AIEnvironment, provider: AIProvider, prompt: string, requestedModel?: string): Promise<{ text: string; model: string }> {
   let lastError: unknown = null;
-  for (const model of DEFAULT_MODELS[provider]) {
+  const models = requestedModel && requestedModel.trim() ? [requestedModel.trim(), ...DEFAULT_MODELS[provider].filter((item) => item !== requestedModel.trim())] : DEFAULT_MODELS[provider];
+  for (const model of models) {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         return { text: await callModel(env, provider, model, prompt), model };
@@ -145,10 +146,10 @@ async function runProvider(env: AIEnvironment, provider: AIProvider, prompt: str
  * Calls the selected provider and transparently falls back to the other configured provider.
  * The response reports which provider actually produced the answer.
  */
-export async function generateAI(env: AIEnvironment, preferred: AIProvider, prompt: string): Promise<AIResult> {
+export async function generateAI(env: AIEnvironment, preferred: AIProvider, prompt: string, requestedModel?: string): Promise<AIResult> {
   if (!prompt.trim() || prompt.length > 3500) throw new Error("Prompt must contain 1–3500 characters.");
   try {
-    const result = await runProvider(env, preferred, prompt);
+    const result = await runProvider(env, preferred, prompt, requestedModel);
     return { ...result, provider: preferred, fallback: false };
   } catch (primaryError) {
     const alternate: AIProvider = preferred === "gemini" ? "nvidia" : "gemini";
@@ -173,11 +174,12 @@ export async function runDeferredAI(
   env: AIEnvironment,
   preferred: AIProvider,
   prompt: string,
+  requestedModel?: string,
 ): Promise<void> {
   if (!interaction.application_id || !interaction.token) return;
   let content: string;
   try {
-    const result = await generateAI(env, preferred, prompt);
+    const result = await generateAI(env, preferred, prompt, requestedModel);
     content = (result.fallback ? "↪ " + result.provider.toUpperCase() + " yedek sağlayıcı olarak kullanıldı.\n\n" : "") + result.text;
   } catch (error) {
     content = "AI sağlayıcı hatası: " + safeErrorMessage(error);
