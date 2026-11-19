@@ -185,13 +185,17 @@ export async function runDeferredAI(
     content = "AI sağlayıcı hatası: " + safeErrorMessage(error);
   }
   const url = "https://discord.com/api/v10/webhooks/" + interaction.application_id + "/" + interaction.token + "/messages/@original";
-  const response = await fetch(url, {
-    method: "PATCH",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ content: content.slice(0, 1900), allowed_mentions: { parse: [] } }),
-    signal: AbortSignal.timeout(10000),
-  });
-  if (!response.ok) {
-    console.error("Could not edit deferred AI interaction; Discord HTTP", response.status);
+  try {
+    const response = await fetch(url, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ content: content.slice(0, 1900), allowed_mentions: { parse: [] } }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!response.ok) {
+      console.error("Could not edit deferred AI interaction; Discord HTTP", response.status);
+    }
+  } catch (error) {
+    console.error("Could not deliver deferred AI response:", safeErrorMessage(error));
   }
 }
