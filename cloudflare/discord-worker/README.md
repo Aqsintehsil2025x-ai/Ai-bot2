@@ -18,7 +18,7 @@ The Worker has a one-minute Cron Trigger to start/reconnect the Gateway and deli
 
 ## Implemented commands
 
-- General/AI: /ping, /yardim, /kimlik, /sor, /xfa
+- General/AI: /ping, /yardim, /kimlik, /sor, /xfa, /ozetle
 - Utilities: /zar, /yazitura, /kahve, /secim, /sekiztop, /ship, /anket
 - FAQ: /kb add, /kb ask, /kb list, /kb remove
 - User/server: /kullanici, /avatar, /sunucu, /rapor, /analytics
