@@ -288,6 +288,15 @@ export class DiscordGateway extends DurableObject<Env> {
     if (!message.guild_id || message.author?.bot || !message.content) return;
     const content = message.content.trim();
     const now = new Date().toISOString();
+    const afkKey = "afk:" + message.author.id;
+    const clearedAfk = await this.env.DB.prepare("DELETE FROM guild_settings WHERE guild_id=? AND setting_key=?")
+      .bind(message.guild_id, afkKey).run();
+    if (clearedAfk.meta.changes) {
+      await this.discordRequest("/channels/" + message.channel_id + "/messages", "POST", {
+        content: "👋 <@" + message.author.id + ">, AFK durumun kaldırıldı.",
+        allowed_mentions: { parse: [], users: [message.author.id] }
+      });
+    }
     await this.env.DB.prepare("INSERT OR IGNORE INTO economy_accounts(guild_id,user_id,updated_at) VALUES(?,?,?)").bind(message.guild_id,message.author.id,now).run();
     const xpGain = 5 + Math.floor(Math.random()*11);
     await this.env.DB.prepare("UPDATE economy_accounts SET xp=xp+?,level=CAST((xp+?)/150 AS INTEGER),last_xp=?,updated_at=? WHERE guild_id=? AND user_id=? AND (last_xp IS NULL OR last_xp<=?)").bind(xpGain,xpGain,now,now,message.guild_id,message.author.id,new Date(Date.now()-60000).toISOString()).run();
