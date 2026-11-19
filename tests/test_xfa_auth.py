@@ -94,19 +94,25 @@ class XFAAuthSmokeTests(unittest.TestCase):
         # succeeds and the endpoint then reports that the planner is unavailable.
         self.assertEqual(allowed_through_csrf.status_code, 400)
 
-    def test_provider_catalog_uses_only_server_managed_gemini_and_nvidia(self):
+    def test_provider_catalog_uses_only_server_managed_providers(self):
         self._login_test_session()
         os.environ["GEMINI_API_KEY"] = "server-gemini-secret"
         os.environ["NVIDIA_API_KEY"] = "server-nvidia-secret"
         response = self.client.get("/xfa/api/providers")
         self.assertEqual(response.status_code, 200)
         providers = response.json["connected"]
-        self.assertEqual({item["id"] for item in providers}, {"gemini", "nvidia"})
-        self.assertTrue(all(item["connected"] for item in providers))
+        by_id = {item["id"]: item for item in providers}
+        self.assertEqual(
+            set(by_id), {"gemini", "nvidia", "groq", "openrouter", "deepseek"}
+        )
+        self.assertTrue(by_id["gemini"]["connected"])
+        self.assertTrue(by_id["nvidia"]["connected"])
+        self.assertFalse(by_id["groq"]["connected"])
+        self.assertFalse(by_id["openrouter"]["connected"])
+        self.assertFalse(by_id["deepseek"]["connected"])
         body = response.get_data(as_text=True)
         self.assertNotIn("server-gemini-secret", body)
         self.assertNotIn("server-nvidia-secret", body)
-        self.assertNotIn("groq", body)
 
     def test_google_api_key_is_supported_as_gemini_fallback(self):
         self._login_test_session()
