@@ -7,8 +7,6 @@ export interface Env {
   DISCORD_CLIENT_SECRET: SecretStoreBinding;
   GEMINI_API_KEY: SecretStoreBinding;
   NVIDIA_API_KEY: SecretStoreBinding;
-  XFA_TOKEN_ENCRYPTION_KEY: SecretStoreBinding;
-  XFA_ACCESS_TOKEN: SecretStoreBinding;
 }
 
 type Option = { name: string; type?: number; value?: string | number | boolean; options?: Option[] };
