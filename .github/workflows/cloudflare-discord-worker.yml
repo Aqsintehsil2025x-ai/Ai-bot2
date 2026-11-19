@@ -43,9 +43,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git switch --orphan worker-deploy-artifact
-          git rm -rf .
           mkdir -p dist
           cp worker-build/entry.js dist/entry.js
-          git add dist/entry.js
+          git add -f dist/entry.js
           git commit -m "Build Worker bundle for test deployment"
           git push --force origin HEAD:worker-deploy-artifact
