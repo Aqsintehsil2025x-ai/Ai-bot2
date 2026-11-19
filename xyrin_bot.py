@@ -1886,6 +1886,7 @@ class UltimateImperialBot(commands.Bot):
         self.economy = EconomyManager()
         self.strikes = StrikeManager()
         self.settings = GuildSettings()
+        self.tickets = JsonStore("tickets.json", lambda: {"active": {}}, int_keys=False)
         self.reminders = ReminderManager()
         self.afk = AFKManager()
         self.giveaways = GiveawayManager()
@@ -1919,6 +1920,8 @@ class UltimateImperialBot(commands.Bot):
     async def setup_hook(self):
         logger.info(f"İmparatorluk alt sistemleri başlatılıyor... [platform={PLATFORM}, örnek={INSTANCE_ID}, veri={DATA_DIR.resolve()}]")
         self.ai = AIService()
+        self.add_view(TicketPanelView())
+        self.add_view(TicketControlView())
         await self.restore_from_backup_if_needed()  # Döngüler başlamadan önce: yeni açılan boş diske eski verileri getir.
         if not SOVEREIGN_IDS:
             logger.warning(
