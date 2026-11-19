@@ -12,6 +12,7 @@
 #   PORT         : Render/Railway otomatik tanımlar; bot bu portta küçük bir /health sayfası açar (Render Web Service şartı).
 #   Önerilen     : BOT_OWNER_ID, MOD_LOG_CHANNEL_ID, WELCOME_CHANNEL_ID
 #   İsteğe bağlı : GEMINI_MODEL, GEMMA_MODEL, NVIDIA_API_KEY, NVIDIA_MODEL, OPENAI_API_KEY, OPENAI_MODEL,
+#                  GROQ_API_KEY, GROQ_MODEL, OPENROUTER_API_KEY, OPENROUTER_MODEL, DEEPSEEK_API_KEY, DEEPSEEK_MODEL,
 #                  BLOCK_ALL_LINKS, ALLOWED_LINK_DOMAINS, WELCOME_ROLE_NAME, AI_ACTION_CONFIRM, MOD_AI_ENABLED, MOD_AI_MAX_PER_MINUTE,
 #                  BET_MAX, AUTO_SYNC, HOLOGRAM_ANNOUNCE, DAILY_QUESTION_TITLE ...
 #
@@ -158,12 +159,28 @@ NVIDIA_API_KEY = env_str("NVIDIA_API_KEY")
 NVIDIA_MODEL = env_str("NVIDIA_MODEL", "nvidia/nemotron-3.5-super-vl-120b-a12b")
 OPENAI_API_KEY = env_str("OPENAI_API_KEY")
 OPENAI_MODEL = env_str("OPENAI_MODEL", "gpt-6-astra")
+GROQ_API_KEY = env_str("GROQ_API_KEY")
+GROQ_MODEL = env_str("GROQ_MODEL", "openai/gpt-oss-120b")
+OPENROUTER_API_KEY = env_str("OPENROUTER_API_KEY")
+OPENROUTER_MODEL = env_str("OPENROUTER_MODEL", "openrouter/free")
+DEEPSEEK_API_KEY = env_str("DEEPSEEK_API_KEY")
+DEEPSEEK_MODEL = env_str("DEEPSEEK_MODEL", "deepseek-flash")
 GEMMA_MODEL = env_str("GEMMA_MODEL", "gemma-4-26b-a4b-it")
 DEFAULT_AI_PROVIDER = env_str(
     "DEFAULT_AI_PROVIDER",
-    "nvidia" if NVIDIA_API_KEY else ("openai" if OPENAI_API_KEY else "gemini"),
+    "gemini" if GEMINI_API_KEY else (
+        "openrouter" if OPENROUTER_API_KEY else (
+            "groq" if GROQ_API_KEY else (
+                "nvidia" if NVIDIA_API_KEY else (
+                    "openai" if OPENAI_API_KEY else (
+                        "deepseek" if DEEPSEEK_API_KEY else "gemini"
+                    )
+                )
+            )
+        )
+    ),
 ).lower()
-if DEFAULT_AI_PROVIDER not in {"nvidia", "openai", "gemini", "gemma"}:
+if DEFAULT_AI_PROVIDER not in {"nvidia", "openai", "gemini", "gemma", "groq", "openrouter", "deepseek"}:
     DEFAULT_AI_PROVIDER = "gemini"
 NVIDIA_CODE_MODEL = env_str("NVIDIA_CODE_MODEL", "nvidia/nemotron-3.5-super-vl-120b-a12b")
 NVIDIA_MAX_TOKENS = max(256, env_int("NVIDIA_MAX_TOKENS", 16384))
@@ -1410,26 +1427,45 @@ class AIService:
                    search: bool = False, provider: Optional[str] = None) -> str:
         """Kanal geçmişiyle seçilen sağlayıcıda konuşur. image = (bayt, mime_type)."""
         provider = (provider or DEFAULT_AI_PROVIDER).lower()
-        if provider not in {"nvidia", "openai", "gemini", "gemma"}:
+        if provider not in {"nvidia", "openai", "gemini", "gemma", "groq", "openrouter", "deepseek"}:
             raise AIError("⚠️ Bilinmeyen AI sağlayıcısı.", "model")
-        if provider == "nvidia" and not NVIDIA_API_KEY:
-            raise AIError("⚠️ NVIDIA_API_KEY Secret tanımlanmamış.", "auth")
-        if provider == "openai" and not OPENAI_API_KEY:
-            raise AIError("⚠️ OPENAI_API_KEY Secret tanımlanmamış.", "auth")
+        provider_keys = {
+            "nvidia": NVIDIA_API_KEY,
+            "openai": OPENAI_API_KEY,
+            "groq": GROQ_API_KEY,
+            "openrouter": OPENROUTER_API_KEY,
+            "deepseek": DEEPSEEK_API_KEY,
+        }
+        if provider in provider_keys and not provider_keys[provider]:
+            missing = {
+                "nvidia": "NVIDIA_API_KEY",
+                "openai": "OPENAI_API_KEY",
+                "groq": "GROQ_API_KEY",
+                "openrouter": "OPENROUTER_API_KEY",
+                "deepseek": "DEEPSEEK_API_KEY",
+            }[provider]
+            raise AIError(f"⚠️ {missing} Secret tanımlanmamış.", "auth")
         if provider in {"gemini", "gemma"} and (not self.enabled or self.client is None):
             raise AIError("⚠️ GEMINI_API_KEY Secret tanımlanmamış veya Google AI istemcisi başlatılamadı.", "auth")
 
         async with self.memory.lock(channel_id):
-            if provider in {"nvidia", "openai"}:
+            if provider in {"nvidia", "openai", "groq", "openrouter", "deepseek"}:
                 if provider == "nvidia":
                     messages = self._nvidia_messages(channel_id, header, user_text, image)
                     text = await asyncio.to_thread(
                         self._nvidia_request, messages, max(AI_TIMEOUT_SECONDS, 90)
                     )
-                else:
+                elif provider == "openai":
                     messages = self._openai_messages(channel_id, header, user_text, image)
                     text = await asyncio.to_thread(
                         self._openai_request, messages, max(AI_TIMEOUT_SECONDS, 90)
+                    )
+                else:
+                    if image:
+                        raise AIError("Bu sağlayıcıda görsel analizi şu an etkin değil; metin mesajı gönder.", "model")
+                    messages = self._openai_messages(channel_id, header, user_text, None)
+                    text = await asyncio.to_thread(
+                        self._compatible_request, messages, max(AI_TIMEOUT_SECONDS, 90), provider
                     )
                 clean, _ = extract_actions(text)
                 stored_user = f"{header}\n{'[görsel gönderildi] ' if image else ''}{user_text}"
@@ -1663,6 +1699,68 @@ class AIService:
         if not content:
             raise AIError("🤔 OpenAI bir yanıt üretemedi.", "empty")
         return content
+
+    @staticmethod
+    def _compatible_request(messages: list, timeout: float, provider: str) -> str:
+        """Call a configured OpenAI-compatible provider without exposing response bodies or credentials."""
+        import urllib.error
+        import urllib.request
+
+        settings = {
+            "groq": (GROQ_API_KEY, GROQ_MODEL, "https://api.groq.com/openai/v1/chat/completions"),
+            "openrouter": (OPENROUTER_API_KEY, OPENROUTER_MODEL, "https://openrouter.ai/api/v1/chat/completions"),
+            "deepseek": (DEEPSEEK_API_KEY, DEEPSEEK_MODEL, "https://api.deepseek.com/chat/completions"),
+        }
+        if provider not in settings:
+            raise AIError("Bilinmeyen AI sağlayıcısı.", "model")
+        api_key, model, endpoint = settings[provider]
+        if not api_key:
+            raise AIError(f"{provider.upper()}_API_KEY Secret tanımlanmamış.", "auth")
+        payload = json.dumps({
+            "model": model,
+            "messages": messages,
+            "max_tokens": AI_MAX_OUTPUT_TOKENS,
+            "stream": False,
+        }).encode("utf-8")
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "Xyrin-Discord-Bot/1.0",
+        }
+        if provider == "openrouter":
+            headers["HTTP-Referer"] = "https://xyrin-flower-ai.pages.dev"
+            headers["X-Title"] = "Xyrin Flower"
+        req = urllib.request.Request(endpoint, data=payload, headers=headers, method="POST")
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                data = json.loads(resp.read(2 * 1024 * 1024).decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            if exc.code == 429:
+                raise AIError(f"⏳ {provider.title()} kullanım limiti doldu; biraz sonra tekrar dene.", "quota") from exc
+            if exc.code in (401, 403):
+                raise AIError(f"⚠️ {provider.title()} API anahtarı geçersiz veya model erişimi kapalı.", "auth") from exc
+            if exc.code == 402:
+                raise AIError(f"⚠️ {provider.title()} hesabında kullanılabilir bakiye veya erişim yok.", "billing") from exc
+            if exc.code == 404:
+                raise AIError(f"⚠️ {provider.title()} model adı bulunamadı; model ayarını kontrol et.", "model") from exc
+            raise AIError(f"⚠️ {provider.title()} geçici bir API hatası verdi ({exc.code}).", "server") from exc
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            raise AIError(f"⌛ {provider.title()} API bağlantısı zamanında yanıt vermedi.", "timeout") from exc
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise AIError(f"⚠️ {provider.title()} geçersiz bir yanıt döndürdü.", "server") from exc
+
+        try:
+            choice = (data.get("choices") or [{}])[0]
+            content = (choice.get("message") or {}).get("content")
+            if isinstance(content, list):
+                content = "".join(str(part.get("text", "")) for part in content if isinstance(part, dict))
+            answer = str(content or "").strip()
+        except (AttributeError, IndexError, TypeError):
+            answer = ""
+        if not answer:
+            raise AIError(f"🤔 {provider.title()} bir yanıt üretemedi.", "empty")
+        return answer
 
     @staticmethod
     def _nvidia_visible(message: dict) -> str:
@@ -3396,6 +3494,9 @@ async def set_ai_provider(ctx, provider: str):
         "openai": bool(OPENAI_API_KEY),
         "gemini": bool(GEMINI_API_KEY and bot.ai and bot.ai.client),
         "gemma": bool(GEMINI_API_KEY and bot.ai and bot.ai.client),
+        "groq": bool(GROQ_API_KEY),
+        "openrouter": bool(OPENROUTER_API_KEY),
+        "deepseek": bool(DEEPSEEK_API_KEY),
     }
     if not requirements.get(provider, False):
         missing = {
@@ -3403,6 +3504,9 @@ async def set_ai_provider(ctx, provider: str):
             "openai": "OPENAI_API_KEY",
             "gemini": "GEMINI_API_KEY",
             "gemma": "GEMINI_API_KEY",
+            "groq": "GROQ_API_KEY",
+            "openrouter": "OPENROUTER_API_KEY",
+            "deepseek": "DEEPSEEK_API_KEY",
         }.get(provider, "ilgili API Secret")
         await ctx.send(f"⚠️ {missing} Secret tanımlı değil veya sağlayıcı başlatılamadı.")
         return
@@ -3413,6 +3517,9 @@ async def set_ai_provider(ctx, provider: str):
         "openai": f"OpenAI ({OPENAI_MODEL})",
         "gemini": f"Gemini ({GEMINI_MODEL})",
         "gemma": f"Gemma ({GEMMA_MODEL})",
+        "groq": f"Groq ({GROQ_MODEL})",
+        "openrouter": f"OpenRouter ({OPENROUTER_MODEL})",
+        "deepseek": f"DeepSeek ({DEEPSEEK_MODEL})",
     }
     await ctx.send(f"✅ Bu sunucunun AI sağlayıcısı **{labels[provider]}** olarak ayarlandı.")
 
@@ -3443,6 +3550,27 @@ async def gemma_komutu(ctx):
 @perm_or_sovereign(manage_guild=True)
 async def openai_komutu(ctx):
     await set_ai_provider(ctx, "openai")
+
+
+@bot.hybrid_command(name="groq", description="Bu sunucuda Groq AI sağlayıcısını seçer.")
+@commands.guild_only()
+@perm_or_sovereign(manage_guild=True)
+async def groq_komutu(ctx):
+    await set_ai_provider(ctx, "groq")
+
+
+@bot.hybrid_command(name="openrouter", description="Bu sunucuda OpenRouter AI sağlayıcısını seçer.")
+@commands.guild_only()
+@perm_or_sovereign(manage_guild=True)
+async def openrouter_komutu(ctx):
+    await set_ai_provider(ctx, "openrouter")
+
+
+@bot.hybrid_command(name="deepseek", description="Bu sunucuda DeepSeek AI sağlayıcısını seçer.")
+@commands.guild_only()
+@perm_or_sovereign(manage_guild=True)
+async def deepseek_komutu(ctx):
+    await set_ai_provider(ctx, "deepseek")
 
 
 @bot.hybrid_command(name="kahve", aliases=["coffee", "espresso"], description="Kahve siparişi ver ☕")
@@ -3480,7 +3608,10 @@ async def hologram_durum_komutu(ctx):
 async def sunucu_raporu(ctx):
     guild = ctx.guild
     bot_count = sum(1 for m in guild.members if m.bot)
-    ai_ok = bool(bot.ai is not None and (bot.ai.enabled or NVIDIA_API_KEY or OPENAI_API_KEY))
+    ai_ok = bool(bot.ai is not None and (
+        bot.ai.enabled or NVIDIA_API_KEY or OPENAI_API_KEY or GROQ_API_KEY
+        or OPENROUTER_API_KEY or DEEPSEEK_API_KEY
+    ))
     embed = discord.Embed(title=f"📊 {guild.name} - Rapor", color=discord.Color.blue())
     embed.add_field(name="👥 Toplam Üye", value=f"{guild.member_count} ({bot_count} bot)", inline=True)
     embed.add_field(name="💬 Kanallar", value=f"{len(guild.text_channels)} metin / {len(guild.voice_channels)} ses", inline=True)
