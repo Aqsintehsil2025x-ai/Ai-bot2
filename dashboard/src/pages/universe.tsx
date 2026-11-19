@@ -134,13 +134,13 @@ export default function UniversePage() {
   async function refreshProviders() {
     const response = await fetch('/xfa/api/providers', { credentials: 'same-origin' });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error || 'AI modelleri yüklənə bilmədi.');
+    if (!response.ok) throw new Error(data.error || 'Yapay zekâ modelleri yüklenemedi.');
     const options = Array.isArray(data.connected) ? data.connected : [];
     setProviderOptions(options);
     const selected = options.find((item: { id: string; connected: boolean }) => item.id === data.active && item.connected)
       || options.find((item: { connected: boolean }) => item.connected);
     if (!selected) {
-      setProviderError('XFA serverində aktiv Gemini və ya NVIDIA modeli yoxdur.');
+      setProviderError('XFA sunucusunda etkin bir Gemini veya NVIDIA modeli yok.');
       return;
     }
     const model = selected.id === data.active && selected.models.includes(data.model)
@@ -166,7 +166,7 @@ export default function UniversePage() {
 
   useEffect(() => {
     if (auth.authenticated) {
-      refreshProviders().catch((err) => setProviderError(err instanceof Error ? err.message : 'AI sağlayıcıları yüklenemedi.'));
+      refreshProviders().catch((err) => setProviderError(err instanceof Error ? err.message : 'Yapay zekâ sağlayıcıları yüklenemedi.'));
     } else {
       setProviderOptions([]);
       setActiveProvider('gemini');
@@ -178,7 +178,7 @@ export default function UniversePage() {
   async function refreshMemory() {
     const response = await fetch('/xfa/api/memory', { credentials: 'same-origin' });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error || 'Yaddaş yüklənmədi.');
+    if (!response.ok) throw new Error(data.error || 'Bellek yüklenemedi.');
     setMemoryItems(Array.isArray(data.items) ? data.items : []);
   }
 
@@ -194,12 +194,12 @@ export default function UniversePage() {
         body: JSON.stringify({ title: memoryTitle, content: memoryContent }),
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || 'Yaddaş saxlanmadı.');
+      if (!response.ok) throw new Error(data.error || 'Bellek kaydedilemedi.');
       setMemoryItems((items) => [data.item, ...items]);
       setMemoryTitle('');
       setMemoryContent('');
     } catch (err) {
-      setMemoryError(err instanceof Error ? err.message : 'Yaddaş saxlanmadı.');
+      setMemoryError(err instanceof Error ? err.message : 'Bellek kaydedilemedi.');
     } finally { setMemoryBusy(false); }
   }
 
@@ -212,16 +212,16 @@ export default function UniversePage() {
         headers: { 'X-CSRF-Token': auth.csrf },
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || 'Yaddaş silinmədi.');
+      if (!response.ok) throw new Error(data.error || 'Bellek silinemedi.');
       setMemoryItems((items) => items.filter((item) => item.id !== itemId));
     } catch (err) {
-      setMemoryError(err instanceof Error ? err.message : 'Yaddaş silinmədi.');
+      setMemoryError(err instanceof Error ? err.message : 'Bellek silinemedi.');
     } finally { setMemoryBusy(false); }
   }
 
   useEffect(() => {
     if (memoryOpen && auth.authenticated) {
-      refreshMemory().catch((err) => setMemoryError(err instanceof Error ? err.message : 'Yaddaş yüklənmədi.'));
+      refreshMemory().catch((err) => setMemoryError(err instanceof Error ? err.message : 'Bellek yüklenemedi.'));
     }
   }, [memoryOpen, auth.authenticated]);
 
@@ -238,7 +238,7 @@ export default function UniversePage() {
         body: JSON.stringify({ email: email.trim(), password }),
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || `Giriş başarısız (HTTP ${response.status}).`);
+      if (!response.ok) throw new Error(data.error || `Giriş Yap başarısız (HTTP ${response.status}).`);
       const sessionResponse = await fetch('/auth/me', { credentials: 'same-origin' });
       const sessionData = await sessionResponse.json().catch(() => ({}));
       if (!sessionResponse.ok || sessionData.authenticated !== true) {
@@ -295,7 +295,7 @@ export default function UniversePage() {
     const attachment = selectedFile;
     if ((!content && !attachment) || busy) return;
     if (!auth.authenticated) {
-      setError('Söhbət üçün əvvəlcə XFA hesabına daxil ol.');
+      setError('Sohbet için önce XFA hesabına giriş yap.');
       return;
     }
     const visibleContent = attachment
@@ -332,11 +332,11 @@ export default function UniversePage() {
               body: JSON.stringify({ messages: next.slice(-20), provider: activeProvider, model: activeModel, web_search: webSearchEnabled }),
             });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || `XFA sorğusu uğursuz oldu (HTTP ${response.status}).`);
+      if (!response.ok) throw new Error(data.error || `XFA isteği başarısız oldu (HTTP ${response.status}).`);
       setMessages((current) => [...current, { role: 'model', content: data.reply || data.answer || 'Şu anda yanıt oluşturamadım.', sources: Array.isArray(data.sources) ? data.sources : [] }]);
       if (attachment) setSelectedFile(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'XFA bağlantısı başarısız oldu.');
+      setError(err instanceof Error ? err.message : 'XFA bağlantısı kurulamadı.');
     } finally {
       setBusy(false);
       inputRef.current?.focus();
@@ -345,7 +345,7 @@ export default function UniversePage() {
 
   async function startVoiceRecording() {
     if (!navigator.mediaDevices?.getUserMedia || !('MediaRecorder' in window)) {
-      setError('Bu brauzer səs yazma funksiyasını dəstəkləmir.');
+      setError('Bu tarayıcı ses kaydını desteklemiyor.');
       return;
     }
     try {
@@ -361,7 +361,7 @@ export default function UniversePage() {
         if (event.data.size > 0) audioChunksRef.current.push(event.data);
       };
       recorder.onerror = () => {
-        setError('Səs yazılarkən xəta baş verdi.');
+        setError('Ses kaydı sırasında bir hata oluştu.');
         stream.getTracks().forEach((track) => track.stop());
         recordingStreamRef.current = null;
         setRecording(false);
@@ -370,7 +370,7 @@ export default function UniversePage() {
         const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
         const extension = blob.type.includes('ogg') ? '.ogg' : blob.type.includes('mp4') ? '.m4a' : '.webm';
         if (blob.size > 8 * 1024 * 1024) {
-          setError('Səs yazısı 8 MB limitini keçdi.');
+          setError('Ses kaydı 8 MB sınırını aştı.');
         } else if (blob.size > 0) {
           setSelectedFile(new File([blob], 'xfa-voice' + extension, { type: blob.type }));
         }
@@ -383,7 +383,7 @@ export default function UniversePage() {
       recorder.start();
       setRecording(true);
     } catch {
-      setError('Mikrofon icazəsi alınmadı və ya cihaz əlçatan deyil.');
+      setError('Mikrofon izni verilmedi veya cihaza erişilemiyor.');
       recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
       recordingStreamRef.current = null;
       setRecording(false);
@@ -396,7 +396,7 @@ export default function UniversePage() {
 
   function speakMessage(content: string) {
     if (!('speechSynthesis' in window)) {
-      setError('Bu brauzer səsli oxuma funksiyasını dəstəkləmir.');
+      setError('Bu tarayıcı sesli okumayı desteklemiyor.');
       return;
     }
     window.speechSynthesis.cancel();
@@ -406,50 +406,50 @@ export default function UniversePage() {
     window.speechSynthesis.speak(utterance);
   }
 
-  const quickPrompts = ['Nebulalar nasıl oluşur?', 'Bana bir Python örneği yaz', 'Yeni bir proje fikri bul', 'Bugünkü hedeflerimi planla'];
+  const quickPrompts = ['Bulutsular nasıl oluşur?', 'Bana bir Python örneği yaz', 'Yeni bir proje fikri bul', 'Bugünkü hedeflerimi planla'];
 
   return (
     <main className="universe-page" ref={rootRef}>
       <SpaceCanvas quality={quality} />
       <div className="universe-vignette" />
-      {scene === 'pulsar' && <div className="universe-pulsar" role="img" aria-label="Fırlanan pulsar ulduzu animasiyası"><div className="pulsar-beam pulsar-beam-a"/><div className="pulsar-beam pulsar-beam-b"/><div className="pulsar-halo"/><div className="pulsar-star"><i/><i/><i/><i/></div><div className="pulsar-rings"/></div>}
+      {scene === 'pulsar' && <div className="universe-pulsar" role="img" aria-label="Dönen pulsar yıldızı animasyonu"><div className="pulsar-beam pulsar-beam-a"/><div className="pulsar-beam pulsar-beam-b"/><div className="pulsar-halo"/><div className="pulsar-star"><i/><i/><i/><i/></div><div className="pulsar-rings"/></div>}
       {scene === 'nebula' && <div className="universe-nebula-scene" aria-hidden="true"><i/><i/><i/><i/><span/></div>}
       <aside className="universe-sidebar">
         <Link href="/" className="universe-brand"><span className="universe-flower">✿</span><strong>XFA</strong><small>XYRIN FLOWER AI</small></Link>
         <div className="universe-nav-label">ÇALIŞMA ALANI</div>
         <a className="universe-nav-item active" href="#chat"><MessageCircle size={16}/> Sohbet</a>
-        <button className="universe-nav-item" type="button" onClick={() => { if (!auth.authenticated) { setError("Yaddaş üçün əvvəlcə hesabına daxil ol."); return; } setMemoryOpen(true); setMemoryError(""); }}><BookOpen size={16}/> Yaddaş</button><a className="universe-nav-item" href="#chat"><Bot size={16}/> Yapay Zekâ Ajanı</a>
+        <button className="universe-nav-item" type="button" onClick={() => { if (!auth.authenticated) { setError("Bellek için önce hesabına giriş yap."); return; } setMemoryOpen(true); setMemoryError(""); }}><BookOpen size={16}/> Bellek</button><a className="universe-nav-item" href="#chat"><Bot size={16}/> Yapay Zekâ Asistanı</a>
         <a className="universe-nav-item" href="/panel"><Grid3X3 size={16}/> Çalışma Alanı</a>
         <a className="universe-nav-item" href="/panel"><Settings size={16}/> Ayarlar</a>
-        <div className="universe-premium"><strong>👑 XFA</strong><p>Herkes için ücretsiz yapay zekâ deneyimi.</p><a href="/panel">Kontrol paneli →</a></div>
+        <div className="universe-premium"><strong>👑 XFA</strong><p>Herkes için ücretsiz yapay zekâ deneyimi.</p><a href="/panel">Kontrol Paneli →</a></div>
         <div className="universe-sidebar-foot">© 2026 XFA.<br/>Herkes için geliştirildi. ♡</div>
       </aside>
       <header className="universe-topbar">
         <Link href="/welcome" className="universe-back"><ArrowLeft size={15}/> Tanıtım sayfası</Link>
         <button className="universe-search" type="button" onClick={() => inputRef.current?.focus()}><Search size={14}/> Mesaj yazmak için tıkla...</button>
-        <div className="universe-status"><i className={stats.ready ? '' : 'offline'}/> {auth.authenticated ? (auth.name || 'Hesabım') : 'Misafir'} <span>◉</span><b>{auth.name ? auth.name.slice(0,1).toUpperCase() : 'A'}</b>{auth.authenticated && <button type="button" className="universe-logout" onClick={logout}>Çıkış</button>}</div>
+        <div className="universe-status"><i className={stats.ready ? '' : 'offline'}/> {auth.authenticated ? (auth.name || 'Hesabım') : 'Misafir'} <span>◉</span><b>{auth.name ? auth.name.slice(0,1).toUpperCase() : 'A'}</b>{auth.authenticated && <button type="button" className="universe-logout" onClick={logout}>Çıkış Yap</button>}</div>
       </header>
       <section className="universe-center">
-        <div className="universe-brand-title"><h1>XFA</h1><h2>Xyrin Flower AI</h2><p>Sonsuz imkânlar. Tamamen <em>ücretsiz.</em></p><div className="universe-pills"><span>∞ Ücretsiz erişim</span><span>♢ Güvenli çalışma</span><span>ϟ Canlı AI sohbeti</span></div></div>
+        <div className="universe-brand-title"><h1>XFA</h1><h2>Xyrin Flower AI</h2><p>Sonsuz olanaklar. Tamamen <em>ücretsiz.</em></p><div className="universe-pills"><span>∞ Ücretsiz erişim</span><span>♢ Güvenli çalışma</span><span>ϟ Canlı yapay zekâ sohbeti</span></div></div>
         <div className="universe-chat" id="chat">
-          <div className="universe-chat-head"><span className="universe-avatar">✿</span><div><strong>{auth.authenticated ? `Merhaba, ${auth.name || 'gezgin'}! 👋` : 'XFA Universe’e hoş geldin! 👋'}</strong><small>{auth.authenticated ? 'XFA hazır. Ne yapmak istersin?' : 'AI sohbetini kullanmak için hesabına giriş yap.'}</small></div></div>
+          <div className="universe-chat-head"><span className="universe-avatar">✿</span><div><strong>{auth.authenticated ? `Merhaba, ${auth.name || 'gezgin'}! 👋` : 'XFA Universe’e hoş geldin! 👋'}</strong><small>{auth.authenticated ? 'XFA hazır. Ne yapmak istersin?' : 'Yapay zekâ sohbetini kullanmak için hesabına giriş yap.'}</small></div></div>
           {!auth.authenticated && !auth.loading && (
             <form className="universe-auth" onSubmit={submitAuth}>
               <div className="universe-auth-heading">
                 <strong>{authMode === 'login' ? 'Hesabına giriş yap' : 'Ücretsiz XFA hesabı oluştur'}</strong>
-                <span>{authMode === 'login' ? 'Sohbeti sürdürmek için giriş yap.' : 'E-posta adresinle XFA’ya katıl.'}</span>
+                <span>{authMode === 'login' ? 'Sohbete devam etmek için giriş yap.' : 'E-posta adresinle XFA’ya katıl.'}</span>
               </div>
               <label className="universe-auth-label" htmlFor="xfa-email">E-posta</label>
               <input id="xfa-email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="ornek@eposta.com" required />
-              <label className="universe-auth-label" htmlFor="xfa-password">Parola</label>
+              <label className="universe-auth-label" htmlFor="xfa-password">Şifre</label>
               <input id="xfa-password" type="password" autoComplete={authMode === 'login' ? 'current-password' : 'new-password'} minLength={12} maxLength={1024} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="En az 12 karakter" required />
               {authError && <p className="universe-error" role="alert">{authError}</p>}
               <div className="universe-auth-actions">
-                <button className="universe-auth-submit" type="submit" disabled={authBusy || !auth.csrf}>{authBusy ? 'Bekle…' : authMode === 'login' ? 'Giriş yap' : 'Hesap oluştur'}</button>
+                <button className="universe-auth-submit" type="submit" disabled={authBusy || !auth.csrf}>{authBusy ? 'Bekleyin…' : authMode === 'login' ? 'Giriş Yap' : 'Hesap oluştur'}</button>
                 <button className="universe-auth-toggle" type="button" onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthError(''); }}>{authMode === 'login' ? 'Hesap oluştur' : 'Zaten hesabım var'}</button>
               </div>
               {auth.google && <a className="universe-google-login" href="/auth/login/google">Google ile giriş yap <ArrowRight size={14}/></a>}
-              {!auth.csrf && <small className="universe-auth-note">Giriş hizmeti şu anda yapılandırılmamış olabilir.</small>}
+              {!auth.csrf && <small className="universe-auth-note">Giriş Yap hizmeti şu anda yapılandırılmamış olabilir.</small>}
             </form>
           )}
           {auth.authenticated && <div className="universe-model-controls">
@@ -459,57 +459,57 @@ export default function UniversePage() {
               if (!option?.connected) return;
               selectAiProvider(event.target.value, option.default_model).catch((err) => setProviderError(err instanceof Error ? err.message : 'Model seçilemedi.'));
             }}>
-              {providerOptions.map((option) => <option key={option.id} value={option.id} disabled={!option.connected}>{option.name}{option.connected ? ' ✓' : ' • Sunucuda aktiv deyil'}</option>)}
+              {providerOptions.map((option) => <option key={option.id} value={option.id} disabled={!option.connected}>{option.name}{option.connected ? ' ✓' : ' • Sunucuda etkin değil'}</option>)}
             </select>
             <select value={activeModel} onChange={(event) => selectAiProvider(activeProvider, event.target.value).catch((err) => setProviderError(err instanceof Error ? err.message : 'Model seçilemedi.'))}>
               {(providerOptions.find((item) => item.id === activeProvider)?.models || [activeModel]).map((model) => <option key={model} value={model}>{model}</option>)}
             </select>
-            <small>XFA serverinin Gemini və NVIDIA bağlantıları</small>
+            <small>XFA sunucusunun Gemini ve NVIDIA bağlantıları</small>
             {providerError && <p className="universe-error" role="alert">{providerError}</p>}
           </div>}
 
-          {memoryOpen && auth.authenticated && <div className="universe-provider-overlay" role="dialog" aria-modal="true" aria-label="XFA yaddaşı">
+          {memoryOpen && auth.authenticated && <div className="universe-provider-overlay" role="dialog" aria-modal="true" aria-label="XFA Belleği">
             <section className="universe-provider-modal universe-memory-modal">
-              <header><div><strong><BookOpen size={17}/> XFA yaddaşı</strong><small>Yalnız sənin əlavə etdiyin qeydlər saxlanılır. Avtomatik yaddaş aktiv deyil.</small></div><button type="button" aria-label="Kapat" onClick={() => setMemoryOpen(false)}><X size={18}/></button></header>
+              <header><div><strong><BookOpen size={17}/> XFA Belleği</strong><small>Yalnızca senin eklediğin kayıtlar saklanır. Otomatik bellek etkin değildir.</small></div><button type="button" aria-label="Kapat" onClick={() => setMemoryOpen(false)}><X size={18}/></button></header>
               <form className="universe-provider-form" onSubmit={saveMemory}>
-                <strong>Yeni yaddaş qeydi</strong>
-                <label>Başlıq</label>
+                <strong>Yeni bellek kaydı</strong>
+                <label>Başlık</label>
                 <input value={memoryTitle} onChange={(event) => setMemoryTitle(event.target.value)} maxLength={120} placeholder="Məsələn: XFA UI seçimi" />
-                <label>Məlumat</label>
-                <textarea value={memoryContent} onChange={(event) => setMemoryContent(event.target.value)} maxLength={6000} rows={4} placeholder="XFA-nın gələcək söhbətlərdə nəzərə almasını istədiyin məlumat..." />
-                <div className="universe-provider-actions"><button type="submit" disabled={memoryBusy || !memoryTitle.trim() || !memoryContent.trim()}>{memoryBusy ? 'Saxlanır…' : 'Yadda saxla'}</button></div>
+                <label>Bilgi</label>
+                <textarea value={memoryContent} onChange={(event) => setMemoryContent(event.target.value)} maxLength={6000} rows={4} placeholder="XFA'nın gelecekteki sohbetlerde dikkate almasını istediğin bilgiler..." />
+                <div className="universe-provider-actions"><button type="submit" disabled={memoryBusy || !memoryTitle.trim() || !memoryContent.trim()}>{memoryBusy ? 'Kaydediliyor…' : 'Kaydet'}</button></div>
               </form>
               {memoryError && <p className="universe-error" role="alert">{memoryError}</p>}
               <div className="universe-memory-list">
-                <strong>Saxlanılan qeydlər ({memoryItems.length}/100)</strong>
+                <strong>Kaydedilen kayıtlar ({memoryItems.length}/100)</strong>
                 {memoryItems.map((item) => <article className="universe-memory-item" key={item.id}>
                   <div><strong>{item.title}</strong><p>{item.content}</p></div>
                   <button type="button" disabled={memoryBusy} onClick={() => removeMemory(item.id)}>Sil</button>
                 </article>)}
-                {!memoryItems.length && <p className="universe-provider-empty">Hələ yaddaş qeydi yoxdur.</p>}
+                {!memoryItems.length && <p className="universe-provider-empty">Henüz bellek kaydı yok.</p>}
               </div>
             </section>
           </div>}
           <div className="universe-quick">{quickPrompts.map((prompt) => <button key={prompt} type="button" onClick={() => { setMessage(prompt); inputRef.current?.focus(); }}>✦ {prompt}</button>)}</div>
           <div className="universe-transcript" ref={transcriptRef} aria-live="polite">
-            {messages.map((item, index) => <div className={item.role === 'user' ? 'universe-user-message' : 'universe-message'} key={index}>{item.role === 'model' && <small className="universe-message-label">XFA <button type="button" aria-label="Cavabı səsləndir" onClick={() => speakMessage(item.content)}><Volume2 size={12}/></button></small>}{item.content}{item.role === 'model' && !!item.sources?.length && <div className="universe-source-list"><strong>Mənbələr</strong>{item.sources.map((source, sourceIndex) => <a key={source.url} href={source.url} target="_blank" rel="noopener noreferrer">[{sourceIndex + 1}] {source.title}</a>)}</div>}</div>)}
+            {messages.map((item, index) => <div className={item.role === 'user' ? 'universe-user-message' : 'universe-message'} key={index}>{item.role === 'model' && <small className="universe-message-label">XFA <button type="button" aria-label="Yanıtı seslendir" onClick={() => speakMessage(item.content)}><Volume2 size={12}/></button></small>}{item.content}{item.role === 'model' && !!item.sources?.length && <div className="universe-source-list"><strong>Mənbələr</strong>{item.sources.map((source, sourceIndex) => <a key={source.url} href={source.url} target="_blank" rel="noopener noreferrer">[{sourceIndex + 1}] {source.title}</a>)}</div>}</div>)}
             {busy && <div className="universe-message universe-thinking"><small>XFA</small><span className="universe-dots">Yanıt hazırlanıyor</span></div>}
           </div>
           {error && <p className="universe-error" role="alert">{error}</p>}
-          {selectedFile && <div className="universe-attachment-strip"><FileText size={15}/><span>{selectedFile.name}<small>{(selectedFile.size / 1024).toFixed(0)} KB</small></span><button type="button" aria-label="Faylı sil" onClick={() => setSelectedFile(null)}><X size={14}/></button></div>}
+          {selectedFile && <div className="universe-attachment-strip"><FileText size={15}/><span>{selectedFile.name}<small>{(selectedFile.size / 1024).toFixed(0)} KB</small></span><button type="button" aria-label="Dosyayı kaldır" onClick={() => setSelectedFile(null)}><X size={14}/></button></div>}
           <form className="universe-input" onSubmit={sendMessage}>
             <input ref={fileInputRef} type="file" hidden accept=".png,.jpg,.jpeg,.webp,.mp3,.wav,.ogg,.webm,.m4a,.pdf,.docx,.pptx,.xlsx,.csv,.txt,.md,.py,.js,.jsx,.ts,.tsx,.css,.json,.yaml,.yml,.toml,.sql,.sh,.java,.c,.cpp,.h,.go,.rs,.rb,.php,.xml,.log" onChange={(event) => { const file = event.target.files?.[0] || null; setSelectedFile(file); if (file) setError(''); event.currentTarget.value = ''; }} />
-            <button type="button" aria-label="Fayl əlavə et" disabled={!auth.authenticated || busy || recording} onClick={() => fileInputRef.current?.click()}><Paperclip size={18}/></button>{recording ? <button type="button" className="universe-recording" aria-label="Səs yazısını dayandır" onClick={stopVoiceRecording}><Square size={15}/></button> : <button type="button" aria-label="Səs yazmağa başla" disabled={!auth.authenticated || busy || !!selectedFile} onClick={startVoiceRecording}><Mic size={17}/></button>}<button type="button" className={agentMode ? 'universe-agent-toggle active' : 'universe-agent-toggle'} aria-label="Araşdırma agentini aktivləşdir" aria-pressed={agentMode} disabled={!auth.authenticated || busy || !!selectedFile} onClick={() => { setAgentMode((value) => !value); setWebSearchEnabled(false); }}><Bot size={16}/></button><button type="button" className={webSearchEnabled ? 'universe-web-toggle active' : 'universe-web-toggle'} aria-label="İnternet axtarışını aktivləşdir" aria-pressed={webSearchEnabled} disabled={!auth.authenticated || busy || !!selectedFile || agentMode} onClick={() => setWebSearchEnabled((value) => !value)}><Globe size={16}/></button><button type="button" aria-label="Nümunə istək əlavə et" onClick={() => setMessage('Lütfən bunu addım-addım izah et: ')}><Smile size={18}/></button><input ref={inputRef} value={message} onChange={(event) => setMessage(event.target.value)} placeholder={auth.authenticated ? 'XFA’ya mesajını yaz...' : 'Önce giriş yapmalısın...'} disabled={!auth.authenticated || busy} /><button className="universe-send" type="submit" disabled={!auth.authenticated || busy || (!message.trim() && !selectedFile)} aria-label="Mesajı göndər"><Send size={19}/></button>
+            <button type="button" aria-label="Dosya ekle" disabled={!auth.authenticated || busy || recording} onClick={() => fileInputRef.current?.click()}><Paperclip size={18}/></button>{recording ? <button type="button" className="universe-recording" aria-label="Ses kaydını durdur" onClick={stopVoiceRecording}><Square size={15}/></button> : <button type="button" aria-label="Ses kaydını başlat" disabled={!auth.authenticated || busy || !!selectedFile} onClick={startVoiceRecording}><Mic size={17}/></button>}<button type="button" className={agentMode ? 'universe-agent-toggle active' : 'universe-agent-toggle'} aria-label="Araştırma asistanını etkinleştir" aria-pressed={agentMode} disabled={!auth.authenticated || busy || !!selectedFile} onClick={() => { setAgentMode((value) => !value); setWebSearchEnabled(false); }}><Bot size={16}/></button><button type="button" className={webSearchEnabled ? 'universe-web-toggle active' : 'universe-web-toggle'} aria-label="İnternet aramasını etkinleştir" aria-pressed={webSearchEnabled} disabled={!auth.authenticated || busy || !!selectedFile || agentMode} onClick={() => setWebSearchEnabled((value) => !value)}><Globe size={16}/></button><button type="button" aria-label="Örnek istek ekle" onClick={() => setMessage('Lütfen bunu adım adım açıkla: ')}><Smile size={18}/></button><input ref={inputRef} value={message} onChange={(event) => setMessage(event.target.value)} placeholder={auth.authenticated ? 'XFA’ya mesajını yaz...' : 'Önce giriş yapmalısın...'} disabled={!auth.authenticated || busy} /><button className="universe-send" type="submit" disabled={!auth.authenticated || busy || (!message.trim() && !selectedFile)} aria-label="Mesajı gönder"><Send size={19}/></button>
           </form>
         </div>
       </section>
       <aside className="universe-right" id="status">
         <section className="universe-stat-card"><h3>▥ &nbsp; XFA Canlı İstatistikleri</h3><div><Sparkles/><strong>{stats.members.toLocaleString('tr-TR')}<small>Discord Üyesi</small></strong></div><div><Grid3X3/><strong>{stats.guilds}<small>Sunucu</small></strong></div><div><Zap/><strong>{stats.ready ? `${stats.latency} ms` : 'Çevrimdışı'}<small>Bot gecikmesi</small></strong></div><svg viewBox="0 0 260 75" preserveAspectRatio="none"><path d="M0 65 C30 61 35 59 55 51 S82 49 100 42 S126 49 148 32 S177 35 193 22 S221 18 260 2" fill="none" stroke="#b34dff" strokeWidth="2.5"/></svg></section>
-        <section className="universe-ecosystem"><h3><Orbit size={15}/> XFA Ekosistemi <span>CANLI</span></h3><p>◉ &nbsp; Discord Bot <small>{stats.ready ? '● Çevrimiçi' : '● Çevrimdışı'}</small></p><p>◎ &nbsp; Web Platformu <small>● Çevrimiçi</small></p><p>▣ &nbsp; XFA Ajan API <small>{auth.authenticated ? '● Oturum açık' : '● Giriş gerekli'}</small></p></section>
+        <section className="universe-ecosystem"><h3><Orbit size={15}/> XFA Ekosistemi <span>CANLI</span></h3><p>◉ &nbsp; Discord Bot <small>{stats.ready ? '● Çevrimiçi' : '● Çevrimdışı'}</small></p><p>◎ &nbsp; Web Platformu <small>● Çevrimiçi</small></p><p>▣ &nbsp; XFA Ajan API <small>{auth.authenticated ? '● Oturum açık' : '● Giriş Yap gerekli'}</small></p></section>
       </aside>
       <div className="universe-quality"><label htmlFor="universe-quality-select">GRAFİK</label><select id="universe-quality-select" value={quality} onChange={(event) => setQuality(event.target.value as 'ultra' | 'balanced' | 'eco')}><option value="ultra">Ultra</option><option value="balanced">Balanced</option><option value="eco">Eco</option></select></div>
-      <div className="universe-scene-switch"><div><strong>{scene === 'deep-space' ? 'Deep Space' : scene === 'pulsar' ? 'Pulsar' : 'Nebula'}</strong><small>Kosmik səhnəni seç</small></div><div className="universe-scene-buttons"><button type="button" className={scene === 'deep-space' ? 'selected' : ''} aria-pressed={scene === 'deep-space'} onClick={() => setScene('deep-space')}>Deep Space</button><button type="button" className={scene === 'pulsar' ? 'selected' : ''} aria-pressed={scene === 'pulsar'} onClick={() => setScene('pulsar')}>Pulsar</button><button type="button" className={scene === 'nebula' ? 'selected' : ''} aria-pressed={scene === 'nebula'} onClick={() => setScene('nebula')}>Nebula</button></div><button className="universe-fullscreen" onClick={toggleFullscreen} aria-label="Tam ekran"><Maximize2 size={17}/></button></div>
-      <div className="universe-live"><Activity size={13}/> CANLI ANİMASİYA</div>
+      <div className="universe-scene-switch"><div><strong>{scene === 'deep-space' ? 'Deep Space' : scene === 'pulsar' ? 'Pulsar' : 'Nebula'}</strong><small>Kozmik sahneyi seç</small></div><div className="universe-scene-buttons"><button type="button" className={scene === 'deep-space' ? 'selected' : ''} aria-pressed={scene === 'deep-space'} onClick={() => setScene('deep-space')}>Deep Space</button><button type="button" className={scene === 'pulsar' ? 'selected' : ''} aria-pressed={scene === 'pulsar'} onClick={() => setScene('pulsar')}>Pulsar</button><button type="button" className={scene === 'nebula' ? 'selected' : ''} aria-pressed={scene === 'nebula'} onClick={() => setScene('nebula')}>Nebula</button></div><button className="universe-fullscreen" onClick={toggleFullscreen} aria-label="Tam ekran"><Maximize2 size={17}/></button></div>
+      <div className="universe-live"><Activity size={13}/> CANLI ANİMASYON</div>
     </main>
   );
 }

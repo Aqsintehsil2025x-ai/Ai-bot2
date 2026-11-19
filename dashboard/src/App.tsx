@@ -310,10 +310,10 @@ function Panel() {
     <main className="panel-page tech-panel-page">
       <TechHeader activePanel />
       <div className="panel-wrap">
-        <div className="panel-breadcrumb"><Link href="/">Ana sayfa</Link><ChevronRight size={14}/><span>Canlı kontrol paneli</span></div>
+        <div className="panel-breadcrumb"><Link href="/">Ana sayfa</Link><ChevronRight size={14}/><span>Canlı Kontrol Paneli</span></div>
         <div className="panel-heading">
           <div><div className="eyebrow"><span className="eyebrow-line"/>KONTROL ALANI / CANLI</div><h1 className="font-display">Botunu <em>tanı.</em></h1><p><strong>{payload.guild.name}</strong> sunucusunun ayarlarını buradan yönet.</p></div>
-          <div className="preview-status"><span className="status-ring"><span/></span><div><strong>Bot bağlantısı aktif</strong><small>{payload.stats.guilds} sunucu · {payload.stats.latency} ms gecikme</small></div></div>
+          <div className="preview-status"><span className="status-ring"><span/></span><div><strong>Bot bağlantısı etkin</strong><small>{payload.stats.guilds} sunucu · {payload.stats.latency} ms gecikme</small></div></div>
         </div>
 
         <div className="panel-alert" role="status" data-testid="status-live-connection">
@@ -325,21 +325,21 @@ function Panel() {
         <div className="panel-layout">
           <div className="panel-main">
             <section className="panel-card modules-card">
-              <div className="card-heading"><div><div className="card-kicker font-mono">01 — MODÜLLER</div><h2>Hangi tarafı açık?</h2><p>Değişiklikleri kaydetmeyi unutma.</p></div><span className="card-symbol"><WandSparkles size={20}/></span></div>
+              <div className="card-heading"><div><div className="card-kicker font-mono">01 — MODÜLLER</div><h2>Hangi özellikler açık?</h2><p>Değişikliklerini kaydetmeyi unutma.</p></div><span className="card-symbol"><WandSparkles size={20}/></span></div>
               <div className="toggle-list">
-                <ToggleRow title="Yapay zekâ sohbeti" description="Doğal ve yardımcı sohbet deneyimi" icon={<Bot size={19}/>} enabled={settings.ai} onChange={() => toggle('ai')} testId="switch-ai"/>
-                <ToggleRow title="Akıllı moderasyon" description="Topluluk düzeni için koruma araçları" icon={<ShieldCheck size={19}/>} enabled={settings.moderation} onChange={() => toggle('moderation')} testId="switch-moderation"/>
-                <ToggleRow title="Eğlence" description="Sohbete küçük, keyifli dokunuşlar" icon={<Sparkles size={19}/>} enabled={settings.entertainment} onChange={() => toggle('entertainment')} testId="switch-entertainment"/>
+                <ToggleRow title="Yapay zekâ sohbeti" description="Doğal ve yardımcı bir sohbet deneyimi" icon={<Bot size={19}/>} enabled={settings.ai} onChange={() => toggle('ai')} testId="switch-ai"/>
+                <ToggleRow title="Akıllı moderasyon" description="Topluluk düzenini korumaya yardımcı araçlar" icon={<ShieldCheck size={19}/>} enabled={settings.moderation} onChange={() => toggle('moderation')} testId="switch-moderation"/>
+                <ToggleRow title="Eğlence" description="Sohbete küçük ve keyifli dokunuşlar" icon={<Sparkles size={19}/>} enabled={settings.entertainment} onChange={() => toggle('entertainment')} testId="switch-entertainment"/>
               </div>
-              <div className="module-foot"><span className="tiny-status"/>{Object.values({ai: settings.ai, moderation: settings.moderation, entertainment: settings.entertainment}).filter(Boolean).length} modül açık <span className="module-foot-note">— canlı bot ayarları</span></div>
+              <div className="module-foot"><span className="tiny-status"/>{Object.values({ai: settings.ai, moderation: settings.moderation, entertainment: settings.entertainment}).filter(Boolean).length} modül etkin <span className="module-foot-note">— canlı bot ayarları</span></div>
             </section>
 
             <section className="panel-card settings-card">
-              <div className="card-heading"><div><div className="card-kicker font-mono">02 — TEMEL AYARLAR</div><h2>İnce ayar senin.</h2><p>Bu değerler Discord botuna kaydedilir.</p></div><span className="card-symbol card-symbol-rose"><Heart size={19}/></span></div>
+              <div className="card-heading"><div><div className="card-kicker font-mono">02 — TEMEL AYARLAR</div><h2>İnce ayar sende.</h2><p>Bu değerler Discord botuna kaydedilir.</p></div><span className="card-symbol card-symbol-rose"><Heart size={19}/></span></div>
               <form onSubmit={saveBasics} className="settings-form">
                 <label className="field-label" htmlFor="prefix">Komut öneki<span>1–5 karakter, boşluk ve / kullanılamaz</span></label>
                 <div className="input-wrap prefix-wrap"><span className="input-prefix">ÖR.</span><input id="prefix" type="text" maxLength={5} value={settings.prefix} onChange={(event) => setField('prefix', event.target.value)} data-testid="input-prefix" aria-label="Komut öneki"/></div>
-                <label className="field-label" htmlFor="language">Yanıt dili<span>Botun konuşacağı dil</span></label>
+                <label className="field-label" htmlFor="language">Yanıt dili<span>Botun yanıt vereceği dil</span></label>
                 <select id="language" value={settings.language} onChange={(event) => setField('language', event.target.value)} className="form-select focus-ring" data-testid="select-language">
                   <option>Türkçe</option><option>English</option><option>Azərbaycanca</option>
                 </select>
@@ -361,8 +361,8 @@ function Panel() {
               <button type="button" className="reset-button focus-ring" onClick={logout} disabled={busy}><LockKeyhole size={15}/>Oturumu kapat</button>
               <span className="connection-foot">XYRIN FLOWER / CANLI PANEL</span>
             </section>
-            <button type="button" className="reset-button focus-ring" onClick={reset}>Varsayılanları yükle <ArrowRight size={14}/></button>
-            <div className="saved-summary" data-testid="text-saved-state"><span className="summary-dot"/>{isSaved ? 'Temel ayarlar kayıtlı' : 'Kaydedilmemiş değişiklik var'}</div>
+            <button type="button" className="reset-button focus-ring" onClick={reset}>Varsayılan ayarları yükle <ArrowRight size={14}/></button>
+            <div className="saved-summary" data-testid="text-saved-state"><span className="summary-dot"/>{isSaved ? 'Temel ayarlar kaydedildi' : 'Kaydedilmemiş değişiklik var'}</div>
           </aside>
         </div>
         <div className="panel-bottom-note"><span>XYRIN FLOWER / CANLI PANEL</span><span>Değişiklikler {payload.guild.name} sunucusuna uygulanır.</span><Link href="/">Siteye dön <ArrowRight size={13}/></Link></div>
