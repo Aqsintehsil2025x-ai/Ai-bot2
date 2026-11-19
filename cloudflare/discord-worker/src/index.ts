@@ -50,6 +50,34 @@ function option(options: Option[] | undefined, name: string): Option | undefined
   return options?.find((item) => item.name === name);
 }
 
+type AIProvider = "gemini" | "nvidia";
+async function generateAI(env: Env, provider: AIProvider, model: string, prompt: string): Promise<string> {
+  if (provider === "gemini") {
+    const apiKey = await env.GEMINI_API_KEY.get();
+    const endpoint = "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent?key=" + encodeURIComponent(apiKey);
+    const response = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 900, temperature: 0.7 } }), signal: AbortSignal.timeout(25000) });
+    const data = await response.json() as { candidates?: { content?: { parts?: { text?: string }[] } }[]; error?: { message?: string } };
+    if (!response.ok) throw new Error(data.error?.message || "Gemini API HTTP " + response.status);
+    const answer = data.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("").trim();
+    if (!answer) throw new Error("Gemini boş yanıt döndürdü.");
+    return answer.slice(0, 1850);
+  }
+  const apiKey = await env.NVIDIA_API_KEY.get();
+  const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", { method: "POST", headers: { authorization: "Bearer " + apiKey, "content-type": "application/json" }, body: JSON.stringify({ model, messages: [{ role: "user", content: prompt }], max_tokens: 900, temperature: 0.7, stream: false }), signal: AbortSignal.timeout(25000) });
+  const data = await response.json() as { choices?: { message?: { content?: string } }[]; error?: { message?: string } };
+  if (!response.ok) throw new Error(data.error?.message || "NVIDIA API HTTP " + response.status);
+  const answer = data.choices?.[0]?.message?.content?.trim();
+  if (!answer) throw new Error("NVIDIA boş yanıt döndürdü.");
+  return answer.slice(0, 1850);
+}
+async function runDeferredAI(interaction: Interaction, env: Env, provider: AIProvider, model: string, prompt: string): Promise<void> {
+  if (!interaction.application_id || !interaction.token) return;
+  let content: string;
+  try { content = await generateAI(env, provider, model, prompt); }
+  catch (error) { content = "AI sağlayıcı hatası: " + (error instanceof Error ? error.message : "Bilinmeyen hata"); }
+  await fetch("https://discord.com/api/v10/webhooks/" + interaction.application_id + "/" + interaction.token + "/messages/@original", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ content: content.slice(0, 1900), allowed_mentions: { parse: [] } }) });
+}
+
 function normalize(value: string): string {
   return value.normalize("NFKC").toLocaleLowerCase("tr").replace(/\s+/g, " ").trim();
 }
@@ -115,7 +143,7 @@ async function handleKnowledgeBase(interaction: Interaction, env: Env): Promise<
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     if (request.method === "GET" && url.pathname === "/health") {
       return json({ ok: true, service: "xfa-discord-test", runtime: "cloudflare-workers", language: "typescript" });
@@ -144,7 +172,18 @@ export default {
       .bind(interaction.id ?? null, command ?? "unknown", guildId, userId, new Date().toISOString()).run();
 
     if (command === "ping") return reply("Pong! Cloudflare TypeScript test bot is online.");
-    if (command === "xfa") return reply("XFA Cloudflare test endpoint is online. TypeScript + D1 aktif.");
+    if (command === "xfa") {
+      const prompt = String(option(interaction.data?.options, "prompt")?.value ?? "").trim();
+      if (!prompt) return reply("XFA AI hazır. Komutu bir prompt ile kullan.");
+      if (prompt.length > 3500) return reply("İstek en fazla 3500 karakter olabilir.");
+      const providerValue = String(option(interaction.data?.options, "provider")?.value ?? "gemini");
+      const provider: AIProvider = providerValue === "nvidia" ? "nvidia" : "gemini";
+      const model = String(option(interaction.data?.options, "model")?.value ?? (provider === "gemini" ? "gemini-2.5-flash" : "meta/llama-3.3-70b-instruct"));
+      const validModel = provider === "gemini" ? /^gemini-[a-zA-Z0-9.-]{1,80}$/.test(model) : /^[a-zA-Z0-9._/-]{1,120}$/.test(model);
+      if (!validModel) return reply("Model adı geçersiz.");
+      ctx.waitUntil(runDeferredAI(interaction, env, provider, model, prompt));
+      return json({ type: 5, data: { flags: EPHEMERAL } });
+    }
     if (command === "kb") return handleKnowledgeBase(interaction, env);
     return reply("Bu komut Cloudflare test sürümünde henüz taşınmadı.");
   },
