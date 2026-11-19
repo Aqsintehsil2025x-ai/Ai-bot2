@@ -355,6 +355,26 @@ async function handleMoreCommands(i, env) {
   return null;
 }
 
+
+async function processDueReminders(env: Env) {
+  const now = new Date().toISOString();
+  const due = await env.DB.prepare("SELECT id,channel_id,user_id,kind,title FROM reminders WHERE due_at<=? ORDER BY due_at LIMIT 25").bind(now).all();
+  if (!due.results.length) return;
+  const token = await env.DISCORD_TOKEN.get();
+  for (const item of due.results) {
+    const content = item.kind === "event"
+      ? "📣 **Etkinlik zamanı!** <@" + item.user_id + "> — " + item.title
+      : "⏰ <@" + item.user_id + "> hatırlatman: **" + item.title + "**";
+    const response = await fetch("https://discord.com/api/v10/channels/" + item.channel_id + "/messages", {
+      method: "POST",
+      headers: { authorization: "Bot " + token, "content-type": "application/json" },
+      body: JSON.stringify({ content, allowed_mentions: { parse: [], users: [item.user_id] } }),
+      signal: AbortSignal.timeout(10000)
+    });
+    if (response.ok) await env.DB.prepare("DELETE FROM reminders WHERE id=?").bind(item.id).run();
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
@@ -417,6 +437,6 @@ export default {
     return reply("Bu komut Cloudflare test sürümünde henüz taşınmadı.");
   },
   async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
-    ctx.waitUntil(env.GATEWAY.getByName("xyrin-main").start());
+    ctx.waitUntil(Promise.all([env.GATEWAY.getByName("xyrin-main").start(), processDueReminders(env)]));
   },
 };
