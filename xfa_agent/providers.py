@@ -14,10 +14,10 @@ API_ENV_VARS = {
 PROVIDERS = {
     "gemini": {
         "name": "Google Gemini", "kind": "gemini",
-        # Current Gemini Developer API models. Older 2.0/2.5 defaults can
-        # return 404 for projects that no longer have access to those models.
-        "models": ["gemini-3.8-flash", "gemini-3.5-flash-lite"],
-        "default_model": "gemini-3.8-flash",
+        # Keep the higher-capability Flash model selectable, but default to
+        # Flash-Lite for lower-latency everyday chat.
+        "models": ["gemini-3.5-flash-lite", "gemini-3.8-flash"],
+        "default_model": "gemini-3.5-flash-lite",
         "note": "XFA server-managed provider",
     },
     "nvidia": {

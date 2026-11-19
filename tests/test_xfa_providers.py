@@ -14,8 +14,9 @@ from xfa_agent.providers import (
 
 class XFAProviderConfigTests(unittest.TestCase):
     def test_gemini_default_is_current_catalog_model(self):
-        self.assertEqual(PROVIDERS["gemini"]["default_model"], "gemini-3.8-flash")
+        self.assertEqual(PROVIDERS["gemini"]["default_model"], "gemini-3.5-flash-lite")
         self.assertIn(PROVIDERS["gemini"]["default_model"], PROVIDERS["gemini"]["models"])
+        self.assertIn("gemini-3.8-flash", PROVIDERS["gemini"]["models"])
         self.assertNotIn("gemini-2.0-flash", PROVIDERS["gemini"]["models"])
         self.assertNotIn("gemini-2.5-flash", PROVIDERS["gemini"]["models"])
 
