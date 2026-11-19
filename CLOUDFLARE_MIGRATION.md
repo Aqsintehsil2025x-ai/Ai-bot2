@@ -38,3 +38,6 @@ The Pages project is connected to GitHub. Path filters have been cleared and the
 - Keep production on its current host until preview tests pass.
 - Do not change the production branch or enable production deployments as part of this migration branch.
 - Do not migrate or delete existing user data without a tested export/import and rollback plan.
+
+
+Preview retry: build watch paths temporarily set to `*` with repository-root build context to diagnose `path_config` skips.
