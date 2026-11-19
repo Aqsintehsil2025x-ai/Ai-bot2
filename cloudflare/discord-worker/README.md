@@ -21,7 +21,7 @@ npm run deploy
 Set Discord Developer Portal > General Information > Interactions Endpoint URL to:
 `https://xfa-discord-test.aqsin-tehsil2025x.workers.dev/discord/interactions`
 
-Worker health endpoint: `https://xfa-discord-test.aqsin-tehsil2025x.workers.dev/health`. Only the dedicated test application's `DISCORD_PUBLIC_KEY` belongs in Worker secrets. Keep its bot token local for the command registration script; do not copy the production Replit token into this test Worker.
+Worker health endpoint: `https://xfa-discord-test.aqsin-tehsil2025x.workers.dev/health`. The existing account-level Secrets Store entries are bound to the Worker (`DISCORD_TOKEN`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `GEMINI_API_KEY`, `NVIDIA_API_KEY`, `XFA_TOKEN_ENCRYPTION_KEY`, and `XFA_ACCESS_TOKEN`). Their values remain encrypted and are never copied into this repository. The current store does not contain `DISCORD_PUBLIC_KEY`; add the public key for the dedicated test Discord application as a Worker secret with `npx wrangler secret put DISCORD_PUBLIC_KEY` before configuring the Discord Interactions URL. Do not point the production application at this test endpoint.
 
 Register slash commands using `node scripts/register-commands.mjs` with `DISCORD_APPLICATION_ID`, `DISCORD_TOKEN`, and optionally `DISCORD_TEST_GUILD_ID` set locally. Use a dedicated test Discord application and test server; do not point the production application at this endpoint. Use a dedicated test Discord application and test server; do not point the production application at this endpoint.
 
