@@ -67,12 +67,17 @@ def require_user_session():
             return jsonify({"error": "Güvenlik doğrulaması başarısız. Sayfayı yenileyip tekrar dene."}), 403
 
 
+def _any_ai_provider_ready():
+    from xfa_agent.providers import PROVIDERS, server_api_key
+    return any(server_api_key(provider) for provider in PROVIDERS)
+
+
 @xfa.get("/health")
 def health():
     return jsonify({
         "ok": True,
         "agent": "XFA",
-        "planner_ready": bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or os.getenv("NVIDIA_API_KEY")),
+        "planner_ready": _any_ai_provider_ready(),
         "remote_browser_ready": bool(os.getenv("XFA_BROWSER_CDP_URL")),
         "execution_mode": "read_only_public_web",
     })
@@ -96,7 +101,7 @@ def list_ai_providers():
     active_item = next((item for item in providers if item["id"] == active), None)
     model = session.get("xfa_ai_model", "")
     if not active_item or model not in active_item["models"]:
-        model = active_item["default_model"] if active_item else "gemini-2.5-flash"
+        model = active_item["default_model"] if active_item else ""
     if active_item and active in available_ids:
         session["xfa_ai_provider"] = active
         session["xfa_ai_model"] = model
