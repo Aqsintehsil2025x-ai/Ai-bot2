@@ -7,7 +7,12 @@ if (!applicationId || !token) {
 }
 
 const commands = [
-  { name: "ping", description: "Cloudflare test bot bağlantısını kontrol eder." },
+  { name: "ping", description: "Bot bağlantısını ve yanıtını kontrol eder." },
+  { name: "zar", description: "Zar atar.", options: [{ type: 4, name: "max_sayi", description: "Zarın en yüksek değeri (varsayılan 100)", required: false, min_value: 2, max_value: 1000000 }] },
+  { name: "yazitura", description: "Yazı tura atar." },
+  { name: "kahve", description: "Kahve siparişi ver ☕", options: [{ type: 3, name: "kahve_turu", description: "Hangi kahve? (örn: Latte)", required: false, max_length: 40 }] },
+  { name: "secim", description: "Seçeneklerin arasından rastgele birini seçer.", options: [{ type: 3, name: "secenekler", description: "Seçenekleri | işaretiyle ayır", required: true, max_length: 900 }] },
+  { name: "sekiztop", description: "Soruna sihirli 8-top cevabı verir.", options: [{ type: 3, name: "soru", description: "Evet/hayır türünde sorun", required: true, max_length: 500 }] },
   { name: "xfa", description: "XFA AI asistanına soru sorar.", options: [
 { type: 3, name: "prompt", description: "Sorun veya isteğin", required: true, max_length: 3500 },
 { type: 3, name: "provider", description: "AI sağlayıcısı", required: false, choices: [{ name: "Gemini", value: "gemini" }, { name: "NVIDIA", value: "nvidia" }] },
