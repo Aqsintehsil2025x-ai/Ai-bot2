@@ -71,6 +71,11 @@ const commands = [
   { name: "rololustur", description: "Yeni rol oluşturur.", options: [{ type: 3, name: "rol_adi", description: "Rol adı", required: true, max_length: 100 }] },
 
 
+
+  { name: "hatirlat", description: "Belirli süre sonra hatırlatma gönderir.", options: [{ type: 3, name: "sure", description: "30m, 2h, 1h30m, 45dk veya 1g", required: true, max_length: 40 }, { type: 3, name: "mesaj", description: "Hatırlatma metni", required: true, max_length: 200 }] },
+  { name: "etkinlik", description: "Zamanı gelince etkinlik anonsu gönderir.", options: [{ type: 3, name: "sure", description: "2h, 1d veya 45dk", required: true, max_length: 40 }, { type: 3, name: "baslik", description: "Etkinlik başlığı", required: true, max_length: 200 }] },
+  { name: "hatirlatmalar", description: "Bekleyen hatırlatma ve etkinliklerini listeler." },
+  { name: "hatirlatsil", description: "Hatırlatma veya etkinliği ID ile siler.", options: [{ type: 4, name: "kimlik", description: "Silinecek kayıt ID'si", required: true, min_value: 1 }] },
   { name: "bakiye", description: "Kullanıcının sanal sunucu bakiyesini gösterir.", options: [{ type: 6, name: "member", description: "Bakiyesi gösterilecek üye", required: false }] },
   { name: "gunluk", description: "Günlük sanal ödülünü alır." },
   { name: "transfer", description: "Bir üyeye sanal bakiye gönderir.", options: [{ type: 6, name: "member", description: "Alıcı", required: true }, { type: 4, name: "miktar", description: "1-10000000", required: true, min_value: 1, max_value: 10000000 }] },
