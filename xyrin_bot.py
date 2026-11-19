@@ -1984,6 +1984,7 @@ class UltimateImperialBot(commands.Bot):
         self.economy = EconomyManager()
         self.strikes = StrikeManager()
         self.settings = GuildSettings()
+        self.tickets = JsonStore("tickets.json", lambda: {"active": {}}, int_keys=False)
         self.reminders = ReminderManager()
         self.afk = AFKManager()
         self.giveaways = GiveawayManager()
@@ -2017,6 +2018,8 @@ class UltimateImperialBot(commands.Bot):
     async def setup_hook(self):
         logger.info(f"İmparatorluk alt sistemleri başlatılıyor... [platform={PLATFORM}, örnek={INSTANCE_ID}, veri={DATA_DIR.resolve()}]")
         self.ai = AIService()
+        self.add_view(TicketPanelView())
+        self.add_view(TicketControlView())
         await self.restore_from_backup_if_needed()  # Döngüler başlamadan önce: yeni açılan boş diske eski verileri getir.
         if not SOVEREIGN_IDS:
             logger.warning(
@@ -2303,15 +2306,22 @@ class UltimateImperialBot(commands.Bot):
         if member.bot:
             return
         guild = member.guild
-        if WELCOME_ROLE_NAME:
-            role = discord.utils.get(guild.roles, name=WELCOME_ROLE_NAME)
-            if role:
+        configured_role_id = self.settings.value(guild.id, "auto_role_id", None)
+        if configured_role_id is not None:
+            role = guild.get_role(int(configured_role_id)) if int(configured_role_id or 0) else None
+        else:
+            role = discord.utils.get(guild.roles, name=WELCOME_ROLE_NAME) if WELCOME_ROLE_NAME else None
+        if role is not None:
+            bot_member = guild.me or guild.get_member(self.user.id)
+            if bot_member is not None and role >= bot_member.top_role:
+                logger.warning("Otomatik rol verilemedi: rol botun en yüksek rolünün üstünde.")
+            else:
                 try:
-                    await member.add_roles(role, reason="Otomatik karşılama rolü")
+                    await member.add_roles(role, reason="Sunucu otomatik karşılama rolü")
                 except discord.HTTPException as e:
                     logger.error(f"Karşılama rolü verilemedi: {e}")
-            else:
-                logger.warning(f"'{WELCOME_ROLE_NAME}' adında karşılama rolü sunucuda bulunamadı.")
+        elif configured_role_id is None and WELCOME_ROLE_NAME:
+            logger.warning(f"'{WELCOME_ROLE_NAME}' adında karşılama rolü sunucuda bulunamadı.")
 
         channel = self.announce_channel(guild)
         if channel is None:
@@ -2335,6 +2345,66 @@ class UltimateImperialBot(commands.Bot):
         if member.bot:
             return
         guild = member.guild
+
+        # Join-to-create temporary voice rooms, configured independently per server.
+        voice_config = self.settings.value(guild.id, "temp_voice_config", {})
+        trigger_id = int(voice_config.get("trigger_channel_id") or 0) if isinstance(voice_config, dict) else 0
+        temp_ids = [
+            int(value) for value in self.settings.value(guild.id, "temp_voice_channels", [])
+            if str(value).isdigit()
+        ]
+        if after.channel and before.channel != after.channel and after.channel.id == trigger_id:
+            category = guild.get_channel(int(voice_config.get("category_id") or 0))
+            if not isinstance(category, discord.CategoryChannel):
+                category = after.channel.category
+            slug = re.sub(r"[^a-z0-9-]+", "-", fold_text(member.display_name).lower()).strip("-")[:35] or "member"
+            room = None
+            try:
+                room = await guild.create_voice_channel(
+                    name=f"{slug}-odasi",
+                    category=category,
+                    reason=f"Temporary voice room for {member} ({member.id})",
+                )
+                temp_ids.append(room.id)
+                self.settings.set(guild.id, "temp_voice_channels", temp_ids)
+                await member.move_to(room, reason="Join-to-create temporary voice room")
+            except discord.Forbidden:
+                logger.warning("Geçici ses odası oluşturulamadı: Manage Channels / Move Members izinlerini kontrol et.")
+                if room is not None:
+                    try:
+                        await room.delete(reason="Temporary room setup failed")
+                    except discord.HTTPException:
+                        pass
+                    self.settings.set(
+                        guild.id, "temp_voice_channels",
+                        [value for value in temp_ids if value != room.id],
+                    )
+            except discord.HTTPException:
+                logger.exception("Geçici ses odası oluşturulurken Discord hatası.")
+                if room is not None:
+                    try:
+                        await room.delete(reason="Temporary room setup failed")
+                    except discord.HTTPException:
+                        pass
+                    self.settings.set(
+                        guild.id, "temp_voice_channels",
+                        [value for value in temp_ids if value != room.id],
+                    )
+
+        if before.channel and before.channel.id in temp_ids:
+            remaining_humans = [voice_member for voice_member in before.channel.members if not voice_member.bot]
+            if not remaining_humans:
+                try:
+                    await before.channel.delete(reason="Temporary voice room is empty")
+                except discord.NotFound:
+                    pass
+                except discord.HTTPException:
+                    logger.warning("Boş geçici ses odası silinemedi.", exc_info=True)
+                self.settings.set(
+                    guild.id, "temp_voice_channels",
+                    [value for value in temp_ids if value != before.channel.id],
+                )
+
         if after.channel and before.channel != after.channel:
             logger.info(f"[HOLOGRAPHIC DLC] {member.name} ses kanalına katıldı: {after.channel.name}. Hologram projektör hazırlanıyor...")
             self.active_holograms[guild.id] = {
@@ -3389,6 +3459,9 @@ def help_pages() -> dict:
             (f"`{p}duyuru <mesaj>`", "Embed ile duyuru yapar."),
             (f"`{p}uyarilar` `{p}uyarisifirla`", "Strike sicili."),
             (f"`{p}modlog` `{p}hosgeldin`", "Log / karşılama kanalı ayarı."),
+            (f"`{p}ticketpanel`", "Destek paneli kurar; ticket kanalları özel ve kalıcıdır."),
+            (f"`{p}otorol [@rol]`", "Yeni katılan üyelere otomatik rol verir veya kapatır."),
+            (f"`{p}tempvoice [#ses-kanalı]`", "Katıl-oluştur geçici ses odası kurar veya kapatır."),
             (f"`{p}kanaloluştur` `{p}rololuştur`", "Manuel kanal / rol."),
             (f"`{p}yedekle` `{p}sync` `{p}evrim`", "Yedek, slash eşitleme. Evrim: sanal ortamda dener, geçerse komutu ekler."),
         ]),
@@ -3443,6 +3516,175 @@ class HelpView(discord.ui.View):
                 await self.message.edit(view=self)
             except discord.HTTPException:
                 pass
+
+
+class TicketPanelView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Destek talebi aç", style=discord.ButtonStyle.primary, emoji="🎫", custom_id="xyrin:tickets:open")
+    async def open_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        guild = interaction.guild
+        member = interaction.user
+        if guild is None or not isinstance(member, discord.Member):
+            await interaction.response.send_message("Bu panel yalnızca sunucuda kullanılabilir.", ephemeral=True)
+            return
+        if member.bot:
+            await interaction.response.send_message("Bot hesapları destek talebi açamaz.", ephemeral=True)
+            return
+
+        active = bot.tickets.data.setdefault("active", {})
+        existing = next((item for item in active.values()
+                         if item.get("guild_id") == guild.id
+                         and item.get("user_id") == member.id
+                         and item.get("status") == "open"), None)
+        if existing:
+            old_channel = guild.get_channel(int(existing.get("channel_id") or 0))
+            if old_channel is not None:
+                await interaction.response.send_message(
+                    f"Açık bir destek talebin zaten var: {old_channel.mention}", ephemeral=True
+                )
+                return
+            active.pop(str(existing.get("channel_id") or ""), None)
+            bot.tickets.mark_dirty()
+
+        await interaction.response.defer(ephemeral=True)
+        config = bot.settings.value(guild.id, "ticket_config", {})
+        if not isinstance(config, dict):
+            config = {}
+        category = guild.get_channel(int(config.get("category_id") or 0))
+        if not isinstance(category, discord.CategoryChannel):
+            category = None
+        support_role = guild.get_role(int(config.get("support_role_id") or 0))
+        bot_member = guild.me or guild.get_member(bot.user.id)
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(view_channel=False),
+            member: discord.PermissionOverwrite(
+                view_channel=True, send_messages=True, read_message_history=True,
+                attach_files=True, embed_links=True,
+            ),
+        }
+        if bot_member is not None:
+            overwrites[bot_member] = discord.PermissionOverwrite(
+                view_channel=True, send_messages=True, read_message_history=True,
+                manage_channels=True, manage_messages=True,
+            )
+        if support_role is not None:
+            overwrites[support_role] = discord.PermissionOverwrite(
+                view_channel=True, send_messages=True, read_message_history=True,
+            )
+        slug = re.sub(r"[^a-z0-9-]+", "-", fold_text(member.name).lower()).strip("-")[:35] or "member"
+        try:
+            channel = await guild.create_text_channel(
+                name=f"ticket-{slug}",
+                category=category,
+                overwrites=overwrites,
+                topic=f"Xyrin support ticket • opener_id={member.id}",
+                reason=f"Support ticket opened by {member} ({member.id})",
+            )
+        except discord.Forbidden:
+            await interaction.followup.send("Kanal yaradıla bilmədi. Botda Manage Channels icazəsini yoxlayın.", ephemeral=True)
+            return
+        except discord.HTTPException:
+            await interaction.followup.send("Dəstək kanalı yaradılarkən Discord xətası baş verdi.", ephemeral=True)
+            return
+
+        record = {
+            "channel_id": channel.id,
+            "guild_id": guild.id,
+            "user_id": member.id,
+            "support_role_id": support_role.id if support_role else None,
+            "log_channel_id": int(config.get("log_channel_id") or 0),
+            "status": "open",
+            "created_at": utcnow().isoformat(),
+        }
+        active[str(channel.id)] = record
+        bot.tickets.mark_dirty()
+        embed = discord.Embed(
+            title="🎫 Dəstək talebin açıldı",
+            description=(
+                f"Salam {member.mention}! Problemini bu kanalda izah edə bilərsən. "
+                "Dəstək komandası sənə burada cavab verəcək.\n\n"
+                "Talebin həll olunanda Talebi bağla düyməsini istifadə et."
+            ),
+            color=discord.Color.blurple(),
+        )
+        if support_role is not None:
+            embed.add_field(name="Dəstək komandası", value=support_role.mention, inline=False)
+        embed.set_footer(text=f"Ticket ID: {channel.id}")
+        await channel.send(embed=embed, view=TicketControlView())
+        await interaction.followup.send(f"Ticket kanalın yaradıldı: {channel.mention}", ephemeral=True)
+
+
+class TicketControlView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Talebi bağla", style=discord.ButtonStyle.danger, emoji="🔒", custom_id="xyrin:tickets:close")
+    async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        channel = interaction.channel
+        guild = interaction.guild
+        if guild is None or not isinstance(channel, discord.TextChannel):
+            await interaction.response.send_message("Bu düymə yalnız ticket kanalında işləyir.", ephemeral=True)
+            return
+        record = bot.tickets.data.setdefault("active", {}).get(str(channel.id))
+        if not record or record.get("status") != "open":
+            await interaction.response.send_message("Bu ticket artıq bağlıdır və ya qeydiyyatda deyil.", ephemeral=True)
+            return
+
+        support_role_id = int(record.get("support_role_id") or 0)
+        is_support = bool(support_role_id and any(
+            role.id == support_role_id for role in getattr(interaction.user, "roles", [])
+        ))
+        is_opener = interaction.user.id == int(record.get("user_id") or 0)
+        can_manage = bool(getattr(interaction.user.guild_permissions, "manage_channels", False))
+        if not (is_opener or is_support or can_manage):
+            await interaction.response.send_message(
+                "Bu ticket-i yalnız onu açan şəxs, dəstək komandası və ya server rəhbərliyi bağlaya bilər.",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.response.defer(ephemeral=True)
+        try:
+            opener = guild.get_member(int(record.get("user_id") or 0))
+            if opener is not None:
+                await channel.set_permissions(
+                    opener, view_channel=True, send_messages=False, add_reactions=False,
+                    reason=f"Ticket closed by {interaction.user}",
+                )
+            await channel.edit(name=("closed-" + channel.name)[:100])
+        except discord.Forbidden:
+            await interaction.followup.send("Ticket bağlana bilmədi. Botun kanal icazələrini yoxlayın.", ephemeral=True)
+            return
+        except discord.HTTPException:
+            await interaction.followup.send("Ticket bağlanarkən Discord xətası baş verdi.", ephemeral=True)
+            return
+
+        record["status"] = "closed"
+        record["closed_at"] = utcnow().isoformat()
+        record["closed_by"] = interaction.user.id
+        bot.tickets.mark_dirty()
+        await channel.send(embed=discord.Embed(
+            title="🔒 Dəstək talebi bağlandı",
+            description=f"Bağlayan: {interaction.user.mention}\nBu kanal arxiv kimi saxlanılır.",
+            color=discord.Color.dark_grey(),
+        ))
+        log_id = int(record.get("log_channel_id") or 0)
+        log_channel = guild.get_channel(log_id) if log_id else None
+        if isinstance(log_channel, discord.TextChannel) and log_channel.id != channel.id:
+            try:
+                await log_channel.send(
+                    f"Ticket bağlandı: {channel.mention} • Açan ID: {record.get('user_id')} • Bağlayan: {interaction.user.mention}"
+                )
+            except discord.HTTPException:
+                pass
+        try:
+            if interaction.message:
+                await interaction.message.edit(view=None)
+        except discord.HTTPException:
+            pass
+        await interaction.followup.send("Ticket bağlandı və arxivləndi.", ephemeral=True)
 
 
 # ==============================================================================
@@ -4706,6 +4948,103 @@ async def duyuru_komutu(ctx, *, mesaj: str):
         except discord.HTTPException:
             pass
         await ctx.channel.send(embed=embed)
+
+
+@bot.hybrid_command(
+    name="otorol",
+    aliases=["autorole"],
+    description="Sunucuya yeni katılan üyelere otomatik rol ayarlar.",
+)
+@app_commands.describe(role="Yeni üyelere verilecek rol; boş bırakırsan otomatik rol kapatılır.")
+@commands.guild_only()
+@perm_or_sovereign(manage_roles=True)
+async def otorol_komutu(ctx, role: Optional[discord.Role] = None):
+    if role is not None:
+        bot_member = ctx.guild.me or ctx.guild.get_member(bot.user.id)
+        if bot_member is not None and role >= bot_member.top_role:
+            await ctx.send("❌ Bu rol botun en yüksek rolünden yüksek veya eşit.")
+            return
+        if role.is_default():
+            await ctx.send("❌ @everyone rolü otomatik rol olarak ayarlanamaz.")
+            return
+        bot.settings.set(ctx.guild.id, "auto_role_id", role.id)
+        await bot.settings.store.flush()
+        await ctx.send(f"✅ Otomatik rol ayarlandı: {role.mention}")
+    else:
+        bot.settings.set(ctx.guild.id, "auto_role_id", 0)
+        await bot.settings.store.flush()
+        await ctx.send("✅ Otomatik rol kapatıldı.")
+
+
+@bot.hybrid_command(
+    name="tempvoice",
+    aliases=["gecicises"],
+    description="Katıl-oluştur geçici ses odası sistemini ayarlar.",
+)
+@app_commands.describe(
+    trigger_channel="Üyelerin katılınca kendi odasını oluşturacağı ses kanalı; boş bırakırsan kapatılır",
+    category="Yeni geçici odaların açılacağı kategori (isteğe bağlı)",
+)
+@commands.guild_only()
+@perm_or_sovereign(manage_channels=True)
+async def temp_voice_komutu(
+    ctx,
+    trigger_channel: Optional[discord.VoiceChannel] = None,
+    category: Optional[discord.CategoryChannel] = None,
+):
+    if trigger_channel is None:
+        bot.settings.set(ctx.guild.id, "temp_voice_config", {"trigger_channel_id": 0, "category_id": None})
+        await bot.settings.store.flush()
+        await ctx.send("✅ Geçici ses odası sistemi kapatıldı. Mövcud otaqlar boşaldıqca silinəcək.")
+        return
+    config = {
+        "trigger_channel_id": trigger_channel.id,
+        "category_id": category.id if category else None,
+    }
+    bot.settings.set(ctx.guild.id, "temp_voice_config", config)
+    await bot.settings.store.flush()
+    await ctx.send(
+        f"✅ Üyeler {trigger_channel.mention} kanalına katılınca kendilerine geçici ses odası oluşturulacak."
+    )
+
+
+# --- 14J. DESTEK TICKET SISTEMI ---
+@bot.hybrid_command(
+    name="ticketpanel",
+    aliases=["destekpaneli"],
+    description="Sunucuya kalıcı bir destek talebi paneli gönderir.",
+)
+@app_commands.describe(
+    support_role="Destek taleplerini görecek rol (isteğe bağlı)",
+    category="Ticket kanallarının açılacağı kategori (isteğe bağlı)",
+    log_channel="Ticket kapanış kayıtlarının gönderileceği kanal (isteğe bağlı)",
+)
+@commands.guild_only()
+@perm_or_sovereign(manage_guild=True)
+async def ticket_panel_komutu(
+    ctx,
+    support_role: Optional[discord.Role] = None,
+    category: Optional[discord.CategoryChannel] = None,
+    log_channel: Optional[discord.TextChannel] = None,
+):
+    config = {
+        "support_role_id": support_role.id if support_role else None,
+        "category_id": category.id if category else None,
+        "log_channel_id": log_channel.id if log_channel else None,
+    }
+    bot.settings.set(ctx.guild.id, "ticket_config", config)
+    await bot.settings.store.flush()
+    embed = discord.Embed(
+        title="🎫 Xyrin Destek Merkezi",
+        description=(
+            "Yardım almak için aşağıdaki düyməyə bas. Bot sənə xüsusi, gizli bir dəstək kanalı yaradacaq.\n"
+            "Hər istifadəçi eyni vaxtda yalnız bir açıq ticket yarada bilər."
+        ),
+        color=discord.Color.blurple(),
+    )
+    if support_role:
+        embed.add_field(name="Destek ekibi", value=support_role.mention, inline=False)
+    await ctx.send(embed=embed, view=TicketPanelView())
 
 
 # --- 14J. ÇEKİLİŞ ---
