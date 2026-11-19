@@ -188,6 +188,10 @@ export class DiscordGateway extends DurableObject {
       await this.handleMessage(packet.d);
       return;
     }
+    if (packet.t === "INTERACTION_CREATE") {
+      await this.handleInteraction(packet.d);
+      return;
+    }
     if (packet.t === "GUILD_MEMBER_ADD") {
       await this.handleMemberJoin(packet.d);
     }
@@ -203,6 +207,117 @@ export class DiscordGateway extends DurableObject {
     });
     if (!response.ok) throw new Error("Discord API HTTP " + response.status);
     return response.status === 204 ? null : response.json();
+  }
+
+
+  async interactionReply(interaction, data) {
+    await fetch("https://discord.com/api/v10/interactions/" + interaction.id + "/" + interaction.token + "/callback", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(data),
+      signal: AbortSignal.timeout(10000)
+    });
+  }
+
+  async handleInteraction(interaction) {
+    const name = interaction.data?.name;
+    const options = interaction.data?.options || [];
+    const uid = interaction.member?.user?.id || interaction.user?.id || "";
+    const guild = interaction.guild_id || "";
+    const get = (list, key) => list?.find(item => item.name === key);
+    const send = (content, ephemeral = true) => this.interactionReply(interaction, {
+      type: 4,
+      data: { content: String(content).slice(0, 1900), ...(ephemeral ? { flags: 64 } : {}), allowed_mentions: { parse: [] } }
+    });
+    const manageGuild = (() => { try { return (BigInt(interaction.member?.permissions || "0") & 32n) === 32n; } catch { return false; } })();
+    await this.env.DB.prepare("INSERT OR IGNORE INTO interaction_audit(interaction_id,command_name,guild_id,user_id,created_at) VALUES(?,?,?,?,?)")
+      .bind(interaction.id, name || "unknown", guild || null, uid || null, new Date().toISOString()).run();
+    if (name === "ping") return send("Pong! Xyrin Cloudflare Gateway aktif.");
+    if (name === "yardim") return send("**Xyrin komutları**\n/ping • /yardim • /kimlik • /sor • /xfa • /kb • /zar • /yazitura • /kahve • /secim • /sekiztop");
+    if (name === "kimlik") return send("Discord kullanıcı ID'n: " + uid);
+    if (name === "zar") {
+      const max = Math.max(2, Math.min(1000000, Number(get(options, "max_sayi")?.value || 100)));
+      return send("🎲 <@" + uid + "> zar attı: **" + (Math.floor(Math.random() * max) + 1) + " / " + max + "**", false);
+    }
+    if (name === "yazitura") return send("🪙 Sonuç: **" + (Math.random() < .5 ? "Yazı" : "Tura") + "**", false);
+    if (name === "kahve") return send("☕ Siparişin hazır: " + String(get(options, "kahve_turu")?.value || "Espresso"), false);
+    if (name === "secim") {
+      const values = String(get(options, "secenekler")?.value || "").split("|").map(x => x.trim()).filter(Boolean);
+      return send(values.length < 2 || values.length > 10 ? "En az 2, en fazla 10 seçenek yaz; | ile ayır." : "🎯 Seçimim: **" + values[Math.floor(Math.random() * values.length)] + "**", false);
+    }
+    if (name === "sekiztop") {
+      const question = String(get(options, "soru")?.value || "").trim();
+      const answers = ["Kesinlikle!", "Büyük ihtimalle evet.", "Bence evet.", "Şu an söylemek zor.", "Daha sonra tekrar sor.", "Pek sanmıyorum.", "Cevabım hayır."];
+      return send(question.length < 3 ? "Daha açıklayıcı bir soru yaz." : "🎱 **" + question.slice(0, 500) + "**\n" + answers[Math.floor(Math.random() * answers.length)], false);
+    }
+    if (name === "ship") {
+      const other = String(get(options, "member")?.value || uid);
+      const seed = (uid + other + new Date().toISOString().slice(0, 10)).split("").reduce((v, c) => ((v * 31 + c.charCodeAt(0)) >>> 0), 7);
+      return send("💞 <@" + uid + "> + <@" + other + ">\nGünlük uyum puanı: **" + (seed % 101) + "%**", false);
+    }
+    if (name === "oneri") {
+      const value = String(get(options, "metin")?.value || "").trim();
+      if (!value || value.length > 1500) return send("Öneri 1–1500 karakter olmalı.");
+      await this.env.DB.prepare("INSERT INTO suggestions(guild_id,user_id,content,created_at) VALUES(?,?,?,?)").bind(guild || "dm", uid, value, new Date().toISOString()).run();
+      return send("💡 Önerin kaydedildi. Teşekkürler!");
+    }
+    if (name === "gemini" || name === "nvidia") {
+      if (!guild || !manageGuild) return send("Sunucuyu Yönet yetkisi gerekiyor.");
+      await this.env.DB.prepare("INSERT INTO guild_settings(guild_id,setting_key,value,updated_at) VALUES(?,?,?,?) ON CONFLICT(guild_id,setting_key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at").bind(guild, "ai_provider", name, new Date().toISOString()).run();
+      return send("XFA sağlayıcısı " + name.toUpperCase() + " olarak ayarlandı.");
+    }
+    if (name === "kb") {
+      if (!guild) return send("Bu komut yalnızca sunucuda kullanılabilir.");
+      const sub = options[0], action = sub?.name, args = sub?.options || [];
+      if (action === "add") {
+        if (!manageGuild) return send("Sunucuyu Yönet yetkisi gerekiyor.");
+        const q = String(get(args, "question")?.value || "").trim(), answer = String(get(args, "answer")?.value || "").trim();
+        if (!q || q.length > 180 || !answer || answer.length > 1500) return send("Soru 1–180, yanıt 1–1500 karakter olmalı.");
+        const now = new Date().toISOString();
+        await this.env.DB.prepare("INSERT INTO knowledge_base(guild_id,question,normalized_question,answer,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(guild_id,normalized_question) DO UPDATE SET question=excluded.question,answer=excluded.answer,updated_at=excluded.updated_at").bind(guild,q,q.normalize("NFKC").toLocaleLowerCase("tr").replace(/\\s+/g," ").trim(),answer,uid,now,now).run();
+        return send("FAQ kaydı eklendi/güncellendi.");
+      }
+      if (action === "ask") {
+        const q = String(get(args, "query")?.value || "").trim(), n = q.normalize("NFKC").toLocaleLowerCase("tr").replace(/\\s+/g," ").trim();
+        const rows = await this.env.DB.prepare("SELECT question,answer FROM knowledge_base WHERE guild_id=? ORDER BY updated_at DESC LIMIT 100").bind(guild).all();
+        const hit = rows.results.find(x => x.normalized_question === n) || rows.results.find(x => x.normalized_question.includes(n) || n.includes(x.normalized_question));
+        return send(hit ? "**" + hit.question + "**\n" + hit.answer : "Bilgi tabanında kayıt bulunamadı.", false);
+      }
+      if (action === "list") {
+        if (!manageGuild) return send("Sunucuyu Yönet yetkisi gerekiyor.");
+        const rows = await this.env.DB.prepare("SELECT question FROM knowledge_base WHERE guild_id=? ORDER BY question LIMIT 25").bind(guild).all();
+        return send(rows.results.length ? rows.results.map((x, i) => (i + 1) + ". " + x.question).join("\n") : "Bilgi tabanı boş.");
+      }
+      if (action === "remove") {
+        if (!manageGuild) return send("Sunucuyu Yönet yetkisi gerekiyor.");
+        const q = String(get(args, "question")?.value || "").trim().normalize("NFKC").toLocaleLowerCase("tr").replace(/\\s+/g," ").trim();
+        const result = await this.env.DB.prepare("DELETE FROM knowledge_base WHERE guild_id=? AND normalized_question=?").bind(guild,q).run();
+        return send(result.meta.changes ? "FAQ kaydı silindi." : "Kayıt bulunamadı.");
+      }
+      return send("Bilinmeyen FAQ işlemi.");
+    }
+    if (name === "sor" || name === "xfa") {
+      const prompt = String(get(options, name === "sor" ? "soru" : "prompt")?.value || "").trim();
+      if (!prompt || prompt.length > 3500) return send("Soru 1–3500 karakter olmalı.");
+      await this.interactionReply(interaction, { type: 5, data: { flags: 64 } });
+      let answer;
+      try {
+        const provider = name === "xfa" && get(options, "provider")?.value === "nvidia" ? "nvidia" : "gemini";
+        if (provider === "gemini") {
+          const key = await this.env.GEMINI_API_KEY.get(), model = String(get(options, "model")?.value || "gemini-2.5-flash");
+          const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent?key=" + encodeURIComponent(key), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 900 } }), signal: AbortSignal.timeout(25000) });
+          const d = await r.json(); if (!r.ok) throw Error(d.error?.message || "Gemini HTTP " + r.status);
+          answer = d.candidates?.[0]?.content?.parts?.map(x => x.text || "").join("").trim();
+        } else {
+          const key = await this.env.NVIDIA_API_KEY.get(), model = String(get(options, "model")?.value || "meta/llama-3.3-70b-instruct");
+          const r = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", { method: "POST", headers: { authorization: "Bearer " + key, "content-type": "application/json" }, body: JSON.stringify({ model, messages: [{ role: "user", content: prompt }], max_tokens: 900 }), signal: AbortSignal.timeout(25000) });
+          const d = await r.json(); if (!r.ok) throw Error(d.error?.message || "NVIDIA HTTP " + r.status);
+          answer = d.choices?.[0]?.message?.content;
+        }
+      } catch (error) { answer = "AI sağlayıcı hatası: " + (error instanceof Error ? error.message : "Bilinmeyen hata"); }
+      await fetch("https://discord.com/api/v10/webhooks/" + interaction.application_id + "/" + interaction.token + "/messages/@original", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ content: String(answer || "AI boş yanıt döndürdü.").slice(0, 1900), allowed_mentions: { parse: [] } }) });
+      return;
+    }
   }
 
   async handleMessage(message) {
