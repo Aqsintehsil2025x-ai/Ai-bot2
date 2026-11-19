@@ -352,6 +352,94 @@ async function processDueReminders(env: Env) {
   }
 }
 
+async function handleEconomyCommand(interaction: Interaction, env: Env): Promise<Response | null> {
+  const name = interaction.data?.name;
+  const guildId = interaction.guild_id;
+  const userId = interaction.member?.user?.id ?? interaction.user?.id;
+  if (!guildId || !userId) return null;
+  const now = new Date();
+  const nowIso = now.toISOString();
+  const targetId = String(option(interaction.data?.options, "member")?.value ?? userId);
+  await env.DB.prepare("INSERT OR IGNORE INTO economy_accounts(guild_id,user_id,updated_at) VALUES(?,?,?)")
+    .bind(guildId, userId, nowIso).run();
+
+  if (name === "bakiye" || name === "seviye") {
+    await env.DB.prepare("INSERT OR IGNORE INTO economy_accounts(guild_id,user_id,updated_at) VALUES(?,?,?)")
+      .bind(guildId, targetId, nowIso).run();
+    const account = await env.DB.prepare("SELECT balance,xp,level,streak FROM economy_accounts WHERE guild_id=? AND user_id=?")
+      .bind(guildId, targetId).first<{ balance: number; xp: number; level: number; streak: number }>();
+    if (!account) return reply("Hesap bulunamadı.");
+    if (name === "bakiye") return reply("🪙 <@" + targetId + "> bakiyesi: **" + account.balance.toLocaleString("tr-TR") + "**", false);
+    const level = Math.floor(account.xp / 150);
+    const progress = account.xp % 150;
+    return reply("📈 <@" + targetId + "> • Seviye **" + level + "**\nXP: **" + progress + "/150** (toplam " + account.xp + ")", false);
+  }
+
+  if (name === "gunluk") {
+    const account = await env.DB.prepare("SELECT last_daily,streak FROM economy_accounts WHERE guild_id=? AND user_id=?")
+      .bind(guildId, userId).first<{ last_daily: string | null; streak: number }>();
+    const previous = account?.last_daily ? Date.parse(account.last_daily) : 0;
+    if (previous && now.getTime() - previous < 86400000) {
+      const remaining = Math.ceil((86400000 - (now.getTime() - previous)) / 3600000);
+      return reply("⏳ Günlük ödülünü aldın. Yaklaşık " + remaining + " saat sonra tekrar dene.");
+    }
+    const streak = previous && now.getTime() - previous < 172800000 ? Math.min(7, Number(account?.streak || 0) + 1) : 1;
+    const reward = 150 + (streak - 1) * 25;
+    const result = await env.DB.prepare("UPDATE economy_accounts SET balance=balance+?,last_daily=?,streak=?,updated_at=? WHERE guild_id=? AND user_id=? AND (last_daily IS NULL OR last_daily<=?)")
+      .bind(reward, nowIso, streak, nowIso, guildId, userId, new Date(now.getTime() - 86400000).toISOString()).run();
+    if (!result.meta.changes) return reply("⏳ Günlük ödülün az önce alınmış. Yarın tekrar dene.");
+    return reply("🎁 Günlük ödülün: **" + reward.toLocaleString("tr-TR") + "**. Seri: **" + streak + " gün**.");
+  }
+
+  if (name === "calis") {
+    const result = await env.DB.prepare("UPDATE economy_accounts SET balance=balance+75,last_work=?,updated_at=? WHERE guild_id=? AND user_id=? AND (last_work IS NULL OR last_work<=?)")
+      .bind(nowIso, nowIso, guildId, userId, new Date(now.getTime() - 3600000).toISOString()).run();
+    if (!result.meta.changes) return reply("⏳ Bir saatlik çalışma molan henüz bitmedi.");
+    return reply("🛠️ Çalışmanı tamamladın ve **75** sanal kredi kazandın!");
+  }
+
+  if (name === "transfer") {
+    const receiverId = String(option(interaction.data?.options, "member")?.value ?? "");
+    const amount = Math.floor(Number(option(interaction.data?.options, "miktar")?.value ?? 0));
+    if (!/^\d{5,25}$/.test(receiverId) || receiverId === userId || !Number.isSafeInteger(amount) || amount < 1 || amount > 10000000) {
+      return reply("Alıcı veya miktar geçersiz.");
+    }
+    const transferId = crypto.randomUUID();
+    const statements = [
+      env.DB.prepare("INSERT OR IGNORE INTO economy_accounts(guild_id,user_id,updated_at) VALUES(?,?,?)").bind(guildId, receiverId, nowIso),
+      env.DB.prepare("INSERT INTO economy_transfers(id,guild_id,sender_id,receiver_id,amount,created_at) SELECT ?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM economy_accounts WHERE guild_id=? AND user_id=? AND balance>=?)")
+        .bind(transferId, guildId, userId, receiverId, amount, nowIso, guildId, userId, amount),
+      env.DB.prepare("UPDATE economy_accounts SET balance=balance-?,updated_at=? WHERE guild_id=? AND user_id=? AND EXISTS (SELECT 1 FROM economy_transfers WHERE id=?)")
+        .bind(amount, nowIso, guildId, userId, transferId),
+      env.DB.prepare("UPDATE economy_accounts SET balance=balance+?,updated_at=? WHERE guild_id=? AND user_id=? AND EXISTS (SELECT 1 FROM economy_transfers WHERE id=?)")
+        .bind(amount, nowIso, guildId, receiverId, transferId),
+    ];
+    await env.DB.batch(statements);
+    const transfer = await env.DB.prepare("SELECT id FROM economy_transfers WHERE id=?").bind(transferId).first();
+    return transfer
+      ? reply("✅ <@" + receiverId + "> kullanıcısına **" + amount.toLocaleString("tr-TR") + "** sanal kredi gönderildi.", false)
+      : reply("❌ Yetersiz bakiye. Transfer gerçekleştirilmedi.");
+  }
+
+  if (name === "siralama") {
+    const kind = option(interaction.data?.options, "tur")?.value === "seviye" ? "xp" : "balance";
+    const rows = await env.DB.prepare("SELECT user_id,balance,xp FROM economy_accounts WHERE guild_id=? ORDER BY " + kind + " DESC LIMIT 10")
+      .bind(guildId).all<{ user_id: string; balance: number; xp: number }>();
+    if (!rows.results.length) return reply("Henüz sıralama verisi yok.");
+    const output = rows.results.map((row, index) => (index + 1) + ". <@" + row.user_id + "> — " +
+      (kind === "xp" ? row.xp.toLocaleString("tr-TR") + " XP" : row.balance.toLocaleString("tr-TR") + " kredi"));
+    return reply("🏆 **Sunucu sıralaması**\n" + output.join("\n"), false);
+  }
+
+  if (name === "market") {
+    return reply("🏪 **Xyrin sanal marketi**\n• VIP — 1000 kredi\n• Reklam alanı — 300 kredi\n\nMarket teslimatları henüz Worker sürümünde etkinleştirilmedi; satın alma özelliği kapalıdır.");
+  }
+  if (name === "satinal") {
+    return reply("Market satın alımları, VIP rol teslimatı ve reklam siparişleri henüz Worker sürümüne taşınmadı. Bakiyenden kredi düşülmedi.");
+  }
+  return null;
+}
+
 export async function dispatchInteraction(
   interaction: Interaction,
   env: Env,
@@ -384,7 +472,7 @@ export async function dispatchInteraction(
     return json({ type: 5, data: { flags: EPHEMERAL } });
   }
 
-  if (command === "ping") return reply("Pong! Cloudflare Worker ve Gateway komut sistemi yanıt veriyor.");
+  const economyResponse = await handleEconomyCommand(interaction, env);\n  if (economyResponse) return economyResponse;\n\n  if (command === "ping") return reply("Pong! Cloudflare Worker ve Gateway komut sistemi yanıt veriyor.");
   if (command === "kb") return handleKnowledgeBase(interaction, env);
   const moreResponse = await handleMoreCommands(interaction, env);
   if (moreResponse) return moreResponse;
