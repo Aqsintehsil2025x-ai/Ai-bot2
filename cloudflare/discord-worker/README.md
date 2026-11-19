@@ -4,7 +4,9 @@ This is an isolated Cloudflare test runtime for the Xyrin Discord bot. It does n
 
 ## Runtime architecture
 
-- **Worker**: Discord HTTP Interactions endpoint, Ed25519 signature verification, D1 access, and Cron processing.
+- **Worker**: Discord HTTP Interactions endpoint, timestamp-bounded Ed25519 signature verification, D1 access, and Cron processing.
+- **Shared dispatcher**: HTTP Interactions and Gateway-delivered slash commands use the same command handler and provider selection.
+- **AI provider layer**: Gemini 3.8 Flash → Gemini 3.5 Flash-Lite model fallback, NVIDIA Nemotron model support, bounded retries for temporary errors, and cross-provider fallback. NVIDIA HTTP 410 is treated as an account/endpoint access issue rather than blindly retrying model names. The bot reports which provider actually answered.
 - **Durable Object — DiscordGateway**: persistent outbound Discord Gateway WebSocket, Identify/Resume, heartbeat ACK checks, reconnects, selected message/member events, and Gateway-delivered slash interactions.
 - **D1**: FAQ, audit logs, server settings, suggestions, join events, virtual economy/XP, and scheduled reminders.
 - **Secrets Store**: bot token and AI provider keys are bound at runtime; secret values are not in Git.
@@ -26,7 +28,11 @@ The Worker has a one-minute Cron Trigger to start/reconnect the Gateway and deli
 - Scheduling: /hatirlat, /etkinlik, /hatirlatmalar, /hatirlatsil
 - Prefix subset: !ping, !yardim, !kimlik, !zar, !yazitura, !kahve, !secim, !sekiztop
 
-D1 stores the economy, reminders, suggestions, and server settings. Message XP has a per-user cooldown. Anti-raid only sends warnings; it does not automatically punish members.
+D1 stores the economy, reminders, suggestions, and server settings. Message XP has a per-user cooldown. Anti-raid only sends warnings; it does not automatically punish members. Gateway heartbeat startup timers are cancelled on disconnect, reconnect uses bounded exponential backoff, and invalid session sequence codes clear stale resume state.
+
+## Validation
+
+From this directory run `npm run check` for TypeScript checks, AI provider regression tests, and command registration syntax. CI also runs `wrangler deploy --dry-run` to validate the Cloudflare bundle. The tests mock provider responses; they do not claim that external Gemini/NVIDIA accounts are currently entitled or available.
 
 ## Slash command registration
 
