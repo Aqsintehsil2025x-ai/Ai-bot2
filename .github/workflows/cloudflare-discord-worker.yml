@@ -1,5 +1,8 @@
 name: Cloudflare Discord Worker
 
+permissions:
+  contents: write
+
 on:
   pull_request:
     paths:
@@ -33,3 +36,16 @@ jobs:
           path: cloudflare/discord-worker/worker-build/
           if-no-files-found: error
           retention-days: 1
+
+      - name: Publish test deployment bundle
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch --orphan worker-deploy-artifact
+          git rm -rf .
+          mkdir -p dist
+          cp worker-build/entry.js dist/entry.js
+          git add dist/entry.js
+          git commit -m "Build Worker bundle for test deployment"
+          git push --force origin HEAD:worker-deploy-artifact
