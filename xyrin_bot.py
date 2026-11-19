@@ -4749,6 +4749,45 @@ async def duyuru_komutu(ctx, *, mesaj: str):
         await ctx.channel.send(embed=embed)
 
 
+# --- 14J. DESTEK TICKET SISTEMI ---
+@bot.hybrid_command(
+    name="ticketpanel",
+    aliases=["destekpaneli"],
+    description="Sunucuya kalıcı bir destek talebi paneli gönderir.",
+)
+@app_commands.describe(
+    support_role="Destek taleplerini görecek rol (isteğe bağlı)",
+    category="Ticket kanallarının açılacağı kategori (isteğe bağlı)",
+    log_channel="Ticket kapanış kayıtlarının gönderileceği kanal (isteğe bağlı)",
+)
+@commands.guild_only()
+@perm_or_sovereign(manage_guild=True)
+async def ticket_panel_komutu(
+    ctx,
+    support_role: Optional[discord.Role] = None,
+    category: Optional[discord.CategoryChannel] = None,
+    log_channel: Optional[discord.TextChannel] = None,
+):
+    config = {
+        "support_role_id": support_role.id if support_role else None,
+        "category_id": category.id if category else None,
+        "log_channel_id": log_channel.id if log_channel else None,
+    }
+    bot.settings.set(ctx.guild.id, "ticket_config", config)
+    await bot.settings.store.flush()
+    embed = discord.Embed(
+        title="🎫 Xyrin Destek Merkezi",
+        description=(
+            "Yardım almak için aşağıdaki düyməyə bas. Bot sənə xüsusi, gizli bir dəstək kanalı yaradacaq.\n"
+            "Hər istifadəçi eyni vaxtda yalnız bir açıq ticket yarada bilər."
+        ),
+        color=discord.Color.blurple(),
+    )
+    if support_role:
+        embed.add_field(name="Destek ekibi", value=support_role.mention, inline=False)
+    await ctx.send(embed=embed, view=TicketPanelView())
+
+
 # --- 14J. ÇEKİLİŞ ---
 class GiveawayJoinView(discord.ui.View):
     def __init__(self, giveaway_id: int):
