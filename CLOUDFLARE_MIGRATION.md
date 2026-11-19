@@ -31,7 +31,7 @@ References:
 
 ## Deployment status
 
-The Pages project is connected to GitHub. Path filters have been cleared and the build root is now the repository root, with the dashboard build invoked from `dashboard/`. A fresh preview build is pending; no successful Pages build or public production release has been verified yet.
+The Pages project is connected to GitHub. The landing site is now the `/` route and the XFA Universe is available at `/universe`; both share one navigation flow. The Universe canvas defaults to Balanced quality, uses a lower pixel budget, and respects the user's reduced-motion preference. The latest preview build for these changes is being validated. The existing production app remains unchanged.
 
 ## Rollout policy
 
@@ -40,4 +40,4 @@ The Pages project is connected to GitHub. Path filters have been cleared and the
 - Do not migrate or delete existing user data without a tested export/import and rollback plan.
 
 
-Preview retry: build watch paths temporarily set to `*` with repository-root build context to diagnose `path_config` skips.
+Preview retry: build watch paths are set to `*` with repository-root build context to avoid `path_config` skips.
