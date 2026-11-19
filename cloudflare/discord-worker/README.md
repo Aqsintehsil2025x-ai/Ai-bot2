@@ -28,7 +28,7 @@ The Worker has a one-minute Cron Trigger to start/reconnect the Gateway and deli
 - Scheduling: /hatirlat, /etkinlik, /hatirlatmalar, /hatirlatsil
 - Prefix subset: !ping, !yardim, !kimlik, !zar, !yazitura, !kahve, !secim, !sekiztop
 
-D1 stores the economy, reminders, suggestions, and server settings. Message XP has a per-user cooldown. Anti-raid only sends warnings; it does not automatically punish members. Gateway heartbeat startup timers are cancelled on disconnect, reconnect uses bounded exponential backoff, and invalid session sequence codes clear stale resume state.
+D1 stores the economy, reminders, suggestions, and server settings. Message XP has a per-user cooldown. AFK is cleared when a member returns to chat and mentioned AFK members are announced. Anti-raid only sends warnings; it does not automatically punish members. Gateway heartbeat startup timers are cancelled on disconnect, reconnect uses bounded exponential backoff, and invalid session sequence codes clear stale resume state.
 
 ## Validation
 
