@@ -71,6 +71,14 @@ class ActionView(discord.ui.View):
         super().__init__(timeout=ACTION_TIMEOUT)
         self.add_item(ActionSelect(game, action, candidates))
 
+    async def on_timeout(self):
+        if self.children and self.children[0].game.phase == "night":
+            game = self.children[0].game
+            game.phase = "finished"
+            channel = game.players[next(iter(game.players))].guild.get_channel(game.channel_id)
+            if channel:
+                await channel.send("⏰ Gizli rollerden biri zamanında seçim yapmadı. Bu tur iptal edildi.")
+
 
 class VoteSelect(discord.ui.Select):
     def __init__(self, game: Game, candidates: list[discord.Member]):
@@ -113,6 +121,16 @@ class LobbyView(discord.ui.View):
         super().__init__(timeout=LOBBY_TIMEOUT)
         self.cog = cog
         self.game = game
+
+    async def on_timeout(self):
+        if self.game.phase == "lobby":
+            self.game.phase = "finished"
+            self.cog.games.pop((self.game.guild_id, self.game.channel_id), None)
+            if self.game.message:
+                try:
+                    await self.game.message.edit(content="⌛ Lobi süresi doldu. Yeni oyun için `/katilkim` yaz.", embed=None, view=None)
+                except discord.HTTPException:
+                    pass
 
     @discord.ui.button(label="🎮 Katıl", style=discord.ButtonStyle.success)
     async def join(self, interaction: discord.Interaction, button: discord.ui.Button):
