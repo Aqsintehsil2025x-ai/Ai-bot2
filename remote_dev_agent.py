@@ -57,11 +57,11 @@ TOOLS = [
     },
     {
         "name": "run_check",
-        "description": "Run one fixed, safe project check. No arbitrary command or shell arguments are accepted.",
+        "description": "Run a non-executing project check. Test runners and package scripts are unavailable because they can execute arbitrary project code.",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "check": {"type": "string", "enum": ["compile", "tests", "dashboard_build", "git_diff"]},
+                "check": {"type": "string", "enum": ["compile", "git_diff"]},
             },
             "required": ["check"], "additionalProperties": False,
         },
@@ -98,7 +98,7 @@ def _run(args: list[str], timeout: int = 120) -> dict[str, Any]:
     result = subprocess.run(
         args, cwd=ROOT, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT, text=True, timeout=timeout, check=False,
-        env={**os.environ, "CI": "1", "GIT_TERMINAL_PROMPT": "0"},
+        env={"PATH": os.environ.get("PATH", ""), "CI": "1", "GIT_TERMINAL_PROMPT": "0"},
     )
     output = (result.stdout or "")[-16000:]
     return {"exit_code": result.returncode, "output": output}
@@ -126,16 +126,6 @@ def _call_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
         check = args.get("check")
         if check == "compile":
             return _run(["python", "-m", "compileall", "-q", "main.py", "web_app.py", "xfa_agent"], 120)
-        if check == "tests":
-            return _run(["python", "-m", "unittest", "discover", "-s", "tests", "-v"], 180)
-        if check == "dashboard_build":
-            dashboard = ROOT / "dashboard"
-            if not (dashboard / "package.json").is_file():
-                raise ValueError("Dashboard package.json was not found.")
-            npm = "npm.cmd" if os.name == "nt" else "npm"
-            return _run([npm, "run", "build"], 240) if (dashboard / "node_modules").is_dir() else {
-                "exit_code": 2, "output": "Dependencies are not installed; this check will not install packages automatically."
-            }
         if check == "git_diff":
             return _run(["git", "diff", "--stat"])
         raise ValueError("Unsupported check.")
