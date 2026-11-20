@@ -1,4 +1,5 @@
 import { generateAI, runDeferredAI, type AIProvider } from "./ai";
+import { handleDashboard } from "./dashboard";
 import type { DiscordGateway } from "./gateway";
 export interface SecretStoreBinding { get(): Promise<string>; }
 export interface Env {
@@ -8,6 +9,7 @@ export interface Env {
   DISCORD_TOKEN: SecretStoreBinding;
   DISCORD_CLIENT_ID: SecretStoreBinding;
   DISCORD_CLIENT_SECRET: SecretStoreBinding;
+  DASHBOARD_SESSION_SECRET: SecretStoreBinding;
   GEMINI_API_KEY: SecretStoreBinding;
   NVIDIA_API_KEY: SecretStoreBinding;
 }
@@ -527,6 +529,8 @@ export async function dispatchInteraction(
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    const dashboardResponse = await handleDashboard(request, env);
+    if (dashboardResponse) return dashboardResponse;
     if (request.method === "GET" && url.pathname === "/gateway/status") {
       return json(await env.GATEWAY.getByName("xyrin-main").status());
     }
