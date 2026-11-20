@@ -55,8 +55,9 @@ class ActionSelect(discord.ui.Select):
         )
 
     async def callback(self, interaction: discord.Interaction):
-        if interaction.user.id not in self.game.players:
-            await interaction.response.send_message("Bu oyun sana ait değil.", ephemeral=True)
+        expected_role = {"kill": "Katil", "investigate": "Dedektif", "protect": "Şerif"}[self.action]
+        if self.game.roles.get(interaction.user.id) != expected_role:
+            await interaction.response.send_message("Bu gizli seçim senin rolüne ait değil.", ephemeral=True)
             return
         self.game.actions[self.action] = int(self.values[0])
         await interaction.response.send_message(
@@ -320,7 +321,7 @@ async def try_resolve_night(game: Game):
             await finish_game(game, "🎉 Masumlar kazandı! Katil elendi.")
             return
         await channel.send(
-            "🗳️ **Oylama başladı!** Herkes DM'deki bağlantı yerine aşağıdaki menüden şüphelendiği kişiyi seçsin."
+            "🗳️ **Oylama başladı!** Herkes aşağıdaki menüden şüphelendiği kişiyi seçsin."
         )
         view = VoteView(game, alive)
         view.game = game
