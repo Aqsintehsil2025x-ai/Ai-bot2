@@ -29,6 +29,7 @@ class Game:
     roles: dict[int, str] = field(default_factory=dict)
     actions: dict[str, int] = field(default_factory=dict)
     votes: dict[int, int] = field(default_factory=dict)
+    eliminated: set[int] = field(default_factory=set)
     message: discord.Message | None = None
     phase: str = "lobby"
 
@@ -89,12 +90,12 @@ class VoteSelect(discord.ui.Select):
         if uid not in self.game.players or uid not in self.game.roles:
             await interaction.response.send_message("Bu oylamaya katılamazsın.", ephemeral=True)
             return
-        if self.game.roles.get(uid) == "elenen":
+        if uid in self.game.eliminated:
             await interaction.response.send_message("Oyundan elendin; oy kullanamazsın.", ephemeral=True)
             return
         self.game.votes[uid] = int(self.values[0])
         await interaction.response.send_message("🗳️ Oyun gizli olarak kaydedildi.", ephemeral=True)
-        if len(self.game.votes) >= len(self.game.roles) - 1:
+        if len(self.game.votes) >= sum(uid not in self.game.eliminated for uid in self.game.roles):
             await resolve_vote(self.game)
 
 
@@ -291,12 +292,12 @@ async def try_resolve_night(game: Game):
         if target_id == protected_id:
             await channel.send("🌅 **Sabah oldu!** Şerif doğru kişiyi korudu. Bu gece kimse elenmedi.")
         else:
-            game.roles[target_id] = "elenen"
+            game.eliminated.add(target_id)
             await channel.send(
                 f"🌅 **Sabah oldu!** {game.players[target_id].display_name} bu tur oyundan elendi. "
                 "Şimdi tartışma ve gizli oylama zamanı."
             )
-        alive = [m for uid, m in game.players.items() if game.roles.get(uid) != "elenen"]
+        alive = [m for uid, m in game.players.items() if uid not in game.eliminated]
         if killer_id not in [m.id for m in alive]:
             await finish_game(game, "🎉 Masumlar kazandı! Katil elendi.")
             return
@@ -312,7 +313,7 @@ async def resolve_vote(game: Game):
     if game.phase != "discussion":
         return
     game.phase = "voting_done"
-    alive = [uid for uid, role in game.roles.items() if role != "elenen"]
+    alive = [uid for uid in game.roles if uid not in game.eliminated]
     votes = [target for voter, target in game.votes.items() if voter in alive and target in alive]
     channel = game.players[next(iter(game.players))].guild.get_channel(game.channel_id)
     if not votes:
@@ -326,7 +327,7 @@ async def resolve_vote(game: Game):
     if len(winners) == 1 and game.roles.get(winners[0]) == "Katil":
         await finish_game(game, "🎉 Masumlar kazandı! Oylamada Katil bulundu.")
     elif len(winners) == 1:
-        game.roles[winners[0]] = "elenen"
+        game.eliminated.add(winners[0])
         await finish_game(game, "🔪 Yanlış kişi seçildi. Katil bu tur hayatta kaldı ve kazandı.")
     else:
         await finish_game(game, "⚖️ Oylama berabere kaldı. Katil kazandı.")
