@@ -4,6 +4,7 @@ import type { DiscordGateway } from "./gateway";
 export interface SecretStoreBinding { get(): Promise<string>; }
 export interface Env {
   DB: D1Database;
+  ASSETS: Fetcher;
   GATEWAY: DurableObjectNamespace<DiscordGateway>;
   DISCORD_PUBLIC_KEY?: string;
   DISCORD_TOKEN: SecretStoreBinding;
@@ -540,7 +541,7 @@ export default {
     if (request.method === "GET" && url.pathname === "/health") {
       return json({ ok: true, service: "xfa-discord-test", runtime: "cloudflare-workers", language: "typescript" });
     }
-    if (request.method !== "POST" || url.pathname !== "/discord/interactions") return json({ error: "Not found" }, 404);
+    if (request.method !== "POST" || url.pathname !== "/discord/interactions") return env.ASSETS.fetch(request);
     if (!env.DISCORD_PUBLIC_KEY) return json({ error: "Discord public key is not configured" }, 503);
 
     const body = await request.text();
