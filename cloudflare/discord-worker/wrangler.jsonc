@@ -26,6 +26,16 @@
   ],
   "secrets_store_secrets": [
     {
+      "binding": "DISCORD_CLIENT_SECRET",
+      "store_id": "38bf4f1392d145f1ae0a76757629b5cd",
+      "secret_name": "DISCORD_CLIENT_SECRET"
+    },
+    {
+      "binding": "DASHBOARD_SESSION_SECRET",
+      "store_id": "38bf4f1392d145f1ae0a76757629b5cd",
+      "secret_name": "DASHBOARD_SESSION_SECRET"
+    },
+    {
       "binding": "DISCORD_CLIENT_ID",
       "store_id": "38bf4f1392d145f1ae0a76757629b5cd",
       "secret_name": "DISCORD_CLIENT_ID"
