@@ -7,18 +7,20 @@ on:
   pull_request:
     paths:
       - "cloudflare/discord-worker/**"
+      - "dashboard/**"
       - ".github/workflows/cloudflare-discord-worker.yml"
   push:
     branches:
       - feature/cloudflare-worker-port
     paths:
       - "cloudflare/discord-worker/**"
+      - "dashboard/**"
       - ".github/workflows/cloudflare-discord-worker.yml"
 
 jobs:
   typecheck:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: cloudflare/discord-worker
@@ -27,13 +29,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Install and build website\n        working-directory: .\n        run: npm ci --prefix dashboard && npm run build --prefix dashboard\n      - run: npm install --no-audit --no-fund
+      - name: Install and build website
+        working-directory: .
+        run: npm ci --prefix dashboard && npm run build --prefix dashboard
+      - run: npm install --no-audit --no-fund
       - run: npm run check
       - run: npx wrangler deploy --dry-run --outdir worker-build
       - uses: actions/upload-artifact@v4
         with:
           name: cloudflare-worker-build
-          path: |\n            cloudflare/discord-worker/worker-build/\n            dashboard/dist/
+          path: |
+            cloudflare/discord-worker/worker-build/
+            dashboard/dist/
           if-no-files-found: error
           retention-days: 1
 
