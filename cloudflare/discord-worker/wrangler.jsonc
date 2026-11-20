@@ -4,6 +4,12 @@
   "main": "src/entry.ts",
   "compatibility_date": "2026-11-19",
   "workers_dev": true,
+  "assets": {
+    "directory": "../../dashboard/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/manage*", "/dashboard/*", "/health", "/gateway/*", "/discord/*"]
+  },
   "durable_objects": {
     "bindings": [
       { "name": "GATEWAY", "class_name": "DiscordGateway" }
