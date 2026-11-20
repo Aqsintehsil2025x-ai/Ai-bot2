@@ -2024,6 +2024,11 @@ class UltimateImperialBot(commands.Bot):
             logger.info("Community Suite: analytics, FAQ knowledge base, anti-raid alerts active.")
         except Exception:
             logger.exception("Community Suite yüklenemedi; temel bot çalışmaya devam edecek.")
+        try:
+            await self.load_extension("cogs.katil_kim")
+            logger.info("Katil Kim? oyunu yüklendi.")
+        except Exception:
+            logger.exception("Katil Kim? oyunu yüklenemedi; temel bot çalışmaya devam edecek.")
         self.add_view(TicketPanelView())
         self.add_view(TicketControlView())
         await self.restore_from_backup_if_needed()  # Döngüler başlamadan önce: yeni açılan boş diske eski verileri getir.
