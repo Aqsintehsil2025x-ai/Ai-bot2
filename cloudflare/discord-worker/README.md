@@ -66,9 +66,8 @@ The control center uses Discord OAuth2 (`identify guilds`) and only lists server
 
 ### One-time Discord / Secrets Store setup
 
-Add these two secret entries to the existing Cloudflare Secrets Store used by this Worker:
+The OAuth client secret is already present in the test Worker Secrets Store; no additional secret entry is required. The session cookie key is independently derived with HKDF from the OAuth secret. Add/confirm this secret entry to the existing Cloudflare Secrets Store used by this Worker:
 - `DISCORD_CLIENT_SECRET`: the OAuth2 client secret from the same Discord application as `DISCORD_CLIENT_ID`.
-- `DASHBOARD_SESSION_SECRET`: a newly generated random secret of at least 32 bytes, used only to sign HttpOnly dashboard sessions.
 
 In Discord Developer Portal → OAuth2 → Redirects, add exactly:
 `https://xfa-discord-test.aqsin-tehsil2025x.workers.dev/dashboard/callback`
