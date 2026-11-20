@@ -130,7 +130,10 @@ export async function handleDashboard(request: Request, env: DashboardEnv): Prom
     const user = await discord("/users/@me",tokenData.access_token);
     const session:Session={userId:user.id,username:user.global_name||user.username,accessToken:tokenData.access_token,expiresAt:Date.now()+Math.min(Number(tokenData.expires_in)||604800,604800)*1000,csrf:b64(crypto.getRandomValues(new Uint8Array(24)))};
     const signed=await seal(session,await env.DASHBOARD_SESSION_SECRET.get());
-    const headers = new Headers({ location: "/manage", "cache-control": "no-store" });\n    headers.append("set-cookie", cookie(signed, Math.floor((session.expiresAt-Date.now())/1000)));\n    headers.append("set-cookie", "xfa_oauth_state=; Path=/dashboard; HttpOnly; Secure; SameSite=Lax; Max-Age=0");\n    return new Response(null, { status: 302, headers });
+    const headers = new Headers({ location: "/manage", "cache-control": "no-store" });
+    headers.append("set-cookie", cookie(signed, Math.floor((session.expiresAt-Date.now())/1000)));
+    headers.append("set-cookie", "xfa_oauth_state=; Path=/dashboard; HttpOnly; Secure; SameSite=Lax; Max-Age=0");
+    return new Response(null, { status: 302, headers });
   }
   if (!url.pathname.startsWith("/api/dashboard/")) return null;
   if (request.method === "OPTIONS") return new Response(null,{status:204,headers:{"access-control-allow-origin":url.origin,"access-control-allow-methods":"GET,POST,PUT,OPTIONS","access-control-allow-headers":"content-type,x-csrf-token","access-control-allow-credentials":"true","vary":"Origin"}});
