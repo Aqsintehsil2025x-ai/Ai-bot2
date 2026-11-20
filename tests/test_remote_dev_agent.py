@@ -31,6 +31,8 @@ class RemoteDevSecurityTests(unittest.TestCase):
         names = {item["name"] for item in response["result"]["tools"]}
         self.assertEqual(names, {"workspace_status", "read_file", "write_file", "run_check"})
         self.assertNotIn("shell", names)
+        check_tool = next(item for item in response["result"]["tools"] if item["name"] == "run_check")
+        self.assertEqual(check_tool["inputSchema"]["properties"]["check"]["enum"], ["compile", "git_diff"])
 
 
 if __name__ == "__main__":
