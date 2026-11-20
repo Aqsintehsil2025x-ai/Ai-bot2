@@ -60,7 +60,7 @@ The Worker now serves the built React website as static assets and exposes a sam
 `https://xfa-discord-test.aqsin-tehsil2025x.workers.dev/manage`
 
 The control center uses Discord OAuth2 (`identify guilds`) and only lists servers where the signed-in user has **Manage Server** permission and the bot is already installed. It supports:
-- shared D1 server settings (AI provider, welcome text, prefix, language, and feature toggles);
+- shared D1 server settings (AI provider, welcome text, and welcome channel);
 - a website AI chat using the same Gemini/NVIDIA provider layer and server-selected provider;
 - listing text channels and sending a message to a selected channel through the bot.
 
