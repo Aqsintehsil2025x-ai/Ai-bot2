@@ -77,7 +77,7 @@ def _safe_path(raw: str, writing: bool = False) -> Path:
         raise ValueError("Path must be a clean relative path inside the project.")
     if any(part.startswith(".") or part.lower() in BLOCKED_TOP_LEVEL for part in rel.parts):
         raise ValueError("Hidden, internal, and dependency paths are blocked.")
-    if any(part.lower() in BLOCKED_NAMES or "secret" in part.lower() or "credential" in part.lower() for part in rel.parts):
+    if any(part.lower() in BLOCKED_NAMES or any(word in part.lower() for word in ("secret", "credential", "token", "password", "cookie", "session", "private", "auth", "api_key", "apikey")) for part in rel.parts):
         raise ValueError("Credential-related paths are blocked.")
     suffix = rel.suffix.lower()
     allowed = WRITE_EXTENSIONS if writing else READ_EXTENSIONS
