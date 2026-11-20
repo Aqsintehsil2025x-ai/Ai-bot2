@@ -10,7 +10,7 @@ export interface Env {
   DISCORD_TOKEN: SecretStoreBinding;
   DISCORD_CLIENT_ID: SecretStoreBinding;
   DISCORD_CLIENT_SECRET: SecretStoreBinding;
-  DASHBOARD_SESSION_SECRET: SecretStoreBinding;
+
   GEMINI_API_KEY: SecretStoreBinding;
   NVIDIA_API_KEY: SecretStoreBinding;
 }
