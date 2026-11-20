@@ -1,0 +1,14 @@
+{
+  "name": "Xyrin Flower AI",
+  "short_name": "Xyrin Flower",
+  "description": "XFA — Türkçe yapay zekâ asistanı",
+  "lang": "tr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#080713",
+  "theme_color": "#171027",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
