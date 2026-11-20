@@ -345,10 +345,13 @@ export class DiscordGateway extends DurableObject<Env> {
   async handleMemberJoin(member: any): Promise<void> {
     const guild = member.guild_id;
     if (!guild || member.user?.bot) return;
-    const welcome = await this.env.DB.prepare("SELECT value FROM guild_settings WHERE guild_id=? AND setting_key='welcome_channel'").bind(guild).first();
+    const welcome = await this.env.DB.prepare("SELECT value FROM guild_settings WHERE guild_id=? AND setting_key='welcome_channel'").bind(guild).first<{value:string}>();
+    const welcomeText = await this.env.DB.prepare("SELECT value FROM guild_settings WHERE guild_id=? AND setting_key='welcome_message'").bind(guild).first<{value:string}>();
     if (welcome?.value) {
+      const template = (welcomeText?.value || "🌸 Hoş geldin {kullanıcı}! Sunucumuza katıldığın için mutluyuz.").slice(0, 500);
+      const content = template.replaceAll("{kullanıcı}", "<@" + member.user.id + ">").replaceAll("{user}", "<@" + member.user.id + ">");
       await this.discordRequest("/channels/" + welcome.value + "/messages", "POST", {
-        content: "🌸 Hoş geldin <@" + member.user.id + ">! Sunucumuza katıldığın için mutluyuz.",
+        content,
         allowed_mentions: { parse: [], users: [member.user.id] }
       });
     }
