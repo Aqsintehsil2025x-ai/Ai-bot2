@@ -6,7 +6,7 @@ interface DashboardEnv {
   DISCORD_TOKEN: SecretBinding;
   DISCORD_CLIENT_ID: SecretBinding;
   DISCORD_CLIENT_SECRET: SecretBinding;
-  DASHBOARD_SESSION_SECRET: SecretBinding;
+
   GEMINI_API_KEY: SecretBinding;
   NVIDIA_API_KEY: SecretBinding;
 }
@@ -27,7 +27,8 @@ function unb64(value: string): string {
   return decoder.decode(Uint8Array.from(raw, c => c.charCodeAt(0)));
 }
 async function sign(value: string, secret: string): Promise<string> {
-  const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const material = await crypto.subtle.importKey("raw", encoder.encode(secret), "HKDF", false, ["deriveKey"]);
+  const key = await crypto.subtle.deriveKey({ name: "HKDF", hash: "SHA-256", salt: encoder.encode("XFA-DASHBOARD"), info: encoder.encode("session-cookie-v1") }, material, { name: "HMAC", hash: "SHA-256", length: 256 }, false, ["sign"]);
   return b64(new Uint8Array(await crypto.subtle.sign("HMAC", key, encoder.encode(value))));
 }
 async function seal(data: Session, secret: string): Promise<string> {
@@ -40,7 +41,7 @@ async function openSession(request: Request, env: DashboardEnv): Promise<Session
   if (!token) return null;
   const [payload, signature] = token.split(".");
   if (!payload || !signature) return null;
-  const expected = await sign(payload, await env.DASHBOARD_SESSION_SECRET.get());
+  const expected = await sign(payload, await env.DISCORD_CLIENT_SECRET.get());
   if (signature !== expected) return null;
   try {
     const session = JSON.parse(unb64(payload)) as Session;
@@ -129,7 +130,7 @@ export async function handleDashboard(request: Request, env: DashboardEnv): Prom
     if (!tokenResponse.ok || !tokenData.access_token) return new Response("Discord giriş doğrulanamadı.",{status:401});
     const user = await discord("/users/@me",tokenData.access_token);
     const session:Session={userId:user.id,username:user.global_name||user.username,accessToken:tokenData.access_token,expiresAt:Date.now()+Math.min(Number(tokenData.expires_in)||604800,604800)*1000,csrf:b64(crypto.getRandomValues(new Uint8Array(24)))};
-    const signed=await seal(session,await env.DASHBOARD_SESSION_SECRET.get());
+    const signed=await seal(session,await env.DISCORD_CLIENT_SECRET.get());
     const headers = new Headers({ location: "/manage", "cache-control": "no-store" });
     headers.append("set-cookie", cookie(signed, Math.floor((session.expiresAt-Date.now())/1000)));
     headers.append("set-cookie", "xfa_oauth_state=; Path=/dashboard; HttpOnly; Secure; SameSite=Lax; Max-Age=0");
