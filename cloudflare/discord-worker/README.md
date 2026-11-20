@@ -51,3 +51,32 @@ This is a broad Worker migration, not yet byte-for-byte feature parity with the 
 ## Free-plan usage
 
 A continuously connected outbound Gateway WebSocket keeps one 128 MB Durable Object active. At 24/7 uptime this is approximately 10,800 GB-s/day, against Cloudflare's 13,000 GB-s/day Free allowance before other account usage. Exceeding a Free limit can cause further operations to fail. Monitor usage; this is not a guarantee of unlimited free hosting.
+
+
+## Unified website control center (test branch)
+
+The Worker now serves the built React website as static assets and exposes a same-origin control center at:
+
+`https://xfa-discord-test.aqsin-tehsil2025x.workers.dev/manage`
+
+The control center uses Discord OAuth2 (`identify guilds`) and only lists servers where the signed-in user has **Manage Server** permission and the bot is already installed. It supports:
+- shared D1 server settings (AI provider, welcome text, prefix, language, and feature toggles);
+- a website AI chat using the same Gemini/NVIDIA provider layer and server-selected provider;
+- listing text channels and sending a message to a selected channel through the bot.
+
+### One-time Discord / Secrets Store setup
+
+Add these two secret entries to the existing Cloudflare Secrets Store used by this Worker:
+- `DISCORD_CLIENT_SECRET`: the OAuth2 client secret from the same Discord application as `DISCORD_CLIENT_ID`.
+- `DASHBOARD_SESSION_SECRET`: a newly generated random secret of at least 32 bytes, used only to sign HttpOnly dashboard sessions.
+
+In Discord Developer Portal → OAuth2 → Redirects, add exactly:
+`https://xfa-discord-test.aqsin-tehsil2025x.workers.dev/dashboard/callback`
+
+Do not place either secret in Git, the website bundle, or chat messages. Existing bot and production routes are not changed by this branch. The `/manage` page is served from the same Worker origin, so its authenticated API calls do not require cross-origin cookies.
+
+The Worker build requires the website build first:
+`npm ci --prefix dashboard && npm run build --prefix dashboard`
+then run `npm run check` and `npx wrangler deploy --dry-run` from `cloudflare/discord-worker`.
+
+This is a test control center; do not merge or route production traffic until OAuth, settings persistence, AI responses, channel listing, and message sending have all been tested in the test Discord server.
