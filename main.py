@@ -10,6 +10,10 @@ import threading
 os.environ["HEALTH_SERVER"] = "false"
 
 from web_app import app, set_bot
+from remote_dev_agent import register_remote_dev
+
+# Authenticated, restricted MCP tools for remote maintenance (disabled until a Replit Secret is set).
+register_remote_dev(app)
 from xyrin_bot import DISCORD_TOKEN, bot, main as run_bot
 
 
