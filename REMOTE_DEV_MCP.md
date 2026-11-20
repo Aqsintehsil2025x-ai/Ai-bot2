@@ -15,7 +15,7 @@ It does **not** expose a general shell, arbitrary command execution, deployment 
 - `workspace_status`: Git status and branch.
 - `read_file`: reads allowlisted text files in the project; hidden paths and credentials are blocked.
 - `write_file`: writes allowlisted text files; hidden paths, credentials, dependencies, and symlinks are blocked.
-- `run_check`: only fixed checks: Python compile, unit tests, dashboard build (no dependency installation), and diff summary.
+- `run_check`: only non-executing checks: Python bytecode compilation and Git diff summary. Unit-test runners and package build scripts are excluded because they execute project-controlled code.
 
 There is deliberately no arbitrary shell tool, no Git push/merge, no deploy tool, and no ability to read environment variables. A failed or missing token disables the endpoint.
 
